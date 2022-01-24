@@ -1,13 +1,13 @@
 CC=gcc
 
 common: common.c
-	CC -c common.c -o common.o
+	$(CC) $(CFLAGS) -c common.c -o common.o
 
 server: server.c common.o
-	CC server.c common.o -o server
+	$(CC) $(CFLAGS) server.c common.o -o server
 
 client: client.c common.o
-	CC client.c common.o -o client
+	$(CC) $(CFLAGS) client.c common.o -o client
 
 clean:
 	rm -rf .o client server

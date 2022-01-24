@@ -48,7 +48,7 @@ void sigchld_handler(int s)
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
-    return sa->sa_family == AF_INET ? &(((struct sockaddr_in *)sa)->sin_addr) : &(((struct sockaddr_in6 *)sa)->sin6_addr);
+    return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
 int internal_spawn(char *const *argv, pid_t *pid)
@@ -89,10 +89,12 @@ int internal_spawn(char *const *argv, pid_t *pid)
     return master_fd;
 
 error:
-    if (master_fd != -1)
+    if (master_fd != -1) {
         close(master_fd);
-    if (slave_fd != -1)
+    }
+    if (slave_fd != -1) {
         close(slave_fd);
+    }
     return -1;
 }
 
@@ -100,20 +102,19 @@ void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
 
-    int pid;
+    pid_t pid;
     int master;
     const char *argv[] = {g_shell_path, NULL};
     master = internal_spawn((char *const *)argv, &pid);
     CHECK(master >= 0);
 
+    fd_set readfds;
+    char buf[BUFFERSIZE];
     int maxfd = master > sockfd ? master : sockfd;
     int nbytes = 0;
 
     while (true)
     {
-        char buf[BUFFERSIZE];
-
-        fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(master, &readfds);
         FD_SET(sockfd, &readfds);
