@@ -10,6 +10,6 @@ client: client.c common.o
 	$(CC) $(CFLAGS) client.c common.o -o client
 
 clean:
-	rm -rf .o client server
+	rm -rf *.o client server
 
 all: server client
