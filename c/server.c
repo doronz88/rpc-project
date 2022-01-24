@@ -177,7 +177,7 @@ int main(int argc, const char *argv[])
 
     struct addrinfo *servinfo2 = servinfo; // servinfo->ai_next;
     char ipstr[INET6_ADDRSTRLEN];
-    inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr, sizeof(ipstr));
+    CHECK(inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr, sizeof(ipstr)));
     TRACE("Waiting for connections on [%s]:%s", ipstr, port);
 
     server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype, servinfo2->ai_protocol);
