@@ -9,4 +9,7 @@ server: server.c common.o
 client: client.c common.o
 	CC client.c common.o -o client
 
+clean:
+	rm -rf .o client server
+
 all: server client
