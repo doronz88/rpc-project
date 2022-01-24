@@ -7,7 +7,8 @@ Inspired by [inSecure-SHell](https://github.com/fffaraz/inSecure-SHell), this sh
 ## Building
 
 ```shell
-cd c
+git clone git@github.com:doronz88/zshell.git
+cd zshell/c
 make all
 ```
 
@@ -16,11 +17,11 @@ make all
 To execute the server:
 
 ```shell
-./server [-p port] [-s shell]
+./c/server [-p port] [-s shell]
 ```
 
 Connecting via:
 
 ```shell
-./connect HOST
+./c/client HOST
 ```
