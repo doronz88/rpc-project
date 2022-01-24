@@ -204,7 +204,7 @@ int main(int argc, const char *argv[])
         int client_fd = accept(server_fd, (struct sockaddr *)&their_addr, &addr_size);
 
         char ipstr[INET6_ADDRSTRLEN];
-        inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr));
+        CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
         pthread_t thread;
