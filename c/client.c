@@ -173,6 +173,6 @@ int main(int argc, char **argv)
     }
 
     close(sockfd);
-    printf("Bye 👋");
+    printf("Bye 👋\n");
     return 0;
 }

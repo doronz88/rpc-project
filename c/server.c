@@ -48,10 +48,7 @@ void sigchld_handler(int s)
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
-    if (sa->sa_family == AF_INET)
-        return &(((struct sockaddr_in *)sa)->sin_addr);
-    else
-        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
+    return sa->sa_family == AF_INET ? &(((struct sockaddr_in *)sa)->sin_addr) : &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
 int internal_spawn(char *const *argv, pid_t *pid)
@@ -64,57 +61,34 @@ int internal_spawn(char *const *argv, pid_t *pid)
     // in particular detects when it's talking to a pipe and forgets to flush the
     // output stream after sending a response.
     master_fd = posix_openpt(O_RDWR);
-    if (master_fd == -1)
-        goto cleanup;
-    res = grantpt(master_fd);
-    if (res != 0)
-        goto cleanup;
-    res = unlockpt(master_fd);
-    if (res != 0)
-        goto cleanup;
+    CHECK(-1 != master_fd);
+    CHECK(0 == grantpt(master_fd));
+    CHECK(0 == unlockpt(master_fd));
 
     // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
     char slave_pty_name[128];
-    res = ioctl(master_fd, TIOCPTYGNAME, slave_pty_name);
-    if (res == -1)
-        goto cleanup;
+    CHECK(-1 != ioctl(master_fd, TIOCPTYGNAME, slave_pty_name));
 
     TRACE("slave_pty_name: %s", slave_pty_name);
 
     slave_fd = open(slave_pty_name, O_RDWR);
-    if (slave_fd == -1)
-        goto cleanup;
+    CHECK(-1 != slave_fd);
 
     posix_spawn_file_actions_t actions;
-    res = posix_spawn_file_actions_init(&actions);
-    if (res != 0)
-        goto cleanup;
-    res = posix_spawn_file_actions_adddup2(&actions, slave_fd, STDIN_FILENO);
-    if (res != 0)
-        goto cleanup;
-    res = posix_spawn_file_actions_adddup2(&actions, slave_fd, STDOUT_FILENO);
-    if (res != 0)
-        goto cleanup;
-    res = posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO);
-    if (res != 0)
-        goto cleanup;
-    res = posix_spawn_file_actions_addclose(&actions, slave_fd);
-    if (res != 0)
-        goto cleanup;
-    res = posix_spawn_file_actions_addclose(&actions, master_fd);
-    if (res != 0)
-        goto cleanup;
-
-    res = posix_spawnp(pid, argv[0], &actions, NULL, argv, environ);
-    if (res != 0)
-        goto cleanup;
+    CHECK(0 == posix_spawn_file_actions_init(&actions));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDIN_FILENO));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDOUT_FILENO));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
+    CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
+    CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
+    CHECK(0 == posix_spawnp(pid, argv[0], &actions, NULL, argv, environ));
 
     close(slave_fd);
     slave_fd = -1;
 
     return master_fd;
 
-cleanup:
+error:
     if (master_fd != -1)
         close(master_fd);
     if (slave_fd != -1)
@@ -135,7 +109,7 @@ void handle_client(int sockfd)
     int maxfd = master > sockfd ? master : sockfd;
     int nbytes = 0;
 
-    for (;;)
+    while (true)
     {
         char buf[BUFFERSIZE];
 
