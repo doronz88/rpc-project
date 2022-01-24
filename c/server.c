@@ -202,6 +202,7 @@ int main(int argc, const char *argv[])
         struct sockaddr_storage their_addr; // connector's address information
         socklen_t addr_size = sizeof(their_addr);
         int client_fd = accept(server_fd, (struct sockaddr *)&their_addr, &addr_size);
+        CHECK(client_fd >= 0);
 
         char ipstr[INET6_ADDRSTRLEN];
         CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
