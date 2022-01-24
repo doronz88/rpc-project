@@ -1,0 +1,12 @@
+CC=gcc
+
+common: common.c
+	CC -c common.c -o common.o
+
+server: server.c common.o
+	CC server.c common.o -o server
+
+client: client.c common.o
+	CC client.c common.o -o client
+
+all: server client
