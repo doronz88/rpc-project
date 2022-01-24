@@ -27,12 +27,6 @@
 
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
-#define TRACE(...) trace(__PRETTY_FUNCTION__, __VA_ARGS__)
-#define CHECK(expression) \
-    if (!(expression))    \
-    {                     \
-        goto error;       \
-    }
 
 extern char **environ;
 
@@ -89,10 +83,12 @@ int internal_spawn(char *const *argv, pid_t *pid)
     return master_fd;
 
 error:
-    if (master_fd != -1) {
+    if (master_fd != -1)
+    {
         close(master_fd);
     }
-    if (slave_fd != -1) {
+    if (slave_fd != -1)
+    {
         close(slave_fd);
     }
     return -1;
@@ -132,7 +128,7 @@ void handle_client(int sockfd)
         {
             nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
             CHECK(nbytes >= 1);
-            write(master, buf, nbytes);
+            writeall(master, buf, nbytes);
         }
     }
 
