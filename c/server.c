@@ -128,7 +128,7 @@ void handle_client(int sockfd)
         {
             nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
             CHECK(nbytes >= 1);
-            writeall(master, buf, nbytes);
+            CHECK(writeall(master, buf, nbytes));
         }
     }
 
