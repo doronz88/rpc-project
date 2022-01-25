@@ -27,16 +27,6 @@
 *.i*86
 *.x86_64
 *.hex
-c/client
-c/server
-c/shell
 
-# Debug files
-*.dSYM/
-
-# macOS shit
-.DS_Store
-
-# ide files
-.vscode
-
+# Unsaved files
+*~

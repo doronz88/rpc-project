@@ -1,0 +1,225 @@
+created by zen
+http://zeng.photography
+
+OVERVIEW
+
+	An experimental Unix shell as the assignment of Operating System Fall 2014, supporting basic shell commands and job control. The main code is written using C, while using Lex as the lexical analyzer, and lemon as the parser.
+
+INSTALL
+	
+	to launch the program:
+		./shell
+	to compile the program from sources:
+		make 
+	other commands avalable for make:
+		make clean
+
+GRAMMAR
+	
+	The program supports basic shell commands.
+
+		accept := command ( < argument ) ( PIPE"|" command )* ( > argument ) ( & )
+		accept := command > argument < argument ( & )
+		command := ( argument )+
+		argument := ( ^ \t \n \r \< \> \" \' )+
+
+	The program supports some basic shell build-in command;
+	However the usage and function may differ from those in standard shells. They are:
+		cd
+		jobs
+		fg
+		bg
+		exit
+		quit
+
+	The program also responses to control signals. When launched foreground as a terminal-shell, the program ignore most of the signal calls, except:
+		ctrl+C as SIGIN
+			throw current input and start waiting a new command
+		ctrl+D as SIGQUIT
+			exit the program
+
+JOB CONTROL
+	
+	The program supports basic job control. 
+
+	The command jobs is used to diplay all non-terminated jobs, running or stopped. The arguments to this command may be the indicator of job id.
+
+	shell: job 
+	return a list of all current non-terminated jobs
+		[id]	group_id	Current_state(Running or stopped)
+		[id]	group_id	Current_state(Running or stopped)
+		...
+
+	shell: job x y ... z
+	return a list of non-terminated jobs with indicator x, y ... z
+		[x] 	group_id	Current_state(Running or stopped)
+		[y]		group_id	Current_state(Running or stopped)
+		...
+
+	The command fg is used to resume stopped job and take it to the foreground.
+	The argument to this command may be the indicator of job id.
+
+	shell: fg
+	resume the last-lauched stopped job
+
+	shell: fg x y ... z
+	resume the stopped job with indicator x, y .. z
+
+	The command bg does the same as fg, except it puts jobs to the background.
+
+
+PRGRAM STRUCTURE
+
+	the main program is structured as the following:
+
+	/* the program */
+	int main()
+	{	
+		/* init parameters & variables */
+		init();
+
+		while(/* no QUIT or EOF signal recieved */)
+		{
+			/* parse the commands from input, build the data of jobs and process to launch */
+			parser();
+
+			/* run the command by launching jobs and process */
+			launch_jobs();
+
+			/* collect and inform user information of launched jobs; take completed jobs offline */
+			notifications();
+		}
+
+		/* destroy resources used; collect information left by completed processes */
+		exit_program();
+	}
+
+	the detailed approach of initial the shell is the following:
+
+	init()
+	{
+		if(/* the shell is interactive */)
+		{
+			if(/* if the shell is run by another shell and in background */)
+			{
+				/* stop itself in case of error job control */
+				stop();
+			}
+
+			/* ignore most of control signals, except deal with special case of ctrl+C, and let go termination calls */
+			signal(SIGIN, another_line);
+			signal(SIGHLD, DFT);
+			signal(OTHER, IGN);
+
+			/* Grab control of the terminal */
+			get_to_stdin();
+		}
+
+	}
+
+	the detailed approach of launch a job is the following:
+
+	launch_job (job j)
+	{
+		/* open the redirected file and pase the descriptor to the following function */
+		file();
+
+		for (/* every process pi in the pipline */)
+		{
+			/* for every two adjacent processes in the pipline, create a pipe */
+			pipe();
+
+			/* fork before each non-build in command (process) is executed */
+			fork();
+
+			/* launch each process, set each process the same group id */
+			launch_process (process pi, id group_id, process_std_input, process_std_output);
+
+			/* wait for the process to complete, method depending on if it runs foreground */
+			wait();
+		}
+	}
+
+	the detailed approach of launch a process is the following:
+
+	/* the function is called in the forked child process */
+	launch_process (process pi, id group_id, process_std_input, process_std_output)
+	{
+		/* set child process signal handling to default */
+		signal();
+
+		/* handle file redirection */
+		dup();
+
+		/* launch the process */
+		exec(process);
+	}
+
+	the detailed approach of collect information from processes is the following:
+
+	notification()
+	{
+		/* collect information from completed processed since last time */
+		wait();
+		update_states(active_job_list);
+
+		/* inform the user when some job is finished */
+		inform();
+
+		/* remove jobs already complete from active list and free memory used for storing the command data */
+		update(active_job_list);
+		clean();
+	}
+
+	the detailed approach of exit is the following:
+
+	exit_program()
+	{
+		/* collect return information of all terminated child process since last time */
+		wait();
+
+		/* destroy data */
+		free();
+	}
+
+DATA STRUCTURE
+	
+	/* A process is a single process.  */
+	typedef struct process
+	{
+	  struct process *next;       /* next process in pipeline */
+	  char **argv;                /* for exec */
+	  pid_t pid;                  /* process ID */
+	  char completed;             /* true if process has completed */
+	  char stopped;               /* true if process has stopped */
+	  int status;                 /* reported status value */
+	} process;
+
+	/* A job is a pipeline of processes.  */
+	typedef struct job
+	{
+	  struct job *next;           /* next active job */
+	  int id;				  	  /* id of the process; 0 if is build in */
+	  int valid;				  /* true if the job is valid to launch */
+	  process *first_process;     /* list of processes in this job */
+	  pid_t pgid;                 /* process group ID */
+	  char notified;              /* true if user told about stopped job */
+	  struct termios tmodes;      /* saved terminal modes */
+	  char* infile;				  /* redirected input file name */
+	  char* outfile;              /* redirected output file name */
+	  int stdin, stdout, stderr;  /* standard i/o channels */
+	  int foreground;             /* true if the job runs foreground */
+	} job;
+
+REFERENCE
+
+	[ The GNU C Library ]: http://www.gnu.org/software/libc/manual/html_node/
+	[ Lex ]: http://dinosaur.compilertools.net/lex/
+	[ Lemon ]: http://www.hwaci.com/sw/lemon/
+	[ Assiment Page ]: https://202.120.38.39/~jzhou/courses/F14.OS/hw1-shell.html
+	[ Github Page ]: https://github.com/ImaginationZ/Shell
+
+LICENSE
+
+	GNU GENERAL PUBLIC LICENSE v2.0
+	feel free to copy or modify codes

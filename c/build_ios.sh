@@ -6,11 +6,20 @@ SYSROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
 CC="$(xcrun -f --sdk $SDK clang)"
 CFLAGS="-arch $ARCH --sysroot=$SYSROOT"
 
-export CC CFLAGS
-
+cd remote_server
 make clean
-make all CC="$CC" CFLAGS="$CFLAGS"
+make all SERVER_CC="$CC" SERVER_CFLAGS="$CFLAGS"
 
-for i in client server; do
+cd ..
+
+cd basic_shell
+make clean
+make all CC="$CC" CFLAGS="$CFLAGS" LEMON_CC="gcc" LEMON_CFLAGS=""
+
+cd ..
+
+cp remote_server/client remote_server/server basic_shell/shell .
+
+for i in client server shell; do
     codesign -s - --generate-entitlement-der $i
 done
