@@ -8,15 +8,13 @@
 #include <pwd.h>
 #include "termios.h"
 
-#define MAX_NAME_LEN 256
-#define MAX_PATH_LEN 1024
+#define MAX_NAME_LEN (256)
+#define MAX_PATH_LEN (1024)
 
 pid_t shell_pgid;
 struct termios shell_tmodes;
 int shell_terminal;
 int shell_is_interactive;
-
-char *buildin[256] = {"cd", "quit", "exit", "jobs", "fg", "bg"};
 
 /* The active jobs are linked into a list.  This is its head.   */
 job *first_job = NULL;

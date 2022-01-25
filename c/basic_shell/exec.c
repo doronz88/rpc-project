@@ -11,12 +11,15 @@
 
 #include "common.h"
 #include "exec.h"
+#include "builtin_cmds.h"
+
+extern char **environ;
 
 extern pid_t shell_pgid;
 extern struct termios shell_tmodes;
 extern int shell_terminal;
 extern int shell_is_interactive;
-extern char *buildin[];
+extern char *builtin[];
 extern job *first_job;
 
 struct passwd *pwd;
@@ -158,15 +161,6 @@ void print_job(job *j)
 	}
 }
 
-int is_buildin(process *p)
-{
-	int i;
-	for (i = 0; buildin[i]; ++i)
-		if (strcmp(buildin[i], p->argv[0]) == 0)
-			return 1;
-	return 0;
-}
-
 /* Store the status of the process pid that was returned by waitpid.
    Return 0 if all went well, nonzero otherwise.  */
 
@@ -220,7 +214,104 @@ void update_status(void)
 	while (!mark_process_status(pid, status));
 }
 
-extern char **environ;
+char **get_splitted_path()
+{
+	size_t i;
+	char **result = NULL;
+	char *path = getenv("PATH");
+	CHECK(path != NULL);
+
+	// count the number of ':' in the PATH env var
+	size_t components = 1;
+	for (i = 0; i < strlen(path); ++i)
+	{
+		if (path[i] == ':')
+		{
+			++components;
+		}
+	}
+
+	// allocate a place to store all paths (+1 extra for NULL)
+	size_t result_size = sizeof(char *) * (components + 1);
+	result = (char **)malloc(result_size);
+	CHECK(result != NULL);
+	memset(result, 0, result_size);
+
+	// store each path
+	i = 0;
+	char *next;
+
+	for (i = 0; i < components - 1; ++i)
+	{
+		next = strchr(path, ':');
+		if (next == NULL)
+		{
+			break;
+		}
+
+		result[i] = malloc(sizeof(char) * (next - path + 1));
+		result[i][next - path] = '\0';
+		CHECK(result[i] != NULL);
+		strncpy(result[i], path, next - path);
+		path = next + 1;
+	}
+
+	result[i] = malloc(sizeof(char) * strlen(path));
+	strcpy(result[i], path);
+
+	return result;
+
+error:
+	if (result)
+	{
+		while (*result)
+		{
+			free(*result);
+			++result;
+		}
+		free(result);
+	}
+
+	return NULL;
+}
+
+char *exec_which(char *executable)
+{
+	size_t i = 0;
+	char *result = NULL;
+	char **paths = NULL;
+
+	paths = get_splitted_path();
+	CHECK(paths != NULL);
+
+	while (paths[i])
+	{
+		char fullpath[1024];
+		sprintf(fullpath, "%s/%s", paths[i], executable);
+		if (0 == access(fullpath, O_RDONLY))
+		{
+			result = malloc(sizeof(char) * (strlen(fullpath) + 1));
+			CHECK(result != NULL);
+			strcpy(result, fullpath);
+			break;
+		}
+		++i;
+	}
+
+error:
+	if (paths)
+	{
+		i = 0;
+		while (paths[i])
+		{
+			free(paths[i]);
+			++i;
+		}
+		free(paths);
+	}
+
+	return result;
+}
 
 pid_t launch_process(process *p, pid_t pgid,
 					 int infile, int outfile, int errfile,
@@ -240,11 +331,11 @@ pid_t launch_process(process *p, pid_t pgid,
 		 the terminal, if appropriate.
 		 This has to be done both by the shell and in the individual
 		 child processes because of potential race conditions.  */
-		if (pgid == 0) 
+		if (pgid == 0)
 		{
 			pgid = pid;
 		}
-		
+
 		CHECK(0 == posix_spawnattr_setpgroup(&attr, pgid));
 		CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP));
 
@@ -268,7 +359,19 @@ pid_t launch_process(process *p, pid_t pgid,
 	}
 
 	/* Exec the new process.  Make sure we exit.  */
-	CHECK(0 == posix_spawnp(&pid, p->argv[0], &actions, &attr, p->argv, environ));
+	char *fullpath = exec_which(p->argv[0]);
+	if (!fullpath)
+	{
+		fprintf(stderr, "%s: not in path\n", p->argv[0]);
+		goto error;
+	}
+
+	CHECK(0 == posix_spawnp(&pid, fullpath, &actions, &attr, p->argv, environ));
+
+	if (fullpath)
+	{
+		free(fullpath);
+	}
 
 	if (foreground)
 	{
@@ -400,177 +503,6 @@ void continue_job(job *j, int foreground)
 		put_job_in_background(j, 1);
 }
 
-void lauch_buildin(process *p, int infile, int outfile, int errfile)
-{
-	/* Set the standard input/output channels of the new process.  */
-	if (strcmp(p->argv[0], "cd") == 0)
-	{
-		char *cd_path = NULL;
-		if (!p->argv[1])
-			cd_path = strdup(getenv("HOME"));
-		else if (p->argv[1][0] == '~')
-		{
-			cd_path = malloc(strlen(getenv("HOME")) + strlen(p->argv[1]));
-			strcpy(cd_path, getenv("HOME"));
-			strncpy(cd_path + strlen(getenv("HOME")), p->argv[1] + 1, strlen(p->argv[1]));
-		}
-		else
-			cd_path = strdup(p->argv[1]);
-		if (chdir(cd_path) < 0)
-			perror("cd:");
-		free(cd_path);
-	}
-	else if (strcmp(p->argv[0], "exit") == 0)
-	{
-		update_status();
-		exit(0);
-	}
-	else if (strcmp(p->argv[0], "quit") == 0)
-	{
-		update_status();
-		exit(0);
-	}
-	else if (strcmp(p->argv[0], "jobs") == 0)
-	{
-		if (p->argv[1])
-		{
-			int i;
-			int id;
-			job *j;
-			for (i = 1; p->argv[i]; ++i)
-			{
-				id = atoi(p->argv[i]);
-				j = find_job_id(id);
-				if (j)
-				{
-					if (!job_is_completed(j))
-					{
-						if (job_is_stopped(j))
-						{
-							dprintf(outfile, "[%d] %ld Stopped\n", j->id, (long)j->pgid);
-						}
-						else
-						{
-							dprintf(outfile, "[%d] %ld Running\n", j->id, (long)j->pgid);
-						}
-					}
-					else
-						dprintf(errfile, "jobs: %s : no such job\n", p->argv[i]);
-				}
-				else
-					dprintf(errfile, "jobs: %s : no such job\n", p->argv[i]);
-			}
-			return;
-		}
-		job *j;
-		/* Update status information for child processes.  */
-		update_status();
-
-		for (j = first_job; j; j = j->next)
-		{
-			if (!job_is_completed(j) && j->id)
-			{
-				if (job_is_stopped(j))
-				{
-					dprintf(outfile, "[%d] %ld Stopped\n", j->id, (long)j->pgid);
-				}
-				else
-				{
-					dprintf(outfile, "[%d] %ld Running\n", j->id, (long)j->pgid);
-				}
-			}
-		}
-	}
-	else if (strcmp(p->argv[0], "fg") == 0)
-	{
-		if (p->argv[1])
-		{
-			int i;
-			int id;
-			job *j;
-			for (i = 1; p->argv[i]; ++i)
-			{
-				id = atoi(p->argv[i]);
-				j = find_job_id(id);
-				if (j)
-				{
-					if (!job_is_completed(j) && job_is_stopped(j))
-						continue_job(j, 1);
-					else
-						dprintf(errfile, "fg: %s : no such job\n", p->argv[i]);
-				}
-				else
-					dprintf(errfile, "fg: %s : no such job\n", p->argv[i]);
-			}
-			return;
-		}
-		job *j;
-		job *jlast = NULL;
-		/* Update status information for child processes.  */
-		update_status();
-
-		for (j = first_job; j; j = j->next)
-		{
-			if (!job_is_completed(j) && j->id)
-			{
-				if (job_is_stopped(j))
-				{
-					jlast = j;
-				}
-			}
-		}
-
-		if (jlast)
-			continue_job(jlast, 1);
-		else
-			dprintf(errfile, "fg: current: no such job\n");
-	}
-	else if (strcmp(p->argv[0], "bg") == 0)
-	{
-		if (p->argv[1])
-		{
-			int i;
-			int id;
-			job *j;
-			for (i = 1; p->argv[i]; ++i)
-			{
-				id = atoi(p->argv[i]);
-				j = find_job_id(id);
-				if (j)
-				{
-					if (!job_is_completed(j) && job_is_stopped(j))
-						continue_job(j, 0);
-					else
-						dprintf(errfile, "bg: %s : no such job\n", p->argv[i]);
-				}
-				else
-					dprintf(errfile, "bg: %s : no such job\n", p->argv[i]);
-			}
-			return;
-		}
-		job *j;
-		job *jlast = NULL;
-		/* Update status information for child processes.  */
-		update_status();
-
-		for (j = first_job; j; j = j->next)
-		{
-			if (!job_is_completed(j) && j->id)
-			{
-				if (job_is_stopped(j))
-				{
-					jlast = j;
-				}
-			}
-		}
-
-		if (jlast)
-			continue_job(jlast, 0);
-		else
-			dprintf(errfile, "bg: current: no such job\n");
-	}
-}
-
 void launch_job(job *j, int foreground, int *id)
 {
 	process *p;
@@ -609,9 +541,9 @@ void launch_job(job *j, int foreground, int *id)
 		}
 		else
 			outfile = j->stdout;
-		if (is_buildin(p))
+		if (builtin_cmds_is_builtin(p))
 		{
-			lauch_buildin(p, infile, outfile, j->stderr);
+			builtin_cmds_launch(p, infile, outfile, j->stderr);
 			p->completed = 1;
 		}
 		else
@@ -619,17 +551,20 @@ void launch_job(job *j, int foreground, int *id)
 			/* Fork the child processes.  */
 			pid = launch_process(p, j->pgid, infile,
 								 outfile, j->stderr, foreground);
-			/* This is the parent process.  */
-			p->pid = pid;
-			if (shell_is_interactive)
+
+			if (pid)
 			{
-				if (!j->pgid)
+				p->pid = pid;
+				if (shell_is_interactive)
 				{
-					j->pgid = pid;
-					j->id = *id;
-					*id = *id + 1;
+					if (!j->pgid)
+					{
+						j->pgid = pid;
+						j->id = *id;
+						*id = *id + 1;
+					}
+					setpgid(pid, j->pgid);
 				}
-				setpgid(pid, j->pgid);
 			}
 		}
 		/* Clean up after pipes.  */

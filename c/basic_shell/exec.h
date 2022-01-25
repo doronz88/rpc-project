@@ -1,3 +1,5 @@
+#ifndef _EXEC_H
+#define _EXEC_H
 #include <termios.h>
 
 #define ARG_MAX 256
@@ -49,3 +51,16 @@ pid_t launch_process (process *p, pid_t pgid,
 void launch_job (job *j, int foreground, int* id);
 
 void do_job_notification (void);
+
+void update_status(void);
+
+job *find_job_id(int id);
+
+int job_is_stopped(job *j);
+
+int job_is_completed(job *j);
+
+void continue_job(job *j, int foreground);
+char *exec_which(char *executable);
+
+#endif // _EXEC_H
