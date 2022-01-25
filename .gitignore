@@ -27,6 +27,8 @@
 *.i*86
 *.x86_64
 *.hex
+c/basic_shell/shell
+c/remote_server/server
 c/client
 c/server
 c/shell
