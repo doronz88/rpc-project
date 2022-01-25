@@ -23,24 +23,23 @@ void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
 void *ParseFree(void *, void (*freeProc)(void *));
 
-void type_prompt(void)
+void print_prompt(void)
 {
-    char path[MAX_PATH_LEN];
-    getcwd(path, MAX_PATH_LEN);
-    int i, ilast;
-    for (i = 0; i < MAX_PATH_LEN && path[i]; ++i)
+    char *ps1 = getenv("PS1");
+    if (ps1)
     {
-        if (path[i] == '/')
-            ilast = i;
+        printf("%s", ps1);
     }
-    // printf("%s $shell: ", path + ilast + 1);
-    printf("$ ");
+    else
+    {
+        printf("$ ");
+    }
 }
 
 void handle_signal(int signo)
 {
     printf("\n");
-    type_prompt();
+    print_prompt();
     fflush(stdout);
 }
 
@@ -125,7 +124,7 @@ int main(int argc, char **argv)
 
     do
     {
-        type_prompt();
+        print_prompt();
         job *j = create_job();
         flag = parse_commands(scanner, j);
         if (j->valid > 0)
