@@ -28,5 +28,11 @@
 *.x86_64
 *.hex
 
+# Compilation Results
+lemon
+shellparser.c
+shellparser.h
+shellscanner.h
+
 # Unsaved files
 *~
