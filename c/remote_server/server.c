@@ -35,6 +35,8 @@ static char g_shell_path[MAX_OPTION_LEN] = DEFAULT_SHELL;
 void sigchld_handler(int s)
 {
     (void)s;
+
+    // TODO: close socket associated with this pid
     while (waitpid(-1, NULL, WNOHANG) > 0)
         ;
     TRACE("Connection closed.");

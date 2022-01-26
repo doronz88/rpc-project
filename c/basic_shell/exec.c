@@ -459,7 +459,9 @@ void format_job_info(job *j, const char *status)
    Delete terminated jobs from the active job list.  */
 void exec_do_job_notification(void)
 {
-	job *j, *jlast, *jnext;
+	job *j = NULL;
+	job *jlast = NULL;
+	job *jnext = NULL;
 
 	/* Update status information for child processes.  */
 	exec_update_status();
