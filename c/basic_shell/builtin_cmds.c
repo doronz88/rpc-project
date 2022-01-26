@@ -9,13 +9,6 @@
 
 extern char **environ;
 
-extern pid_t shell_pgid;
-extern struct termios shell_tmodes;
-extern int shell_terminal;
-extern int shell_is_interactive;
-extern char *builtin[];
-extern job *first_job;
-
 typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
 void handle_builtin_which(process *p, int infile, int outfile, int errfile);
@@ -112,7 +105,7 @@ void handle_builtin_export(process *p, int infile, int outfile, int errfile)
 
 void handle_builtin_exit(process *p, int infile, int outfile, int errfile)
 {
-    update_status();
+    exec_update_status();
     exit(0);
 }
 
@@ -126,12 +119,12 @@ void handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
         for (i = 1; p->argv[i]; ++i)
         {
             id = atoi(p->argv[i]);
-            j = find_job_id(id);
+            j = exec_find_job_id(id);
             if (j)
             {
-                if (!job_is_completed(j))
+                if (!exec_job_is_completed(j))
                 {
-                    if (job_is_stopped(j))
+                    if (exec_job_is_stopped(j))
                     {
                         dprintf(outfile, "[%d] %ld Stopped\n", j->id, (long)j->pgid);
                     }
@@ -150,13 +143,13 @@ void handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
     }
     job *j;
     /* Update status information for child processes.  */
-    update_status();
+    exec_update_status();
 
-    for (j = first_job; j; j = j->next)
+    for (j = exec_first_job; j; j = j->next)
     {
-        if (!job_is_completed(j) && j->id)
+        if (!exec_job_is_completed(j) && j->id)
         {
-            if (job_is_stopped(j))
+            if (exec_job_is_stopped(j))
             {
                 dprintf(outfile, "[%d] %ld Stopped\n", j->id, (long)j->pgid);
             }
@@ -178,11 +171,11 @@ void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
         for (i = 1; p->argv[i]; ++i)
         {
             id = atoi(p->argv[i]);
-            j = find_job_id(id);
+            j = exec_find_job_id(id);
             if (j)
             {
-                if (!job_is_completed(j) && job_is_stopped(j))
-                    continue_job(j, 1);
+                if (!exec_job_is_completed(j) && exec_job_is_stopped(j))
+                    exec_continue_job(j, 1);
                 else
                     dprintf(errfile, "fg: %s : no such job\n", p->argv[i]);
             }
@@ -194,13 +187,13 @@ void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
     job *j;
     job *jlast = NULL;
     /* Update status information for child processes.  */
-    update_status();
+    exec_update_status();
 
-    for (j = first_job; j; j = j->next)
+    for (j = exec_first_job; j; j = j->next)
     {
-        if (!job_is_completed(j) && j->id)
+        if (!exec_job_is_completed(j) && j->id)
         {
-            if (job_is_stopped(j))
+            if (exec_job_is_stopped(j))
             {
                 jlast = j;
             }
@@ -208,7 +201,7 @@ void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
     }
 
     if (jlast)
-        continue_job(jlast, 1);
+        exec_continue_job(jlast, 1);
     else
         dprintf(errfile, "fg: current: no such job\n");
 }
@@ -223,11 +216,11 @@ void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
         for (i = 1; p->argv[i]; ++i)
         {
             id = atoi(p->argv[i]);
-            j = find_job_id(id);
+            j = exec_find_job_id(id);
             if (j)
             {
-                if (!job_is_completed(j) && job_is_stopped(j))
-                    continue_job(j, 0);
+                if (!exec_job_is_completed(j) && exec_job_is_stopped(j))
+                    exec_continue_job(j, 0);
                 else
                     dprintf(errfile, "bg: %s : no such job\n", p->argv[i]);
             }
@@ -239,13 +232,13 @@ void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
     job *j;
     job *jlast = NULL;
     /* Update status information for child processes.  */
-    update_status();
+    exec_update_status();
 
-    for (j = first_job; j; j = j->next)
+    for (j = exec_first_job; j; j = j->next)
     {
-        if (!job_is_completed(j) && j->id)
+        if (!exec_job_is_completed(j) && j->id)
         {
-            if (job_is_stopped(j))
+            if (exec_job_is_stopped(j))
             {
                 jlast = j;
             }
@@ -253,7 +246,7 @@ void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
     }
 
     if (jlast)
-        continue_job(jlast, 0);
+        exec_continue_job(jlast, 0);
     else
         dprintf(errfile, "bg: current: no such job\n");
 }

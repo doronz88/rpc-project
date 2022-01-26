@@ -7,13 +7,8 @@ all: shell
 shell: main.c exec.o shellparser.o shellscanner.o common.o builtin_cmds.o
 	$(CC) $(CFLAGS) -o $@ $^
 
-common.o: common.c
-	$(CC) $(CFLAGS) -c common.c -o $@
-
-builtin_cmds.o: builtin_cmds.c
-	$(CC) $(CFLAGS) -c builtin_cmds.c -o $@
-
-exec.o: exec.h exec.c
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 shellparser.o: shellparser.h shellparser.c exec.o
 

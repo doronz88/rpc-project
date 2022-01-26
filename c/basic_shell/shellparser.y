@@ -120,7 +120,7 @@ commandList(A) ::= command(B) .
 command(A) ::= argumentList(B) .
 {
     //printf("command ::= FILENAME argumentList .\n");
-    A = create_process();
+    A = exec_create_process();
     A->argv = B;
 }
 

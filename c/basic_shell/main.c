@@ -1,23 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "shellparser.h"
-#include "shellscanner.h"
 #include <sys/types.h>
 #include <signal.h>
+
+#include "shellparser.h"
+#include "shellscanner.h"
 #include "exec.h"
-#include <pwd.h>
 #include "termios.h"
 
 #define MAX_NAME_LEN (256)
 #define MAX_PATH_LEN (1024)
-
-pid_t shell_pgid;
-struct termios shell_tmodes;
-int shell_terminal;
-int shell_is_interactive;
-
-/* The active jobs are linked into a list.  This is its head.   */
-job *first_job = NULL;
 
 void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
@@ -47,9 +39,9 @@ void init_shell()
 {
 
     /* See if we are running interactively.  */
-    shell_terminal = STDIN_FILENO;
-    shell_is_interactive = isatty(shell_terminal);
-    if (shell_is_interactive)
+    exec_shell_terminal = STDIN_FILENO;
+    exec_shell_is_interactive = isatty(exec_shell_terminal);
+    if (exec_shell_is_interactive)
     {
         // /* Loop until we are in the foreground.  */
         // while (tcgetpgrp(shell_terminal) != (shell_pgid = getpgrp()))
@@ -64,18 +56,18 @@ void init_shell()
         // signal (SIGCHLD, SIG_IGN);
 
         /* Put ourselves in our own process group.  */
-        shell_pgid = getpid();
-        if (setpgid(shell_pgid, shell_pgid) < 0)
+        exec_shell_pgid = getpid();
+        if (setpgid(exec_shell_pgid, exec_shell_pgid) < 0)
         {
             perror("Couldn't put the shell in its own process group");
             exit(1);
         }
 
         /* Grab control of the terminal.  */
-        tcsetpgrp(shell_terminal, shell_pgid);
+        tcsetpgrp(exec_shell_terminal, exec_shell_pgid);
 
         /* Save default terminal attributes for shell.  */
-        tcgetattr(shell_terminal, &shell_tmodes);
+        tcgetattr(exec_shell_terminal, &exec_shell_tmodes);
     }
 }
 
@@ -125,29 +117,32 @@ int main(int argc, char **argv)
     do
     {
         print_prompt();
-        job *j = create_job();
+        job *j = exec_create_job();
         flag = parse_commands(scanner, j);
         if (j->valid > 0)
         {
-            if (first_job)
+            if (exec_first_job)
             {
                 job *t;
-                for (t = first_job; t->next; t = t->next)
+                for (t = exec_first_job; t->next; t = t->next)
                     ;
                 t->next = j;
             }
             else
-                first_job = j;
-            launch_job(j, j->foreground, &id);
-            do_job_notification();
-            // print_job(first_job);
+            {
+                exec_first_job = j;
+            }
+            exec_launch_job(j, j->foreground, &id);
+            exec_do_job_notification();
         }
         else if (j->valid < 0)
         {
-            do_job_notification();
+            exec_do_job_notification();
         }
         else
-            (free_job(j));
+        {
+            (exec_free_job(j));
+        }
     } while (flag == 1);
 
     yylex_destroy(scanner);

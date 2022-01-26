@@ -15,14 +15,15 @@
 
 extern char **environ;
 
-extern pid_t shell_pgid;
-extern struct termios shell_tmodes;
-extern int shell_terminal;
-extern int shell_is_interactive;
-extern char *builtin[];
-extern job *first_job;
+job *exec_first_job = NULL;
 
-struct passwd *pwd;
+pid_t launch_process(process *p, pid_t pgid,
+					 int infile, int outfile, int errfile,
+					 int foreground);
+
+void print_job(job *);
+void free_process(process *);
+void print_process(process *);
 
 void print_process(process *p)
 {
@@ -33,7 +34,7 @@ void print_process(process *p)
 	}
 }
 
-process *create_process(void)
+process *exec_create_process(void)
 {
 	process *p = malloc(sizeof(process));
 	if (!p)
@@ -48,7 +49,7 @@ process *create_process(void)
 	return p;
 }
 
-job *create_job()
+job *exec_create_job()
 {
 	job *j = malloc(sizeof(job));
 	if (!j)
@@ -81,7 +82,7 @@ void free_process(process *p)
 	free(p->argv);
 }
 
-void free_job(job *j)
+void exec_free_job(job *j)
 {
 	if (!j)
 		return;
@@ -101,43 +102,51 @@ job *find_job(pid_t pgid)
 {
 	job *j;
 
-	for (j = first_job; j; j = j->next)
+	for (j = exec_first_job; j; j = j->next)
 		if (j->pgid == pgid)
 			return j;
 	return NULL;
 }
 
-job *find_job_id(int id)
+job *exec_find_job_id(int id)
 {
 	if (id < 1)
 		return NULL;
 	job *j;
-	for (j = first_job; j; j = j->next)
+	for (j = exec_first_job; j; j = j->next)
 		if (j->id == id)
 			return j;
 	return NULL;
 }
 
 /* Return true if all processes in the job have stopped or completed.  */
-int job_is_stopped(job *j)
+bool exec_job_is_stopped(job *j)
 {
 	process *p;
 
 	for (p = j->first_process; p; p = p->next)
+	{
 		if (!p->completed && !p->stopped)
-			return 0;
-	return 1;
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 /* Return true if all processes in the job have completed.  */
-int job_is_completed(job *j)
+bool exec_job_is_completed(job *j)
 {
 	process *p;
 
 	for (p = j->first_process; p; p = p->next)
+	{
 		if (!p->completed)
-			return 0;
-	return 1;
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 void print_job(job *j)
@@ -150,9 +159,13 @@ void print_job(job *j)
 	process *p;
 	int i = 0;
 	if (j->infile)
+	{
 		printf("infile: %s\n", j->infile);
+	}
 	if (j->outfile)
+	{
 		printf("outfile: %s\n", j->outfile);
+	}
 	for (p = j->first_process; p; p = p->next)
 	{
 		printf("pro%d\n", i);
@@ -171,7 +184,7 @@ int mark_process_status(pid_t pid, int status)
 	if (pid > 0)
 	{
 		/* Update the record for the process.  */
-		for (j = first_job; j; j = j->next)
+		for (j = exec_first_job; j; j = j->next)
 			for (p = j->first_process; p; p = p->next)
 				if (p->pid == pid)
 				{
@@ -204,14 +217,15 @@ int mark_process_status(pid_t pid, int status)
 /* Check for processes that have status information available,
    without blocking.  */
 
-void update_status(void)
+void exec_update_status(void)
 {
 	int status;
 	pid_t pid;
 
 	do
+	{
 		pid = waitpid(WAIT_ANY, &status, WUNTRACED | WNOHANG);
-	while (!mark_process_status(pid, status));
+	} while (!mark_process_status(pid, status));
 }
 
 char **get_splitted_path()
@@ -325,7 +339,7 @@ pid_t launch_process(process *p, pid_t pgid,
 	posix_spawnattr_t attr;
 	CHECK(0 == posix_spawnattr_init(&attr));
 
-	if (shell_is_interactive)
+	if (exec_shell_is_interactive)
 	{
 		/* Put the process into the process group and give the process group
 		 the terminal, if appropriate.
@@ -375,7 +389,7 @@ pid_t launch_process(process *p, pid_t pgid,
 
 	if (foreground)
 	{
-		CHECK(0 == tcsetpgrp(shell_terminal, pgid));
+		CHECK(0 == tcsetpgrp(exec_shell_terminal, pgid));
 	}
 
 error:
@@ -391,8 +405,9 @@ void wait_for_job(job *j)
 	pid_t pid;
 
 	do
+	{
 		pid = waitpid(-j->pgid, &status, WUNTRACED);
-	while (!mark_process_status(pid, status) && !job_is_stopped(j) && !job_is_completed(j));
+	} while (!mark_process_status(pid, status) && !exec_job_is_stopped(j) && !exec_job_is_completed(j));
 }
 /* Format information about job status for the user to look at.  */
 
@@ -403,34 +418,34 @@ void format_job_info(job *j, const char *status)
 /* Notify the user about stopped or terminated jobs.
    Delete terminated jobs from the active job list.  */
 
-void do_job_notification(void)
+void exec_do_job_notification(void)
 {
 	job *j, *jlast, *jnext;
 
 	/* Update status information for child processes.  */
-	update_status();
+	exec_update_status();
 
 	jlast = NULL;
-	for (j = first_job; j; j = jnext)
+	for (j = exec_first_job; j; j = jnext)
 	{
 		jnext = j->next;
 
 		/* If all processes have completed, tell the user the job has
 		completed and delete it from the list of active jobs.  */
-		if (job_is_completed(j))
+		if (exec_job_is_completed(j))
 		{
 			if (!j->foreground)
 				format_job_info(j, "Done");
 			if (jlast)
 				jlast->next = jnext;
 			else
-				first_job = jnext;
-			free_job(j);
+				exec_first_job = jnext;
+			exec_free_job(j);
 		}
 
 		/* Notify the user about stopped jobs,
 		marking them so that we won’t do this more than once.  */
-		else if (job_is_stopped(j) && !j->notified)
+		else if (exec_job_is_stopped(j) && !j->notified)
 		{
 			format_job_info(j, "Stopped");
 			j->notified = 1;
@@ -451,11 +466,11 @@ void put_job_in_foreground(job *j, int cont)
 {
 	j->foreground = 1;
 	/* Put the job into the foreground.  */
-	tcsetpgrp(shell_terminal, j->pgid);
+	tcsetpgrp(exec_shell_terminal, j->pgid);
 	/* Send the job a continue signal, if necessary.  */
 	if (cont)
 	{
-		tcsetattr(shell_terminal, TCSADRAIN, &j->tmodes);
+		tcsetattr(exec_shell_terminal, TCSADRAIN, &j->tmodes);
 		if (kill(-j->pgid, SIGCONT) < 0)
 			perror("kill (SIGCONT)");
 	}
@@ -463,11 +478,11 @@ void put_job_in_foreground(job *j, int cont)
 	wait_for_job(j);
 
 	/* Put the shell back in the foreground.  */
-	tcsetpgrp(shell_terminal, shell_pgid);
+	tcsetpgrp(exec_shell_terminal, exec_shell_pgid);
 
 	/* Restore the shell’s terminal modes.  */
-	tcgetattr(shell_terminal, &j->tmodes);
-	tcsetattr(shell_terminal, TCSADRAIN, &shell_tmodes);
+	tcgetattr(exec_shell_terminal, &j->tmodes);
+	tcsetattr(exec_shell_terminal, TCSADRAIN, &exec_shell_tmodes);
 }
 
 /* Put a job in the background.  If the cont argument is true, send
@@ -494,7 +509,7 @@ void mark_job_as_running(job *j)
 }
 /* Continue the job J.  */
 
-void continue_job(job *j, int foreground)
+void exec_continue_job(job *j, int foreground)
 {
 	mark_job_as_running(j);
 	if (foreground)
@@ -503,7 +518,7 @@ void continue_job(job *j, int foreground)
 		put_job_in_background(j, 1);
 }
 
-void launch_job(job *j, int foreground, int *id)
+void exec_launch_job(job *j, int foreground, int *id)
 {
 	process *p;
 	pid_t pid;
@@ -555,7 +570,7 @@ void launch_job(job *j, int foreground, int *id)
 			if (pid)
 			{
 				p->pid = pid;
-				if (shell_is_interactive)
+				if (exec_shell_is_interactive)
 				{
 					if (!j->pgid)
 					{
@@ -579,7 +594,7 @@ void launch_job(job *j, int foreground, int *id)
 		infile = mypipe[0];
 	}
 
-	if (!shell_is_interactive)
+	if (!exec_shell_is_interactive)
 	{
 		wait_for_job(j);
 	}
