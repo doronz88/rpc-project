@@ -12,6 +12,7 @@ extern char **environ;
 typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
 void handle_builtin_help(process *p, int infile, int outfile, int errfile);
+void handle_builtin_echo(process *p, int infile, int outfile, int errfile);
 void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
 void handle_builtin_which(process *p, int infile, int outfile, int errfile);
 void handle_builtin_cd(process *p, int infile, int outfile, int errfile);
@@ -30,6 +31,7 @@ typedef struct
 
 builtin_cmd_t builtin_cmds_list[] = {
     {"help", handle_builtin_help},
+    {"echo", handle_builtin_echo},
     {"lasterror", handle_builtin_lasterror},
     {"which", handle_builtin_which},
     {"cd", handle_builtin_cd},
@@ -66,16 +68,25 @@ bool builtin_cmds_is_builtin(process *p)
 
 void handle_builtin_help(process *p, int infile, int outfile, int errfile)
 {
-    printf("Builtin commands:\n");
+    dprintf(outfile, "Builtin commands:\n");
     for (size_t i = 0; i < sizeof(builtin_cmds_list) / sizeof(builtin_cmds_list[0]); ++i)
     {
-        printf("- %s\n", builtin_cmds_list[i].name);
+        dprintf(outfile, "- %s\n", builtin_cmds_list[i].name);
     }
+}
+
+void handle_builtin_echo(process *p, int infile, int outfile, int errfile)
+{
+    for (size_t i = 1; p->argv[i]; ++i)
+    {
+        dprintf(outfile, "%s ", p->argv[i]);
+    }
+    dprintf(outfile, "\n");
 }
 
 void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
 {
-    printf("%d (%s)\n", exec_last_job_status, strerror(exec_last_job_status));
+    dprintf(outfile, "%d (%s)\n", exec_last_job_status, strerror(exec_last_job_status));
 }
 
 void handle_builtin_which(process *p, int infile, int outfile, int errfile)
@@ -83,15 +94,18 @@ void handle_builtin_which(process *p, int infile, int outfile, int errfile)
     char *result = exec_which(p->argv[1]);
     if (result)
     {
-        puts(result);
+        dprintf(outfile, "%s\n", result);
     }
+    free(result);
 }
 
 void handle_builtin_cd(process *p, int infile, int outfile, int errfile)
 {
     char *cd_path = NULL;
     if (!p->argv[1])
+    {
         cd_path = strdup(getenv("HOME"));
+    }
     else if (p->argv[1][0] == '~')
     {
         cd_path = malloc(strlen(getenv("HOME")) + strlen(p->argv[1]));
@@ -99,9 +113,13 @@ void handle_builtin_cd(process *p, int infile, int outfile, int errfile)
         strncpy(cd_path + strlen(getenv("HOME")), p->argv[1] + 1, strlen(p->argv[1]));
     }
     else
+    {
         cd_path = strdup(p->argv[1]);
+    }
     if (chdir(cd_path) < 0)
+    {
         perror("cd:");
+    }
     free(cd_path);
 }
 
