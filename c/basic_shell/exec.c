@@ -15,6 +15,7 @@
 
 extern char **environ;
 
+int exec_last_job_status = 0;
 job *exec_first_job = NULL;
 
 pid_t launch_process(process *p, pid_t pgid,
@@ -398,7 +399,6 @@ error:
 
 /* Check for processes that have status information available,
    blocking until all processes in the given job have reported.  */
-
 void wait_for_job(job *j)
 {
 	int status;
@@ -407,17 +407,18 @@ void wait_for_job(job *j)
 	do
 	{
 		pid = waitpid(-j->pgid, &status, WUNTRACED);
+		exec_last_job_status = status;
 	} while (!mark_process_status(pid, status) && !exec_job_is_stopped(j) && !exec_job_is_completed(j));
 }
-/* Format information about job status for the user to look at.  */
 
+/* Format information about job status for the user to look at.  */
 void format_job_info(job *j, const char *status)
 {
 	fprintf(stderr, "[%d] %ld %s\n", j->id, (long)j->pgid, status);
 }
+
 /* Notify the user about stopped or terminated jobs.
    Delete terminated jobs from the active job list.  */
-
 void exec_do_job_notification(void)
 {
 	job *j, *jlast, *jnext;

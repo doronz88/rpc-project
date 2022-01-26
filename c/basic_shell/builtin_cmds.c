@@ -11,6 +11,8 @@ extern char **environ;
 
 typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
+void handle_builtin_help(process *p, int infile, int outfile, int errfile);
+void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
 void handle_builtin_which(process *p, int infile, int outfile, int errfile);
 void handle_builtin_cd(process *p, int infile, int outfile, int errfile);
 void handle_builtin_exit(process *p, int infile, int outfile, int errfile);
@@ -27,6 +29,8 @@ typedef struct
 } builtin_cmd_t;
 
 builtin_cmd_t builtin_cmds_list[] = {
+    {"help", handle_builtin_help},
+    {"lasterror", handle_builtin_lasterror},
     {"which", handle_builtin_which},
     {"cd", handle_builtin_cd},
     {"exit", handle_builtin_exit},
@@ -58,6 +62,20 @@ bool builtin_cmds_is_builtin(process *p)
         }
     }
     return false;
+}
+
+void handle_builtin_help(process *p, int infile, int outfile, int errfile)
+{
+    printf("Builtin commands:\n");
+    for (size_t i = 0; i < sizeof(builtin_cmds_list) / sizeof(builtin_cmds_list[0]); ++i)
+    {
+        printf("- %s\n", builtin_cmds_list[i].name);
+    }
+}
+
+void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
+{
+    printf("%d (%s)\n", exec_last_job_status, strerror(exec_last_job_status));
 }
 
 void handle_builtin_which(process *p, int infile, int outfile, int errfile)

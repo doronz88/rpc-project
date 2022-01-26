@@ -16,6 +16,7 @@ typedef struct process
   char stopped;         /* true if process has stopped */
   int status;           /* reported status value */
 } process;
+
 /* A job is a pipeline of processes.  */
 typedef struct job
 {
@@ -39,6 +40,7 @@ int exec_shell_is_interactive;
 
 /* The active jobs are linked into a list.  This is its head.   */
 job *exec_first_job;
+int exec_last_job_status;
 
 process *exec_create_process();
 job *exec_create_job();
