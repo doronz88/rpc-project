@@ -60,6 +60,7 @@ job *exec_create_job()
 		perror("malloc");
 		return NULL;
 	}
+	j->next = NULL;
 	j->first_process = NULL;
 	j->valid = 1;
 	j->id = 0;

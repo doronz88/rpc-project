@@ -12,6 +12,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "common.h"
+
 #define DEFAULT_PORT "5910"
 #define BUFFERSIZE (64 * 1024)
 
@@ -155,7 +157,7 @@ int main(int argc, char **argv)
                 // perror("stdin closed");
                 break;
             }
-            mbytes = send(sockfd, buf, nbytes, 0);
+            mbytes = sendall(sockfd, buf, nbytes);
         }
 
         if (FD_ISSET(sockfd, &readfds))
@@ -166,7 +168,7 @@ int main(int argc, char **argv)
                 // perror("sockfd closed");
                 break;
             }
-            mbytes = write(STDOUT_FILENO, buf, nbytes);
+            mbytes = writeall(STDOUT_FILENO, buf, nbytes);
         }
         if (nbytes != mbytes)
             printf("nbytes [%d] != mbytes [%d] \n", nbytes, mbytes);

@@ -118,8 +118,8 @@ void shell_init()
     if (exec_shell_is_interactive)
     {
         // /* Loop until we are in the foreground.  */
-        // while (tcgetpgrp(shell_terminal) != (shell_pgid = getpgrp()))
-        //     kill(-shell_pgid, SIGTTIN);
+        // while (tcgetpgrp(exec_shell_terminal) != (exec_shell_pgid = getpgrp()))
+        //     kill(-exec_shell_pgid, SIGTTIN);
 
         /* Ignore interactive and job-control signals.  */
         signal(SIGINT, handle_signal);
@@ -200,7 +200,7 @@ int shell_execute(FILE *in, bool interactive)
         {
             if (exec_first_job)
             {
-                job *t;
+                job *t = NULL;
                 for (t = exec_first_job; t->next; t = t->next)
                     ;
                 t->next = j;
