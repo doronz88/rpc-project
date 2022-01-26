@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "exec.h"
 #include "builtin_cmds.h"
@@ -9,9 +10,12 @@
 
 extern char **environ;
 
+#define MAX_READ_CHUNK (0x1000)
+
 typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
 void handle_builtin_help(process *p, int infile, int outfile, int errfile);
+void handle_builtin_cat(process *p, int infile, int outfile, int errfile);
 void handle_builtin_echo(process *p, int infile, int outfile, int errfile);
 void handle_builtin_pwd(process *p, int infile, int outfile, int errfile);
 void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
@@ -32,6 +36,7 @@ typedef struct
 
 builtin_cmd_t builtin_cmds_list[] = {
     {"help", handle_builtin_help},
+    {"cat", handle_builtin_cat},
     {"echo", handle_builtin_echo},
     {"pwd", handle_builtin_pwd},
     {"lasterror", handle_builtin_lasterror},
@@ -56,11 +61,11 @@ void builtin_cmds_launch(process *p, int infile, int outfile, int errfile)
     }
 }
 
-bool builtin_cmds_is_builtin(process *p)
+bool builtin_cmds_is_builtin(const char *executable)
 {
     for (size_t i = 0; i < sizeof(builtin_cmds_list) / sizeof(builtin_cmds_list[0]); ++i)
     {
-        if (0 == strcmp(builtin_cmds_list[i].name, p->argv[0]))
+        if (0 == strcmp(builtin_cmds_list[i].name, executable))
         {
             return true;
         }
@@ -75,6 +80,30 @@ void handle_builtin_help(process *p, int infile, int outfile, int errfile)
     {
         dprintf(outfile, "- %s\n", builtin_cmds_list[i].name);
     }
+}
+
+void handle_builtin_cat(process *p, int infile, int outfile, int errfile)
+{
+    if (p->argv[1])
+    {
+        infile = open(p->argv[1], O_RDONLY);
+        CHECK(infile >= 0);
+    }
+    char buf[MAX_READ_CHUNK];
+    int result;
+    do
+    {
+        result = read(infile, buf, sizeof(buf));
+        if (result > 0)
+        {
+            write(outfile, buf, result);
+        }
+    } while (result > 0);
+    return;
+
+error:
+    dprintf(errfile, "cat: failed to read\n");
+    return;
 }
 
 void handle_builtin_echo(process *p, int infile, int outfile, int errfile)
@@ -101,6 +130,12 @@ void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
 
 void handle_builtin_which(process *p, int infile, int outfile, int errfile)
 {
+    if (builtin_cmds_is_builtin(p->argv[1]))
+	{
+		dprintf(outfile, "%s: shell built-in command\n", p->argv[1]);
+        return;
+	}
+
     char *result = exec_which(p->argv[1]);
     if (result)
     {

@@ -13,6 +13,8 @@
 #include "exec.h"
 #include "builtin_cmds.h"
 
+#define ENV_VAR_PREFIX ('$')
+
 extern char **environ;
 
 int exec_last_job_status = 0;
@@ -466,7 +468,6 @@ void exec_do_job_notification(void)
 /* Put job j in the foreground.  If cont is nonzero,
    restore the saved terminal modes and send the process group a
    SIGCONT signal to wake it up before we block.  */
-
 void put_job_in_foreground(job *j, int cont)
 {
 	j->foreground = 1;
@@ -492,7 +493,6 @@ void put_job_in_foreground(job *j, int cont)
 
 /* Put a job in the background.  If the cont argument is true, send
    the process group a SIGCONT signal to wake it up.  */
-
 void put_job_in_background(job *j, int cont)
 {
 	/* Send the job a continue signal, if necessary.  */
@@ -503,7 +503,6 @@ void put_job_in_background(job *j, int cont)
 }
 
 /* Mark a stopped job J as being running again.  */
-
 void mark_job_as_running(job *j)
 {
 	process *p;
@@ -512,8 +511,8 @@ void mark_job_as_running(job *j)
 		p->stopped = 0;
 	j->notified = 0;
 }
-/* Continue the job J.  */
 
+/* Continue the job J.  */
 void exec_continue_job(job *j, int foreground)
 {
 	mark_job_as_running(j);
@@ -560,15 +559,16 @@ void exec_launch_job(job *j, int foreground, int *id)
 			outfile = mypipe[1];
 		}
 		else
+		{
 			outfile = j->stdout;
-		if (builtin_cmds_is_builtin(p))
+		}
+		if (builtin_cmds_is_builtin(p->argv[0]))
 		{
 			builtin_cmds_launch(p, infile, outfile, j->stderr);
 			p->completed = 1;
 		}
 		else
 		{
-			/* Fork the child processes.  */
 			pid = launch_process(p, j->pgid, infile,
 								 outfile, j->stderr, foreground);
 

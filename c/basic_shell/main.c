@@ -16,7 +16,7 @@ void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
 void *ParseFree(void *, void (*freeProc)(void *));
 
-#define DEFAULT_PS1 ("[\\s@\\h \\b]\\$")
+#define DEFAULT_PS1 ("[\\u@\\h \\b]\\$")
 #define SHELL_NAME ("zShell")
 #define USER_SUFFIX ("$")
 #define ROOT_SUFFIX ("#")
@@ -25,7 +25,8 @@ void *ParseFree(void *, void (*freeProc)(void *));
 void print_prompt(void)
 {
     char *ps1 = getenv("PS1");
-    if (!ps1) {
+    if (!ps1)
+    {
         ps1 = DEFAULT_PS1;
     }
 
@@ -37,12 +38,18 @@ void print_prompt(void)
 
     char *resolved_prompt_old = NULL;
     char *resolved_prompt = NULL;
-    
+
     resolved_prompt = str_replace(ps1, "\\s", SHELL_NAME);
     CHECK(resolved_prompt != NULL);
 
     resolved_prompt_old = resolved_prompt;
     resolved_prompt = str_replace(resolved_prompt_old, "\\h", hostname);
+    free(resolved_prompt_old);
+    resolved_prompt_old = NULL;
+    CHECK(resolved_prompt != NULL);
+
+    resolved_prompt_old = resolved_prompt;
+    resolved_prompt = str_replace(resolved_prompt_old, "\\u", getlogin());
     free(resolved_prompt_old);
     resolved_prompt_old = NULL;
     CHECK(resolved_prompt != NULL);
@@ -143,7 +150,9 @@ int parse_commands(yyscan_t scanner, job *j)
         return -1;
     }
     else if (0 == lexCode)
+    {
         return 0;
+    }
     return 1;
 }
 
