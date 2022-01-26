@@ -14,14 +14,14 @@
 %%
 
 "|"                     { return PIPE; }
-"\<"						{ return LEFT; }
-"\>"						{ return RIGHT; }
+"\<"					{ return LEFT; }
+"\>"					{ return RIGHT; }
 "&"						{ return AND; }
 
 [ \t\r]                 { }
 [\n]                    { return EOL; }
 
-[^ \t\r\n|\<\>'"&]+       { return ARGUMENT; }
+[^ \t\r\n|\<\>'"&]+     { return ARGUMENT; }
 
 [']                     { BEGIN(SINGLE_QUOTED); }
 <SINGLE_QUOTED>[^']+    { yymore(); }

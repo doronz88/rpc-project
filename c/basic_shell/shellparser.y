@@ -36,22 +36,27 @@
 }
 
 start ::= in .
+
 in ::= .
 {
     j->valid = 0;
 }
+
 in ::= EOL .
 {
     j->valid = -1;
 }
+
 in ::= job EOL .
 {
     j->foreground = 1;
 }
+
 in ::= job AND EOL .
 {
     j->foreground = 0;
 }
+
 job ::= commandList(B) .
 {
     j->first_process = B;
@@ -82,6 +87,7 @@ job ::= command(B) LEFT ARGUMENT(C) RIGHT ARGUMENT(D) .
     j->infile = C;
     j->outfile = D;
 }
+
 job ::= command(B) LEFT ARGUMENT(C) PIPE commandList(D) .
 {   
     B->next = D;
@@ -96,7 +102,6 @@ job ::= command(B) PIPE commandList(C) RIGHT ARGUMENT(D) .
     j->outfile = D;
 }
 
-
 job ::= command(B) LEFT ARGUMENT(C) PIPE commandList(D) RIGHT ARGUMENT(E).
 {   
     B->next = D;
@@ -104,7 +109,6 @@ job ::= command(B) LEFT ARGUMENT(C) PIPE commandList(D) RIGHT ARGUMENT(E).
     j->infile = C;
     j->outfile = E;
 }
-
 
 commandList(A) ::= command(B) PIPE commandList(C) .
 {
@@ -139,6 +143,7 @@ argumentList(A) ::= argumentList(C) argument(B) .
         }
     }
 }
+
 argumentList(A) ::= argument(B) .
 {
     //printf("argumentList ::= argument .\n");
@@ -146,6 +151,7 @@ argumentList(A) ::= argument(B) .
     A[0] = B;
     A[1] = NULL;
 }
+
 argument(A) ::= ARGUMENT(B) .
 {
     //printf("argument ::= ARGUMENT .\n");
