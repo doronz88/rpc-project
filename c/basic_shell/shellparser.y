@@ -129,7 +129,7 @@ argumentList(A) ::= argumentList(C) argument(B) .
     //printf("argumentList ::= argument argumentList .\n");
     A = C;
     int i;
-    for (i = 1; i < ARG_MAX-1; ++i)
+    for (i = 1; i < MAX_ARG_COUNT-1; ++i)
     {
         if (A[i] == NULL)
         {
@@ -142,7 +142,7 @@ argumentList(A) ::= argumentList(C) argument(B) .
 argumentList(A) ::= argument(B) .
 {
     //printf("argumentList ::= argument .\n");
-    A = malloc(ARG_MAX * sizeof(char*));
+    A = malloc(MAX_ARG_COUNT * sizeof(char*));
     A[0] = B;
     A[1] = NULL;
 }

@@ -13,6 +13,7 @@ typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfil
 
 void handle_builtin_help(process *p, int infile, int outfile, int errfile);
 void handle_builtin_echo(process *p, int infile, int outfile, int errfile);
+void handle_builtin_pwd(process *p, int infile, int outfile, int errfile);
 void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
 void handle_builtin_which(process *p, int infile, int outfile, int errfile);
 void handle_builtin_cd(process *p, int infile, int outfile, int errfile);
@@ -32,6 +33,7 @@ typedef struct
 builtin_cmd_t builtin_cmds_list[] = {
     {"help", handle_builtin_help},
     {"echo", handle_builtin_echo},
+    {"pwd", handle_builtin_pwd},
     {"lasterror", handle_builtin_lasterror},
     {"which", handle_builtin_which},
     {"cd", handle_builtin_cd},
@@ -84,9 +86,17 @@ void handle_builtin_echo(process *p, int infile, int outfile, int errfile)
     dprintf(outfile, "\n");
 }
 
+void handle_builtin_pwd(process *p, int infile, int outfile, int errfile)
+{
+    char curpath[PATH_MAX_LEN];
+    getcwd(curpath, PATH_MAX_LEN);
+    dprintf(outfile, "%s\n", curpath);
+}
+
 void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
 {
-    dprintf(outfile, "%d (%s)\n", exec_last_job_status, strerror(exec_last_job_status));
+    int lasterror = atoi(getenv("?"));
+    dprintf(outfile, "%d (%s)\n", lasterror, strerror(lasterror));
 }
 
 void handle_builtin_which(process *p, int infile, int outfile, int errfile)

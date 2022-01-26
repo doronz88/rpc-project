@@ -76,7 +76,7 @@ void free_process(process *p)
 {
 	if (!p->argv)
 		return;
-	for (int i = 0; p->argv[i] && i < ARG_MAX; ++i)
+	for (int i = 0; p->argv[i] && i < MAX_ARG_COUNT; ++i)
 	{
 		free(p->argv[i]);
 	}
@@ -407,7 +407,11 @@ void wait_for_job(job *j)
 	do
 	{
 		pid = waitpid(-j->pgid, &status, WUNTRACED);
-		exec_last_job_status = status;
+		
+		char status_str[256];
+		sprintf(status_str, "%d", status);
+		setenv("?", status_str, 1);
+
 	} while (!mark_process_status(pid, status) && !exec_job_is_stopped(j) && !exec_job_is_completed(j));
 }
 

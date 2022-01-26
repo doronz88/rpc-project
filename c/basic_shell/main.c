@@ -2,30 +2,77 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <unistd.h>
+#include <limits.h>
+#include <libgen.h>
 
 #include "shellparser.h"
 #include "shellscanner.h"
 #include "exec.h"
 #include "termios.h"
-
-#define MAX_NAME_LEN (256)
-#define MAX_PATH_LEN (1024)
+#include "common.h"
 
 void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
 void *ParseFree(void *, void (*freeProc)(void *));
 
+#define DEFAULT_PS1 ("[\\s@\\h \\b]\\$")
+#define SHELL_NAME ("zShell")
+#define USER_SUFFIX ("$")
+#define ROOT_SUFFIX ("#")
+#define HOST_NAME_MAX (256)
+
 void print_prompt(void)
 {
     char *ps1 = getenv("PS1");
-    if (ps1)
-    {
-        printf("%s", ps1);
+    if (!ps1) {
+        ps1 = DEFAULT_PS1;
     }
-    else
+
+    char hostname[HOST_NAME_MAX + 1];
+    CHECK(0 == gethostname(hostname, HOST_NAME_MAX + 1));
+
+    char curpath[PATH_MAX_LEN];
+    getcwd(curpath, PATH_MAX_LEN);
+
+    char *resolved_prompt_old = NULL;
+    char *resolved_prompt = NULL;
+    
+    resolved_prompt = str_replace(ps1, "\\s", SHELL_NAME);
+    CHECK(resolved_prompt != NULL);
+
+    resolved_prompt_old = resolved_prompt;
+    resolved_prompt = str_replace(resolved_prompt_old, "\\h", hostname);
+    free(resolved_prompt_old);
+    resolved_prompt_old = NULL;
+    CHECK(resolved_prompt != NULL);
+
+    resolved_prompt_old = resolved_prompt;
+    resolved_prompt = str_replace(resolved_prompt_old, "\\b", basename(curpath));
+    free(resolved_prompt_old);
+    resolved_prompt_old = NULL;
+    CHECK(resolved_prompt != NULL);
+
+    resolved_prompt_old = resolved_prompt;
+    resolved_prompt = str_replace(resolved_prompt_old, "\\$", getuid() == 0 ? ROOT_SUFFIX : USER_SUFFIX);
+    free(resolved_prompt_old);
+    resolved_prompt_old = NULL;
+    CHECK(resolved_prompt != NULL);
+
+    printf("%s ", resolved_prompt);
+    free(resolved_prompt);
+    return;
+
+error:
+    if (resolved_prompt_old)
     {
-        printf("$ ");
+        free(resolved_prompt_old);
     }
+    if (resolved_prompt)
+    {
+        free(resolved_prompt);
+    }
+    printf("$ ");
 }
 
 void handle_signal(int signo)
@@ -37,7 +84,6 @@ void handle_signal(int signo)
 
 void init_shell()
 {
-
     /* See if we are running interactively.  */
     exec_shell_terminal = STDIN_FILENO;
     exec_shell_is_interactive = isatty(exec_shell_terminal);

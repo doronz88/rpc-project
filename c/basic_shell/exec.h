@@ -4,7 +4,7 @@
 #include <termios.h>
 #include <stdbool.h>
 
-#define ARG_MAX (256)
+#define MAX_ARG_COUNT (256)
 
 /* A process is a single process.  */
 typedef struct process
