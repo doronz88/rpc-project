@@ -16,7 +16,7 @@ void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
 void *ParseFree(void *, void (*freeProc)(void *));
 
-#define DEFAULT_PS1 ("[\\u@\\h \\b]\\$")
+#define DEFAULT_PS1 ("\033[0;36m[\\u@\\h \033[0;35m\\b\033[0;36m]\\$\033[0;37m")
 #define SHELL_NAME ("zShell")
 #define USER_SUFFIX ("$")
 #define ROOT_SUFFIX ("#")

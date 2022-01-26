@@ -330,10 +330,16 @@ error:
 	return result;
 }
 
+bool is_path(char *executable)
+{
+	return strchr(executable, '/') != NULL;
+}
+
 pid_t launch_process(process *p, pid_t pgid,
 					 int infile, int outfile, int errfile,
 					 int foreground)
 {
+	char *fullpath = NULL;
 	pid_t pid = 0;
 
 	posix_spawn_file_actions_t actions;
@@ -375,20 +381,27 @@ pid_t launch_process(process *p, pid_t pgid,
 		CHECK(0 == posix_spawn_file_actions_adddup2(&actions, errfile, STDERR_FILENO));
 	}
 
-	/* Exec the new process.  Make sure we exit.  */
-	char *fullpath = exec_which(p->argv[0]);
-	if (!fullpath)
+	char *executable = p->argv[0];
+
+	if (is_path(executable))
 	{
-		fprintf(stderr, "%s: not in path\n", p->argv[0]);
-		goto error;
+		if (0 != access(executable, O_RDONLY))
+		{
+			fprintf(stderr, "%s: failed to access\n", executable);
+		}
+	}
+	else
+	{
+		fullpath = exec_which(executable);
+		if (!fullpath)
+		{
+			fprintf(stderr, "%s: not in path\n", executable);
+			goto error;
+		}
+		executable = fullpath;
 	}
 
-	CHECK(0 == posix_spawnp(&pid, fullpath, &actions, &attr, p->argv, environ));
-
-	if (fullpath)
-	{
-		free(fullpath);
-	}
+	CHECK(0 == posix_spawnp(&pid, executable, &actions, &attr, p->argv, environ));
 
 	if (foreground)
 	{
@@ -396,6 +409,11 @@ pid_t launch_process(process *p, pid_t pgid,
 	}
 
 error:
+	if (fullpath)
+	{
+		free(fullpath);
+	}
+
 	return pid;
 }
 
@@ -409,7 +427,7 @@ void wait_for_job(job *j)
 	do
 	{
 		pid = waitpid(-j->pgid, &status, WUNTRACED);
-		
+
 		char status_str[256];
 		sprintf(status_str, "%d", status);
 		setenv("?", status_str, 1);
