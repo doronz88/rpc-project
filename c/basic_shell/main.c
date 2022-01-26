@@ -16,7 +16,7 @@ void *ParseAlloc(void *(*allocProc)(size_t));
 void *Parse(void *, int, const char *, job *);
 void *ParseFree(void *, void (*freeProc)(void *));
 
-#define DEFAULT_PS1 ("\033[0;36m[\\u@\\h \033[0;35m\\b\033[0;36m]\\$\033[0;37m")
+#define DEFAULT_PS1 ("\033[0;36m[\\u@\\h \033[0;35m\\b\033[0;36mֿֿֿֿ\\e]\\$\033[0;37m")
 #define SHELL_NAME ("zShell")
 #define USER_SUFFIX ("$")
 #define ROOT_SUFFIX ("#")
@@ -56,6 +56,19 @@ void print_prompt(void)
 
     resolved_prompt_old = resolved_prompt;
     resolved_prompt = str_replace(resolved_prompt_old, "\\b", basename(curpath));
+    free(resolved_prompt_old);
+    resolved_prompt_old = NULL;
+    CHECK(resolved_prompt != NULL);
+
+    int last_error = exec_get_last_error();
+    char error_str[256] = {0};
+    if (0 != last_error)
+    {
+        sprintf(error_str, "\033[0;31m [%d]\033[0;36m", last_error);
+    }
+
+    resolved_prompt_old = resolved_prompt;
+    resolved_prompt = str_replace(resolved_prompt_old, "\\e", error_str);
     free(resolved_prompt_old);
     resolved_prompt_old = NULL;
     CHECK(resolved_prompt != NULL);

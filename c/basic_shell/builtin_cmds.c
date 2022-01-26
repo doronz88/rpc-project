@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "exec.h"
 #include "builtin_cmds.h"
@@ -12,21 +13,21 @@ extern char **environ;
 
 #define MAX_READ_CHUNK (0x1000)
 
-typedef void (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
+typedef int (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
-void handle_builtin_help(process *p, int infile, int outfile, int errfile);
-void handle_builtin_cat(process *p, int infile, int outfile, int errfile);
-void handle_builtin_echo(process *p, int infile, int outfile, int errfile);
-void handle_builtin_pwd(process *p, int infile, int outfile, int errfile);
-void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
-void handle_builtin_which(process *p, int infile, int outfile, int errfile);
-void handle_builtin_cd(process *p, int infile, int outfile, int errfile);
-void handle_builtin_exit(process *p, int infile, int outfile, int errfile);
-void handle_builtin_jobs(process *p, int infile, int outfile, int errfile);
-void handle_builtin_fg(process *p, int infile, int outfile, int errfile);
-void handle_builtin_bg(process *p, int infile, int outfile, int errfile);
-void handle_builtin_set(process *p, int infile, int outfile, int errfile);
-void handle_builtin_export(process *p, int infile, int outfile, int errfile);
+int handle_builtin_help(process *p, int infile, int outfile, int errfile);
+int handle_builtin_cat(process *p, int infile, int outfile, int errfile);
+int handle_builtin_echo(process *p, int infile, int outfile, int errfile);
+int handle_builtin_pwd(process *p, int infile, int outfile, int errfile);
+int handle_builtin_lasterror(process *p, int infile, int outfile, int errfile);
+int handle_builtin_which(process *p, int infile, int outfile, int errfile);
+int handle_builtin_cd(process *p, int infile, int outfile, int errfile);
+int handle_builtin_exit(process *p, int infile, int outfile, int errfile);
+int handle_builtin_jobs(process *p, int infile, int outfile, int errfile);
+int handle_builtin_fg(process *p, int infile, int outfile, int errfile);
+int handle_builtin_bg(process *p, int infile, int outfile, int errfile);
+int handle_builtin_set(process *p, int infile, int outfile, int errfile);
+int handle_builtin_export(process *p, int infile, int outfile, int errfile);
 
 typedef struct
 {
@@ -49,16 +50,16 @@ builtin_cmd_t builtin_cmds_list[] = {
     {"set", handle_builtin_set},
     {"export", handle_builtin_export}};
 
-void builtin_cmds_launch(process *p, int infile, int outfile, int errfile)
+int builtin_cmds_launch(process *p, int infile, int outfile, int errfile)
 {
     for (size_t i = 0; i < sizeof(builtin_cmds_list) / sizeof(builtin_cmds_list[0]); ++i)
     {
         if (0 == strcmp(p->argv[0], builtin_cmds_list[i].name))
         {
-            builtin_cmds_list[i].handler(p, infile, outfile, errfile);
-            break;
+            return builtin_cmds_list[i].handler(p, infile, outfile, errfile);
         }
     }
+    return EINVAL;
 }
 
 bool builtin_cmds_is_builtin(const char *executable)
@@ -73,16 +74,17 @@ bool builtin_cmds_is_builtin(const char *executable)
     return false;
 }
 
-void handle_builtin_help(process *p, int infile, int outfile, int errfile)
+int handle_builtin_help(process *p, int infile, int outfile, int errfile)
 {
     dprintf(outfile, "Builtin commands:\n");
     for (size_t i = 0; i < sizeof(builtin_cmds_list) / sizeof(builtin_cmds_list[0]); ++i)
     {
         dprintf(outfile, "- %s\n", builtin_cmds_list[i].name);
     }
+    return 0;
 }
 
-void handle_builtin_cat(process *p, int infile, int outfile, int errfile)
+int handle_builtin_cat(process *p, int infile, int outfile, int errfile)
 {
     if (p->argv[1])
     {
@@ -99,42 +101,45 @@ void handle_builtin_cat(process *p, int infile, int outfile, int errfile)
             write(outfile, buf, result);
         }
     } while (result > 0);
-    return;
+    return 0;
 
 error:
     dprintf(errfile, "cat: failed to read\n");
-    return;
+    return errno;
 }
 
-void handle_builtin_echo(process *p, int infile, int outfile, int errfile)
+int handle_builtin_echo(process *p, int infile, int outfile, int errfile)
 {
     for (size_t i = 1; p->argv[i]; ++i)
     {
         dprintf(outfile, "%s ", p->argv[i]);
     }
     dprintf(outfile, "\n");
+    return 0;
 }
 
-void handle_builtin_pwd(process *p, int infile, int outfile, int errfile)
+int handle_builtin_pwd(process *p, int infile, int outfile, int errfile)
 {
     char curpath[PATH_MAX_LEN];
     getcwd(curpath, PATH_MAX_LEN);
     dprintf(outfile, "%s\n", curpath);
+    return 0;
 }
 
-void handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
+int handle_builtin_lasterror(process *p, int infile, int outfile, int errfile)
 {
-    int lasterror = atoi(getenv("?"));
+    int lasterror = exec_get_last_error();
     dprintf(outfile, "%d (%s)\n", lasterror, strerror(lasterror));
+    return 0;
 }
 
-void handle_builtin_which(process *p, int infile, int outfile, int errfile)
+int handle_builtin_which(process *p, int infile, int outfile, int errfile)
 {
     if (builtin_cmds_is_builtin(p->argv[1]))
-	{
-		dprintf(outfile, "%s: shell built-in command\n", p->argv[1]);
-        return;
-	}
+    {
+        dprintf(outfile, "%s: shell built-in command\n", p->argv[1]);
+        return 0;
+    }
 
     char *result = exec_which(p->argv[1]);
     if (result)
@@ -142,10 +147,13 @@ void handle_builtin_which(process *p, int infile, int outfile, int errfile)
         dprintf(outfile, "%s\n", result);
     }
     free(result);
+
+    return 0;
 }
 
-void handle_builtin_cd(process *p, int infile, int outfile, int errfile)
+int handle_builtin_cd(process *p, int infile, int outfile, int errfile)
 {
+    int err = 0;
     char *cd_path = NULL;
     if (!p->argv[1])
     {
@@ -161,36 +169,40 @@ void handle_builtin_cd(process *p, int infile, int outfile, int errfile)
     {
         cd_path = strdup(p->argv[1]);
     }
-    if (chdir(cd_path) < 0)
+    err = chdir(cd_path);
+    if (err < 0)
     {
-        perror("cd:");
+        perror("cd");
     }
     free(cd_path);
+    return err;
 }
 
-void handle_builtin_set(process *p, int infile, int outfile, int errfile)
+int handle_builtin_set(process *p, int infile, int outfile, int errfile)
 {
     for (char **env = environ; *env != NULL; env++)
     {
         printf("%s\n", *env);
     }
+    return 0;
 }
 
-void handle_builtin_export(process *p, int infile, int outfile, int errfile)
+int handle_builtin_export(process *p, int infile, int outfile, int errfile)
 {
     if (setenv(p->argv[1], p->argv[2], 1))
     {
         fprintf(stderr, "setenv failed\n");
     }
+    return 0;
 }
 
-void handle_builtin_exit(process *p, int infile, int outfile, int errfile)
+int handle_builtin_exit(process *p, int infile, int outfile, int errfile)
 {
     exec_update_status();
     exit(0);
 }
 
-void handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
+int handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
 {
     if (p->argv[1])
     {
@@ -220,7 +232,7 @@ void handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
             else
                 dprintf(errfile, "jobs: %s : no such job\n", p->argv[i]);
         }
-        return;
+        return 0;
     }
     job *j;
     /* Update status information for child processes.  */
@@ -240,9 +252,11 @@ void handle_builtin_jobs(process *p, int infile, int outfile, int errfile)
             }
         }
     }
+
+    return 0;
 }
 
-void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
+int handle_builtin_fg(process *p, int infile, int outfile, int errfile)
 {
     if (p->argv[1])
     {
@@ -263,7 +277,7 @@ void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
             else
                 dprintf(errfile, "fg: %s : no such job\n", p->argv[i]);
         }
-        return;
+        return 0;
     }
     job *j;
     job *jlast = NULL;
@@ -282,12 +296,18 @@ void handle_builtin_fg(process *p, int infile, int outfile, int errfile)
     }
 
     if (jlast)
+    {
         exec_continue_job(jlast, 1);
+    }
     else
+    {
         dprintf(errfile, "fg: current: no such job\n");
+    }
+
+    return 0;
 }
 
-void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
+int handle_builtin_bg(process *p, int infile, int outfile, int errfile)
 {
     if (p->argv[1])
     {
@@ -308,7 +328,7 @@ void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
             else
                 dprintf(errfile, "bg: %s : no such job\n", p->argv[i]);
         }
-        return;
+        return 0;
     }
     job *j;
     job *jlast = NULL;
@@ -327,7 +347,13 @@ void handle_builtin_bg(process *p, int infile, int outfile, int errfile)
     }
 
     if (jlast)
+    {
         exec_continue_job(jlast, 0);
+    }
     else
+    {
         dprintf(errfile, "bg: current: no such job\n");
+    }
+
+    return 0;
 }

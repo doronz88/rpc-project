@@ -335,6 +335,17 @@ bool is_path(char *executable)
 	return strchr(executable, '/') != NULL;
 }
 
+int exec_get_last_error()
+{
+	char *last_error_str = getenv("?");
+	if (NULL == last_error_str)
+	{
+		return 0;
+	}
+	int lasterror = atoi(last_error_str);
+	return lasterror;
+}
+
 pid_t launch_process(process *p, pid_t pgid,
 					 int infile, int outfile, int errfile,
 					 int foreground)
@@ -417,6 +428,13 @@ error:
 	return pid;
 }
 
+void set_last_error(int error)
+{
+	char status_str[256];
+	sprintf(status_str, "%d", error);
+	setenv("?", status_str, 1);
+}
+
 /* Check for processes that have status information available,
    blocking until all processes in the given job have reported.  */
 void wait_for_job(job *j)
@@ -427,11 +445,7 @@ void wait_for_job(job *j)
 	do
 	{
 		pid = waitpid(-j->pgid, &status, WUNTRACED);
-
-		char status_str[256];
-		sprintf(status_str, "%d", status);
-		setenv("?", status_str, 1);
-
+		set_last_error(status);
 	} while (!mark_process_status(pid, status) && !exec_job_is_stopped(j) && !exec_job_is_completed(j));
 }
 
@@ -582,7 +596,7 @@ void exec_launch_job(job *j, int foreground, int *id)
 		}
 		if (builtin_cmds_is_builtin(p->argv[0]))
 		{
-			builtin_cmds_launch(p, infile, outfile, j->stderr);
+			set_last_error(builtin_cmds_launch(p, infile, outfile, j->stderr));
 			p->completed = 1;
 		}
 		else

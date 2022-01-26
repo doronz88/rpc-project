@@ -53,5 +53,6 @@ bool exec_job_is_stopped(job *j);
 bool exec_job_is_completed(job *j);
 void exec_continue_job(job *j, int foreground);
 char *exec_which(char *executable);
+int exec_get_last_error();
 
 #endif // _EXEC_H

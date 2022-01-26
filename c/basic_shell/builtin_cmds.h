@@ -5,7 +5,7 @@
 
 #include "exec.h"
 
-void builtin_cmds_launch(process *p, int infile, int outfile, int errfile);
+int builtin_cmds_launch(process *p, int infile, int outfile, int errfile);
 bool builtin_cmds_is_builtin(const char *executable);
 
 #endif // _BUILTIN_CMDS_H
