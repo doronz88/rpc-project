@@ -4,7 +4,7 @@ LEMON_CFLAGS =
 
 all: shell
 
-shell: main.c exec.o shellparser.o shellscanner.o common.o builtin_cmds.o
+shell: main.c exec.o shellparser.o shellscanner.o common.o builtin_cmds.o shell.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c

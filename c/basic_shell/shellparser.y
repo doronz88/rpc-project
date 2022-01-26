@@ -47,6 +47,16 @@ in ::= EOL .
     j->valid = -1;
 }
 
+in ::= COMMENT EOL .
+{
+    j->valid = -1;
+}
+
+in ::= COMMENT job EOL .
+{
+    j->valid = -1;
+}
+
 in ::= job EOL .
 {
     j->foreground = 1;

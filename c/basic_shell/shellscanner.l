@@ -13,6 +13,7 @@
 
 %%
 
+"#"                     { return COMMENT; }
 "|"                     { return PIPE; }
 "\<"					{ return LEFT; }
 "\>"					{ return RIGHT; }

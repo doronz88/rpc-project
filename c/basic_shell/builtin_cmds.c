@@ -8,6 +8,7 @@
 #include "exec.h"
 #include "builtin_cmds.h"
 #include "common.h"
+#include "shell.h"
 
 extern char **environ;
 
@@ -16,6 +17,7 @@ extern char **environ;
 typedef int (*builtin_handle_t)(process *p, int infile, int outfile, int errfile);
 
 int handle_builtin_help(process *p, int infile, int outfile, int errfile);
+int handle_builtin_source(process *p, int infile, int outfile, int errfile);
 int handle_builtin_cat(process *p, int infile, int outfile, int errfile);
 int handle_builtin_echo(process *p, int infile, int outfile, int errfile);
 int handle_builtin_pwd(process *p, int infile, int outfile, int errfile);
@@ -37,6 +39,7 @@ typedef struct
 
 builtin_cmd_t builtin_cmds_list[] = {
     {"help", handle_builtin_help},
+    {"source", handle_builtin_source},
     {"cat", handle_builtin_cat},
     {"echo", handle_builtin_echo},
     {"pwd", handle_builtin_pwd},
@@ -82,6 +85,24 @@ int handle_builtin_help(process *p, int infile, int outfile, int errfile)
         dprintf(outfile, "- %s\n", builtin_cmds_list[i].name);
     }
     return 0;
+}
+
+int handle_builtin_source(process *p, int infile, int outfile, int errfile)
+{
+    FILE *f = NULL;
+    
+    f = fopen(p->argv[1], "rb");
+    CHECK(NULL != f);
+    
+    shell_execute(f, false);
+
+error:
+    if (f)
+    {
+        fclose(f);
+    }
+
+    return errno;
 }
 
 int handle_builtin_cat(process *p, int infile, int outfile, int errfile)
