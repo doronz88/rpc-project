@@ -25,10 +25,6 @@ class Client:
         self._old_settings = None
         self._reconnect()
 
-    def _reconnect(self):
-        self._sock = socket()
-        self._sock.connect((self._hostname, self._port))
-
     def open(self, filename: str, mode: int):
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_OPEN,
@@ -95,6 +91,44 @@ class Client:
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
+    def dlopen(self, filename: str, mode: int):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_DLOPEN,
+            'data': {'filename': filename, 'mode': mode},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def dlclose(self, lib: int):
+        lib &= 0xffffffffffffffff
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_DLCLOSE,
+            'data': {'lib': lib},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def dlsym(self, lib: int, symbol_name: str):
+        lib &= 0xffffffffffffffff
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_DLSYM,
+            'data': {'lib': lib, 'symbol_name': symbol_name},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def call(self, address: int, argv: typing.List[int] = None):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_CALL,
+            'data': {'address': address, 'argv': argv},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
     def put_file(self, filename: str, buf: bytes):
         fd = self.open(filename, os.O_WRONLY | os.O_CREAT)
         assert fd >= 0
@@ -121,6 +155,35 @@ class Client:
                 raise IOError()
         self.close(fd)
         return buf
+
+    def shell(self, argv: typing.List[str] = None):
+        if argv is None:
+            argv = self.DEFAULT_ARGV
+
+        pid = self._execute(argv)
+        logging.info(f'shell process started as pid: {pid}')
+
+        self._sock.setblocking(False)
+
+        self._prepare_terminal()
+        try:
+            result = self._execution_loop()
+        except Exception:
+            self._restore_terminal()
+            self._reconnect()
+            raise
+
+        self._restore_terminal()
+        self._reconnect()
+
+        return result
+
+
+
+
+    def _reconnect(self):
+        self._sock = socket()
+        self._sock.connect((self._hostname, self._port))
 
     def _execute(self, argv: typing.List[str]) -> int:
         message = protocol_message_t.build({
@@ -182,24 +245,4 @@ class Client:
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
                         return exitcode_t.parse(data)
 
-    def shell(self, argv: typing.List[str] = None):
-        if argv is None:
-            argv = self.DEFAULT_ARGV
 
-        pid = self._execute(argv)
-        logging.info(f'shell process started as pid: {pid}')
-
-        self._sock.setblocking(False)
-
-        self._prepare_terminal()
-        try:
-            result = self._execution_loop()
-        except Exception:
-            self._restore_terminal()
-            self._reconnect()
-            raise
-
-        self._restore_terminal()
-        self._reconnect()
-
-        return result

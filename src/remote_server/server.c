@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include <spawn.h>
+#include <dlfcn.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 
@@ -35,14 +36,20 @@ extern char **environ;
 
 typedef enum
 {
-    CMD_EXEC = 0,
-    CMD_OPEN = 1,
-    CMD_CLOSE = 2,
-    CMD_WRITE = 3,
-    CMD_READ = 4,
-    CMD_REMOVE = 5,
-    CMD_MKDIR = 6,
-    CMD_CHMOD = 7,
+    CMD_EXEC=0,
+    CMD_OPEN=1,
+    CMD_CLOSE=2,
+    CMD_WRITE=3,
+    CMD_READ=4,
+    CMD_REMOVE=5,
+    CMD_MKDIR=6,
+    CMD_CHMOD=7,
+    CMD_DLOPEN=8,
+    CMD_DLCLOSE=9,
+    CMD_DLSYM=10,
+    CMD_CALL=11,
+    CMD_PEEK=12,
+    CMD_POKE=13,
 } cmd_type_t;
 
 typedef enum
@@ -97,6 +104,30 @@ typedef struct
     char filename[MAX_PATH_LEN];
     u32 mode;
 } cmd_chmod_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+    u32 mode;
+} cmd_dlopen_t;
+
+typedef struct
+{
+    u64 lib;
+} cmd_dlclose_t;
+
+typedef struct
+{
+    u64 lib;
+    char symbol_name[MAX_PATH_LEN];
+} cmd_dlsym_t;
+
+typedef struct
+{
+    u64 address;
+    u64 argc;
+    u64 argv[0];
+} cmd_call_t;
 
 typedef struct
 {
@@ -412,6 +443,88 @@ error:
     return result;
 }
 
+bool handle_dlopen(int sockfd)
+{
+    int result = false;
+    cmd_dlopen_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    u64 err = (u64)dlopen(cmd.filename, cmd.mode);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_dlclose(int sockfd)
+{
+    int result = false;
+    cmd_dlclose_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    u64 err = (u64)dlclose((void *)cmd.lib);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_dlsym(int sockfd)
+{
+    int result = false;
+    cmd_dlsym_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    u64 err = (u64)dlsym((void *)cmd.lib, cmd.symbol_name);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+typedef u64 (*call_argc0_t)();
+typedef u64 (*call_argc1_t)(u64);
+
+bool handle_call(int sockfd)
+{
+    TRACE("enter");
+    s64 err = 0;
+    int result = false;
+    u64 *argv = NULL;
+    cmd_call_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    argv = (u64 *)malloc(sizeof(u64) * cmd.argc);
+    CHECK(recvall(sockfd, (char *)argv, sizeof(u64) * cmd.argc));
+
+    switch (cmd.argc)
+    {
+        case 0:
+            err = ((call_argc0_t)cmd.address)();
+            break;
+        case 1:
+            err = ((call_argc1_t)cmd.address)(argv[0]);
+            break;
+    }
+
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    if (argv)
+    {
+        free(argv);
+    }
+    return result;
+}
+
 void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
@@ -465,6 +578,21 @@ void handle_client(int sockfd)
         case CMD_CHMOD:
         {
             handle_chmod(sockfd);
+            break;
+        }
+        case CMD_DLOPEN:
+        {
+            handle_dlopen(sockfd);
+            break;
+        }
+        case CMD_DLSYM:
+        {
+            handle_dlsym(sockfd);
+            break;
+        }
+        case CMD_CALL:
+        {
+            handle_call(sockfd);
             break;
         }
         default:

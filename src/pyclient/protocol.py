@@ -10,6 +10,12 @@ cmd_type_t = Enum(Int32ul,
                   CMD_REMOVE=5,
                   CMD_MKDIR=6,
                   CMD_CHMOD=7,
+                  CMD_DLOPEN=8,
+                  CMD_DLCLOSE=9,
+                  CMD_DLSYM=10,
+                  CMD_CALL=11,
+                  CMD_PEEK=12,
+                  CMD_POKE=13,
                   )
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
@@ -53,6 +59,25 @@ cmd_close_t = Struct(
     'fd' / Int64sl,
 )
 
+cmd_dlopen_t = Struct(
+    'filename' / PaddedString(MAX_PATH_LEN, 'utf8'),
+    'mode' / Int32ul,
+)
+
+cmd_dlclose_t = Struct(
+    'lib' / Int64ul,
+)
+
+cmd_dlsym_t = Struct(
+    'lib' / Int64ul,
+    'symbol_name' / PaddedString(MAX_PATH_LEN, 'utf8'),
+)
+
+cmd_call_t = Struct(
+    'address' / Int64ul,
+    'argv' / PrefixedArray(Int64ul, Int64ul),
+)
+
 protocol_message_t = Struct(
     'magic' / Const(MAGIC, Int32ul),
     'cmd_type' / cmd_type_t,
@@ -65,6 +90,10 @@ protocol_message_t = Struct(
         cmd_type_t.CMD_CHMOD: cmd_chmod_t,
         cmd_type_t.CMD_READ: cmd_read_t,
         cmd_type_t.CMD_WRITE: cmd_write_t,
+        cmd_type_t.CMD_DLOPEN: cmd_dlopen_t,
+        cmd_type_t.CMD_DLCLOSE: cmd_dlclose_t,
+        cmd_type_t.CMD_DLSYM: cmd_dlsym_t,
+        cmd_type_t.CMD_CALL: cmd_call_t,
     })
 )
 
