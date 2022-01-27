@@ -1,4 +1,4 @@
-# Object files
+.gitignore# Object files
 *.o
 *.ko
 *.obj

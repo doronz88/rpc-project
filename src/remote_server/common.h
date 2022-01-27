@@ -10,6 +10,7 @@ typedef unsigned short u16;
 typedef unsigned int u32;
 typedef signed int s32;
 typedef unsigned long u64;
+typedef unsigned long s64;
 
 #define TRACE(...) trace(__PRETTY_FUNCTION__, __VA_ARGS__)
 #define CHECK(expression)            \

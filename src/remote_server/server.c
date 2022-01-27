@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include <spawn.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 
 #include "common.h"
@@ -26,16 +27,22 @@
 #define USAGE ("Usage: %s [-p port] [-s shell]")
 #define MAGIC (0x12345678)
 
+#define MAX_PATH_LEN (1024)
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
 
 extern char **environ;
 
-static char g_shell_path[MAX_OPTION_LEN] = DEFAULT_SHELL;
-
 typedef enum
 {
     CMD_EXEC = 0,
+    CMD_OPEN = 1,
+    CMD_CLOSE = 2,
+    CMD_WRITE = 3,
+    CMD_READ = 4,
+    CMD_REMOVE = 5,
+    CMD_MKDIR = 6,
+    CMD_CHMOD = 7,
 } cmd_type_t;
 
 typedef enum
@@ -49,6 +56,47 @@ typedef struct
     u32 type;
     u32 size;
 } cmd_exec_chunk_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+    u32 mode;
+} cmd_open_t;
+
+typedef struct
+{
+    s64 fd;
+} cmd_close_t;
+
+typedef struct
+{
+    s64 fd;
+    u64 size;
+    char *data[0];
+} cmd_write_t;
+
+typedef struct
+{
+    s64 fd;
+    u64 size;
+} cmd_read_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+    u32 mode;
+} cmd_mkdir_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+} cmd_remove_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+    u32 mode;
+} cmd_chmod_t;
 
 typedef struct
 {
@@ -130,25 +178,25 @@ bool handle_exec(int sockfd)
 
     // +1 for additional NULL at end of list
     size_t argv_size = (argc + 1) * sizeof(char *);
-    argv = (char **) malloc(argv_size * sizeof(char *));
+    argv = (char **)malloc(argv_size * sizeof(char *));
     memset(argv, 0, argv_size * sizeof(char *));
 
     for (u32 i = 0; i < argc; ++i)
     {
         u32 len;
         CHECK(recvall(sockfd, (char *)&len, sizeof(len)));
-        
+
         // +1 for additional \0 at end of each string
         size_t str_size = (len + 1) * sizeof(char);
         argv[i] = malloc(str_size * sizeof(char));
         CHECK(argv[i] != NULL);
-        
+
         CHECK(recvall(sockfd, argv[i], len * sizeof(char)));
         argv[i][len] = '\0';
     }
 
     pid_t pid;
-    
+
     master = internal_spawn((char *const *)argv, &pid);
     CHECK(master >= 0);
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
@@ -231,21 +279,187 @@ error:
     return result;
 }
 
+bool handle_open(int sockfd)
+{
+    TRACE("enter");
+    int result = false;
+    cmd_open_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    TRACE("filename: %s, mode: %d", cmd.filename, cmd.mode);
+
+    s64 fd = open(cmd.filename, cmd.mode);
+    CHECK(sendall(sockfd, (char *)&fd, sizeof(fd)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_close(int sockfd)
+{
+    TRACE("enter");
+    int result = false;
+    cmd_close_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    s32 err = close(cmd.fd);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_write(int sockfd)
+{
+    TRACE("enter");
+    int result = false;
+    cmd_write_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    s64 n = write(cmd.fd, cmd.data, cmd.size);
+    CHECK(sendall(sockfd, (char *)&n, sizeof(n)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_read(int sockfd)
+{
+    TRACE("enter");
+    int result = false;
+    char *buf = NULL;
+    cmd_read_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    buf = (char *)malloc(sizeof(char) * cmd.size);
+    CHECK(NULL != buf);
+
+    s64 n = read(cmd.fd, buf, cmd.size);
+    CHECK(sendall(sockfd, (char *)&n, sizeof(n)));
+
+    if (n > 0)
+    {
+        CHECK(sendall(sockfd, buf, n));
+    }
+
+    result = true;
+
+error:
+    if (buf)
+    {
+        free(buf);
+    }
+    return result;
+}
+
+bool handle_mkdir(int sockfd)
+{
+    int result = false;
+    cmd_mkdir_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    int err = mkdir(cmd.filename, cmd.mode);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+error:
+    return result;
+}
+
+bool handle_remove(int sockfd)
+{
+    int result = false;
+    cmd_remove_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    int err = remove(cmd.filename);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
+bool handle_chmod(int sockfd)
+{
+    int result = false;
+    cmd_chmod_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    int err = chmod(cmd.filename, cmd.mode);
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+
 void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
 
-    protocol_message_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-    CHECK(cmd.magic == MAGIC);
+    while (true)
+    {
+        protocol_message_t cmd;
+        CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+        CHECK(cmd.magic == MAGIC);
 
-    switch (cmd.cmd_type)
-    {
-    case CMD_EXEC:
-    {
-        handle_exec(sockfd);
-        break;
-    }
+        TRACE("cmd type: %d", cmd.cmd_type);
+
+        switch (cmd.cmd_type)
+        {
+        case CMD_EXEC:
+        {
+            handle_exec(sockfd);
+            break;
+        }
+        case CMD_OPEN:
+        {
+            handle_open(sockfd);
+            break;
+        }
+        case CMD_CLOSE:
+        {
+            handle_close(sockfd);
+            break;
+        }
+        case CMD_READ:
+        {
+            handle_read(sockfd);
+            break;
+        }
+        case CMD_WRITE:
+        {
+            handle_write(sockfd);
+            break;
+        }
+        case CMD_REMOVE:
+        {
+            handle_remove(sockfd);
+            break;
+        }
+        case CMD_MKDIR:
+        {
+            handle_mkdir(sockfd);
+            break;
+        }
+        case CMD_CHMOD:
+        {
+            handle_chmod(sockfd);
+            break;
+        }
+        default:
+        {
+            TRACE("unknown cmd");
+        }
+        }
     }
 
 error:
@@ -261,18 +475,13 @@ int main(int argc, const char *argv[])
     int opt;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *)argv, "p:s:")) != -1)
+    while ((opt = getopt(argc, (char *const *)argv, "p:")) != -1)
     {
         switch (opt)
         {
         case 'p':
         {
             strncpy(port, optarg, sizeof(port) - 1);
-            break;
-        }
-        case 's':
-        {
-            strncpy(g_shell_path, optarg, sizeof(g_shell_path) - 1);
             break;
         }
         default: /* '?' */

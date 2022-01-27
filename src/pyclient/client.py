@@ -7,7 +7,9 @@ import typing
 from select import select
 from socket import socket
 
-from protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
+from construct import Int32ul, Int64ul, Int32sl
+
+from protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 
 DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
@@ -26,6 +28,50 @@ class Client:
     def connect(self):
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
+
+    def open(self, filename: str, mode: int):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_OPEN,
+            'data': {'filename': filename, 'mode': mode},
+        })
+        self._sock.sendall(message)
+        fd = fd_t.parse(self.recvall(fd_t.sizeof()))
+        return fd
+
+    def close(self, fd: int):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_CLOSE,
+            'data': {'fd': fd },
+        })
+        self._sock.sendall(message)
+        err = Int32sl.parse(self.recvall(Int32sl.sizeof()))
+        return err
+
+    def read(self, fd: int, size: int = CHUNK_SIZE):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_READ,
+            'data': {'fd': fd, 'size': size},
+        })
+        self._sock.sendall(message)
+        err = Int64ul.parse(self.recvall(Int64ul.sizeof()))
+        buf = b''
+        if err > 0:
+            buf = self.recvall(err)
+        return err, buf
+
+    def get_file(self, filename: str) -> bytes:
+        fd = self.open(filename, os.O_RDONLY)
+        assert fd >= 0
+        buf = b''
+        while True:
+            err, chunk = self.read(fd)
+            buf += chunk
+            if err == 0:
+                break
+            elif err < 0:
+                raise IOError()
+        self.close(fd)
+        return buf
 
     def execute(self, argv: typing.List[str]) -> int:
         message = protocol_message_t.build({
@@ -54,7 +100,6 @@ class Client:
 
     def recvall(self, size: int) -> bytes:
         buf = b''
-        # self._sock.setblocking(True)
         while size:
             try:
                 chunk = self._sock.recv(size)
@@ -62,7 +107,6 @@ class Client:
                 continue
             size -= len(chunk)
             buf += chunk
-        # self._sock.setblocking(False)
         return buf
 
     def shell(self, argv: typing.List[str] = None):

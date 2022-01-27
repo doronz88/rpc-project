@@ -29,7 +29,7 @@ bool recvall(int sockfd, char *buf, size_t len)
     while (len > 0)
     {
         bytes = recv(sockfd, buf + total_bytes, len, 0);
-        CHECK(bytes != -1);
+        CHECK(bytes > 0);
 
         total_bytes += bytes;
         len -= bytes;
