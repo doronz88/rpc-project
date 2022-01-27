@@ -27,11 +27,11 @@
 *.i*86
 *.x86_64
 *.hex
-c/basic_shell/shell
-c/remote_server/server
-c/client
-c/server
-c/shell
+src/basic_shell/shell
+src/remote_server/server
+src/client
+src/server
+src/shell
 
 # Python cache
 __pycache__
