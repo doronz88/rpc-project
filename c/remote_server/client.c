@@ -154,10 +154,9 @@ int main(int argc, char **argv)
             nbytes = read(STDIN_FILENO, buf, BUFFERSIZE);
             if (nbytes < 1)
             {
-                // perror("stdin closed");
                 break;
             }
-            mbytes = sendall(sockfd, buf, nbytes);
+            CHECK(sendall(sockfd, buf, nbytes));
         }
 
         if (FD_ISSET(sockfd, &readfds))
@@ -165,15 +164,13 @@ int main(int argc, char **argv)
             nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
             if (nbytes < 1)
             {
-                // perror("sockfd closed");
                 break;
             }
-            mbytes = writeall(STDOUT_FILENO, buf, nbytes);
+            CHECK(writeall(STDOUT_FILENO, buf, nbytes));
         }
-        if (nbytes != mbytes)
-            printf("nbytes [%d] != mbytes [%d] \n", nbytes, mbytes);
     }
 
+error:
     close(sockfd);
     printf("Bye 👋\n");
     return 0;
