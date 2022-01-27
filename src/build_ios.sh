@@ -18,8 +18,8 @@ make all CC="$CC" CFLAGS="$CFLAGS" LEMON_CC="gcc" LEMON_CFLAGS=""
 
 cd ..
 
-cp remote_server/client remote_server/server basic_shell/shell .
+cp remote_server/server basic_shell/shell .
 
-for i in client server shell; do
+for i in server shell; do
     codesign -s - --generate-entitlement-der $i
 done

@@ -9,7 +9,7 @@ This project was optimized for macOS and iOS, but should work also for Linux.
 
 ```shell
 git clone git@github.com:doronz88/zshell.git
-cd c
+cd src
 ./build_ios.sh
 ```
 
@@ -24,5 +24,15 @@ To execute the server:
 Connecting via:
 
 ```shell
-./client HOST
+python3 src/pyclient/cli.py shell <HOST>
+```
+
+```
+Usage: cli.py [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  shell
 ```

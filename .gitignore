@@ -1,5 +1,5 @@
 # Object files
-*.o
+
 *.ko
 *.obj
 *.elf
@@ -33,6 +33,9 @@ c/client
 c/server
 c/shell
 
+# Python cache
+__pycache__
+
 # Debug files
 *.dSYM/
 
@@ -41,4 +44,5 @@ c/shell
 
 # ide files
 .vscode
+.idea
 

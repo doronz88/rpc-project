@@ -24,6 +24,7 @@
 #define DEFAULT_PORT ("5910")
 #define DEFAULT_SHELL ("/bin/sh")
 #define USAGE ("Usage: %s [-p port] [-s shell]")
+#define MAGIC (0x12345678)
 
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
@@ -32,6 +33,29 @@ extern char **environ;
 
 static char g_shell_path[MAX_OPTION_LEN] = DEFAULT_SHELL;
 
+typedef enum
+{
+    CMD_EXEC = 0,
+} cmd_type_t;
+
+typedef enum
+{
+    CMD_EXEC_CHUNK_TYPE_STDOUT = 0,
+    CMD_EXEC_CHUNK_TYPE_EXITCODE = 1,
+} cmd_exec_chunk_type_t;
+
+typedef struct
+{
+    u32 type;
+    u32 size;
+} cmd_exec_chunk_t;
+
+typedef struct
+{
+    u32 magic;
+    u32 cmd_type;
+} protocol_message_t;
+
 void sigchld_handler(int s)
 {
     (void)s;
@@ -39,7 +63,7 @@ void sigchld_handler(int s)
     // TODO: close socket associated with this pid
     while (waitpid(-1, NULL, WNOHANG) > 0)
         ;
-    TRACE("Connection closed.");
+    TRACE("child died.");
 }
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
@@ -96,15 +120,38 @@ error:
     return -1;
 }
 
-void handle_client(int sockfd)
+bool handle_exec(int sockfd)
 {
-    TRACE("enter. fd: %d", sockfd);
+    int master = -1;
+    int result = false;
+    char **argv = NULL;
+    u32 argc;
+    CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
+
+    // +1 for additional NULL at end of list
+    size_t argv_size = (argc + 1) * sizeof(char *);
+    argv = (char **) malloc(argv_size * sizeof(char *));
+    memset(argv, 0, argv_size * sizeof(char *));
+
+    for (u32 i = 0; i < argc; ++i)
+    {
+        u32 len;
+        CHECK(recvall(sockfd, (char *)&len, sizeof(len)));
+        
+        // +1 for additional \0 at end of each string
+        size_t str_size = (len + 1) * sizeof(char);
+        argv[i] = malloc(str_size * sizeof(char));
+        CHECK(argv[i] != NULL);
+        
+        CHECK(recvall(sockfd, argv[i], len * sizeof(char)));
+        argv[i][len] = '\0';
+    }
 
     pid_t pid;
-    int master;
-    const char *argv[] = {g_shell_path, NULL};
+    
     master = internal_spawn((char *const *)argv, &pid);
     CHECK(master >= 0);
+    CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
 
     fd_set readfds;
     char buf[BUFFERSIZE];
@@ -122,20 +169,91 @@ void handle_client(int sockfd)
         if (FD_ISSET(master, &readfds))
         {
             nbytes = read(master, buf, BUFFERSIZE);
-            CHECK(nbytes >= 1);
-            CHECK(sendall(sockfd, buf, nbytes));
+            if (nbytes < 1)
+            {
+                break;
+            }
+
+            cmd_exec_chunk_t chunk;
+            chunk.type = CMD_EXEC_CHUNK_TYPE_STDOUT;
+            chunk.size = nbytes;
+
+            CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
+            CHECK(sendall(sockfd, buf, chunk.size));
         }
 
         if (FD_ISSET(sockfd, &readfds))
         {
             nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
-            CHECK(nbytes >= 1);
+            if (nbytes < 1)
+            {
+                break;
+            }
             CHECK(writeall(master, buf, nbytes));
         }
     }
 
+    // TODO: real value
+    s32 err = 0;
+    cmd_exec_chunk_t chunk;
+    chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
+    chunk.size = sizeof(err);
+
+    CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
+    CHECK(sendall(sockfd, (char *)&err, chunk.size));
+
+    TRACE("sent exit code to client fd: %d", sockfd);
+
+    result = true;
+
 error:
-    close(sockfd);
+    if (argv)
+    {
+        for (u32 i = 0; i < argc; ++i)
+        {
+            if (argv[i])
+            {
+                free(argv[i]);
+            }
+        }
+        free(argv);
+    }
+
+    if (-1 != master)
+    {
+        TRACE("close master: %d", master);
+        if (0 != close(master))
+        {
+            perror("close");
+        }
+    }
+
+    return result;
+}
+
+void handle_client(int sockfd)
+{
+    TRACE("enter. fd: %d", sockfd);
+
+    protocol_message_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(cmd.magic == MAGIC);
+
+    switch (cmd.cmd_type)
+    {
+    case CMD_EXEC:
+    {
+        handle_exec(sockfd);
+        break;
+    }
+    }
+
+error:
+    TRACE("close client fd: %d", sockfd);
+    if (0 != close(sockfd))
+    {
+        perror("close");
+    }
 }
 
 int main(int argc, const char *argv[])
