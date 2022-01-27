@@ -7,7 +7,7 @@ import typing
 from select import select
 from socket import socket
 
-from construct import Int32ul, Int64ul, Int32sl
+from construct import Int32sl, Int64sl
 
 from protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 
@@ -22,7 +22,7 @@ class Client:
         self._hostname = hostname
         self._port = port
         self._sock = None
-        self.old_settings = None
+        self._old_settings = None
         self.connect()
 
     def connect(self):
@@ -35,16 +35,16 @@ class Client:
             'data': {'filename': filename, 'mode': mode},
         })
         self._sock.sendall(message)
-        fd = fd_t.parse(self.recvall(fd_t.sizeof()))
+        fd = fd_t.parse(self._recvall(fd_t.sizeof()))
         return fd
 
-    def close(self, fd: int):
+    def close(self, fd: int) -> int:
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_CLOSE,
-            'data': {'fd': fd },
+            'data': {'fd': fd},
         })
         self._sock.sendall(message)
-        err = Int32sl.parse(self.recvall(Int32sl.sizeof()))
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
     def read(self, fd: int, size: int = CHUNK_SIZE):
@@ -53,11 +53,60 @@ class Client:
             'data': {'fd': fd, 'size': size},
         })
         self._sock.sendall(message)
-        err = Int64ul.parse(self.recvall(Int64ul.sizeof()))
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         buf = b''
         if err > 0:
-            buf = self.recvall(err)
+            buf = self._recvall(err)
         return err, buf
+
+    def write(self, fd: int, buf: bytes) -> int:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_WRITE,
+            'data': {'fd': fd, 'size': len(buf), 'data': buf},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def mkdir(self, filename: str, mode: int) -> int:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_MKDIR,
+            'data': {'filename': filename, 'mode': mode},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def remove(self, filename: str) -> int:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_REMOVE,
+            'data': {'filename': filename},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def chmod(self, filename: str, mode: int) -> int:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_CHMOD,
+            'data': {'filename': filename, 'mode': mode},
+        })
+        self._sock.sendall(message)
+        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        return err
+
+    def put_file(self, filename: str, buf: bytes):
+        fd = self.open(filename, os.O_WRONLY | os.O_CREAT)
+        assert fd >= 0
+
+        while buf:
+            err = self.write(fd, buf)
+            if err < 0:
+                raise IOError()
+            buf = buf[err:]
+
+        self.close(fd)
+        return buf
 
     def get_file(self, filename: str) -> bytes:
         fd = self.open(filename, os.O_RDONLY)
@@ -82,14 +131,14 @@ class Client:
         pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))
         return pid
 
-    def restore_terminal(self):
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, self.old_settings)
+    def _restore_terminal(self):
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, self._old_settings)
 
-    def prepare_terminal(self):
+    def _prepare_terminal(self):
         fd = sys.stdin.fileno()
-        self.old_settings = termios.tcgetattr(fd)
+        self._old_settings = termios.tcgetattr(fd)
 
-        atexit.register(self.restore_terminal)
+        atexit.register(self._restore_terminal)
 
         new = termios.tcgetattr(fd)
         new[3] &= ~(termios.ECHO | termios.ICANON)
@@ -98,7 +147,7 @@ class Client:
 
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, new)
 
-    def recvall(self, size: int) -> bytes:
+    def _recvall(self, size: int) -> bytes:
         buf = b''
         while size:
             try:
@@ -118,7 +167,7 @@ class Client:
 
         self._sock.setblocking(False)
 
-        self.prepare_terminal()
+        self._prepare_terminal()
 
         while True:
             rlist, _, xlist = select([sys.stdin, self._sock], [], [self._sock])
@@ -134,13 +183,13 @@ class Client:
                     self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:
-                        buf = self.recvall(exec_chunk_t.sizeof())
+                        buf = self._recvall(exec_chunk_t.sizeof())
                     except ConnectionResetError:
                         print('Bye. 👋')
                         return
 
                     exec_chunk = exec_chunk_t.parse(buf)
-                    data = self.recvall(exec_chunk.size)
+                    data = self._recvall(exec_chunk.size)
 
                     if exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_STDOUT:
                         sys.stdout.write(data.decode())

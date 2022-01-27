@@ -304,7 +304,7 @@ bool handle_close(int sockfd)
     cmd_close_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    s32 err = close(cmd.fd);
+    s64 err = close(cmd.fd);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
 
     result = true;
@@ -316,16 +316,27 @@ error:
 bool handle_write(int sockfd)
 {
     TRACE("enter");
+    char *data = NULL;
     int result = false;
     cmd_write_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    TRACE("fd: %d size: %d", cmd.fd, cmd.size);
 
-    s64 n = write(cmd.fd, cmd.data, cmd.size);
+    data = (char *)malloc(sizeof(char) * cmd.size);
+    CHECK(NULL != data);
+    CHECK(recvall(sockfd, data, cmd.size));
+
+    s64 n = write(cmd.fd, data, cmd.size);
     CHECK(sendall(sockfd, (char *)&n, sizeof(n)));
 
     result = true;
 
 error:
+    if (data)
+    {
+        free(data);
+    }
+
     return result;
 }
 
@@ -364,7 +375,7 @@ bool handle_mkdir(int sockfd)
     cmd_mkdir_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    int err = mkdir(cmd.filename, cmd.mode);
+    s64 err = mkdir(cmd.filename, cmd.mode);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
 
 error:
@@ -377,7 +388,7 @@ bool handle_remove(int sockfd)
     cmd_remove_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    int err = remove(cmd.filename);
+    s64 err = remove(cmd.filename);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
 
     result = true;
@@ -392,7 +403,7 @@ bool handle_chmod(int sockfd)
     cmd_chmod_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    int err = chmod(cmd.filename, cmd.mode);
+    s64 err = chmod(cmd.filename, cmd.mode);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
 
     result = true;
@@ -408,6 +419,7 @@ void handle_client(int sockfd)
     while (true)
     {
         protocol_message_t cmd;
+        TRACE("recv");
         CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
         CHECK(cmd.magic == MAGIC);
 
