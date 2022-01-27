@@ -12,6 +12,7 @@ coloredlogs.install(level=logging.DEBUG)
 logging.getLogger('asyncio').disabled = True
 logging.getLogger('parso').disabled = True
 logging.getLogger('parso.cache').disabled = True
+logging.getLogger('parso.python.diff').disabled = True
 
 
 @click.group()

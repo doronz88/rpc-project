@@ -7,7 +7,7 @@ import typing
 from select import select
 from socket import socket
 
-from construct import Int32sl, Int64sl
+from construct import Int64sl
 
 from protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 
@@ -23,9 +23,9 @@ class Client:
         self._port = port
         self._sock = None
         self._old_settings = None
-        self.connect()
+        self._reconnect()
 
-    def connect(self):
+    def _reconnect(self):
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
 
@@ -122,7 +122,7 @@ class Client:
         self.close(fd)
         return buf
 
-    def execute(self, argv: typing.List[str]) -> int:
+    def _execute(self, argv: typing.List[str]) -> int:
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_EXEC,
             'data': {'argv': argv},
@@ -158,24 +158,9 @@ class Client:
             buf += chunk
         return buf
 
-    def shell(self, argv: typing.List[str] = None):
-        if argv is None:
-            argv = self.DEFAULT_ARGV
-
-        pid = self.execute(argv)
-        logging.info(f'shell process started as pid: {pid}')
-
-        self._sock.setblocking(False)
-
-        self._prepare_terminal()
-
+    def _execution_loop(self):
         while True:
-            rlist, _, xlist = select([sys.stdin, self._sock], [], [self._sock])
-
-            for fd in xlist:
-                if fd == self._sock:
-                    print('Bye. 👋')
-                    return
+            rlist, _, _ = select([sys.stdin, self._sock], [], [])
 
             for fd in rlist:
                 if fd == sys.stdin:
@@ -195,4 +180,26 @@ class Client:
                         sys.stdout.write(data.decode())
                         sys.stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
-                        sys.exit(exitcode_t.parse(data))
+                        return exitcode_t.parse(data)
+
+    def shell(self, argv: typing.List[str] = None):
+        if argv is None:
+            argv = self.DEFAULT_ARGV
+
+        pid = self._execute(argv)
+        logging.info(f'shell process started as pid: {pid}')
+
+        self._sock.setblocking(False)
+
+        self._prepare_terminal()
+        try:
+            result = self._execution_loop()
+        except Exception:
+            self._restore_terminal()
+            self._reconnect()
+            raise
+
+        self._restore_terminal()
+        self._reconnect()
+
+        return result
