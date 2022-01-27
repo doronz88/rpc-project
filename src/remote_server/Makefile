@@ -1,7 +1,7 @@
 SERVER_CC=gcc
 CLIENT_CC=gcc
 
-all: server client
+all: server 
 
 common_server.o: common.c
 	$(SERVER_CC) $(SERVER_CFLAGS) -c common.c -o common_server.o
