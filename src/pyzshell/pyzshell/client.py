@@ -12,10 +12,11 @@ from select import select
 from socket import socket
 
 import IPython
+from cached_property import cached_property
 from construct import Int64sl
 from traitlets.config import Config
 
-from pyzshell.command import CommandsMeta
+from pyzshell.command import CommandsMeta, command
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 from pyzshell.structs import utsname_linux, utsname_darwin
@@ -45,7 +46,7 @@ class Client(metaclass=CommandsMeta):
         finally:
             self.symbols.free(x)
 
-    @property
+    @cached_property
     def os_family(self):
         with self.safe_malloc(1024 * 20) as block:
             assert 0 == self.symbols.uname(block)
@@ -60,6 +61,7 @@ class Client(metaclass=CommandsMeta):
             assert 0 == self.symbols.uname(uname)
             return utsname.parse(uname.peek(utsname.sizeof()))
 
+    @command()
     def info(self):
         uname = self.uname
         print('sysname:', uname.sysname)
