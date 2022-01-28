@@ -36,20 +36,20 @@ extern char **environ;
 
 typedef enum
 {
-    CMD_EXEC=0,
-    CMD_OPEN=1,
-    CMD_CLOSE=2,
-    CMD_WRITE=3,
-    CMD_READ=4,
-    CMD_REMOVE=5,
-    CMD_MKDIR=6,
-    CMD_CHMOD=7,
-    CMD_DLOPEN=8,
-    CMD_DLCLOSE=9,
-    CMD_DLSYM=10,
-    CMD_CALL=11,
-    CMD_PEEK=12,
-    CMD_POKE=13,
+    CMD_EXEC = 0,
+    CMD_OPEN = 1,
+    CMD_CLOSE = 2,
+    CMD_WRITE = 3,
+    CMD_READ = 4,
+    CMD_REMOVE = 5,
+    CMD_MKDIR = 6,
+    CMD_CHMOD = 7,
+    CMD_DLOPEN = 8,
+    CMD_DLCLOSE = 9,
+    CMD_DLSYM = 10,
+    CMD_CALL = 11,
+    CMD_PEEK = 12,
+    CMD_POKE = 13,
 } cmd_type_t;
 
 typedef enum
@@ -128,6 +128,19 @@ typedef struct
     u64 argc;
     u64 argv[0];
 } cmd_call_t;
+
+typedef struct 
+{
+    u64 address;
+    u64 size;
+} cmd_peek_t;
+
+typedef struct 
+{
+    u64 address;
+    u64 size;
+    u8 data[0];
+} cmd_poke_t;
 
 typedef struct
 {
@@ -488,11 +501,11 @@ error:
     return result;
 }
 
-typedef u64 (*call_argc0_t)();
-typedef u64 (*call_argc1_t)(u64);
-
 bool handle_call(int sockfd)
 {
+    typedef u64 (*call_argc0_t)();
+    typedef u64 (*call_argc1_t)(u64);
+
     TRACE("enter");
     s64 err = 0;
     int result = false;
@@ -505,15 +518,55 @@ bool handle_call(int sockfd)
 
     switch (cmd.argc)
     {
-        case 0:
-            err = ((call_argc0_t)cmd.address)();
-            break;
-        case 1:
-            err = ((call_argc1_t)cmd.address)(argv[0]);
-            break;
+    case 0:
+        err = ((call_argc0_t)cmd.address)();
+        break;
+    case 1:
+        err = ((call_argc1_t)cmd.address)(argv[0]);
+        break;
     }
 
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    if (argv)
+    {
+        free(argv);
+    }
+    return result;
+}
+
+bool handle_peek(int sockfd)
+{
+    TRACE("enter");
+    s64 err = 0;
+    int result = false;
+    u64 *argv = NULL;
+    cmd_peek_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(sendall(sockfd, (char *)cmd.address, cmd.size));
+
+    result = true;
+
+error:
+    if (argv)
+    {
+        free(argv);
+    }
+    return result;
+}
+
+bool handle_poke(int sockfd)
+{
+    TRACE("enter");
+    s64 err = 0;
+    int result = false;
+    u64 *argv = NULL;
+    cmd_poke_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(sockfd, (char *)cmd.address, cmd.size));
 
     result = true;
 
@@ -593,6 +646,16 @@ void handle_client(int sockfd)
         case CMD_CALL:
         {
             handle_call(sockfd);
+            break;
+        }
+        case CMD_PEEK:
+        {
+            handle_peek(sockfd);
+            break;
+        }
+        case CMD_POKE:
+        {
+            handle_poke(sockfd);
             break;
         }
         default:

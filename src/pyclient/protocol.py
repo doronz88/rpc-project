@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, Int32sl, \
-    PaddedString, Bytes, Int64ul, Int64sl
+    PaddedString, Bytes, Int64ul, Int64sl, Prefixed
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -78,6 +78,17 @@ cmd_call_t = Struct(
     'argv' / PrefixedArray(Int64ul, Int64ul),
 )
 
+cmd_peek_t = Struct(
+    'address' / Int64ul,
+    'size' / Int64ul,
+)
+
+cmd_poke_t = Struct(
+    'address' / Int64ul,
+    'size' / Int64ul,
+    'data' / Bytes(this.size),
+)
+
 protocol_message_t = Struct(
     'magic' / Const(MAGIC, Int32ul),
     'cmd_type' / cmd_type_t,
@@ -94,6 +105,8 @@ protocol_message_t = Struct(
         cmd_type_t.CMD_DLCLOSE: cmd_dlclose_t,
         cmd_type_t.CMD_DLSYM: cmd_dlsym_t,
         cmd_type_t.CMD_CALL: cmd_call_t,
+        cmd_type_t.CMD_PEEK: cmd_peek_t,
+        cmd_type_t.CMD_POKE: cmd_poke_t,
     })
 )
 

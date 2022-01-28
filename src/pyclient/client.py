@@ -129,6 +129,21 @@ class Client:
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
+    def peek(self, address: int, size: int) -> bytes:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_PEEK,
+            'data': {'address': address, 'size': size},
+        })
+        self._sock.sendall(message)
+        return self._recvall(size)
+
+    def poke(self, address: int, data: bytes):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_POKE,
+            'data': {'address': address, 'size': len(data), 'data': data},
+        })
+        self._sock.sendall(message)
+
     def put_file(self, filename: str, buf: bytes):
         fd = self.open(filename, os.O_WRONLY | os.O_CREAT)
         assert fd >= 0
