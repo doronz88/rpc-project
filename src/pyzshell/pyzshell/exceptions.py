@@ -8,4 +8,3 @@ class SymbolAbsentError(ZShellError):
 
 class ArgumentError(ZShellError):
     pass
-

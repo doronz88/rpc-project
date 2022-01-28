@@ -1,7 +1,6 @@
 import logging
 import sys
 
-import IPython
 import click
 import coloredlogs
 

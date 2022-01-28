@@ -37,19 +37,12 @@ extern char **environ;
 typedef enum
 {
     CMD_EXEC = 0,
-    CMD_OPEN = 1,
-    CMD_CLOSE = 2,
-    CMD_WRITE = 3,
-    CMD_READ = 4,
-    CMD_REMOVE = 5,
-    CMD_MKDIR = 6,
-    CMD_CHMOD = 7,
-    CMD_DLOPEN = 8,
-    CMD_DLCLOSE = 9,
-    CMD_DLSYM = 10,
-    CMD_CALL = 11,
-    CMD_PEEK = 12,
-    CMD_POKE = 13,
+    CMD_DLOPEN = 1,
+    CMD_DLCLOSE = 2,
+    CMD_DLSYM = 3,
+    CMD_CALL = 4,
+    CMD_PEEK = 5,
+    CMD_POKE = 6,
 } cmd_type_t;
 
 typedef enum
@@ -63,47 +56,6 @@ typedef struct
     u32 type;
     u32 size;
 } cmd_exec_chunk_t;
-
-typedef struct
-{
-    char filename[MAX_PATH_LEN];
-    u32 mode;
-} cmd_open_t;
-
-typedef struct
-{
-    s64 fd;
-} cmd_close_t;
-
-typedef struct
-{
-    s64 fd;
-    u64 size;
-    char *data[0];
-} cmd_write_t;
-
-typedef struct
-{
-    s64 fd;
-    u64 size;
-} cmd_read_t;
-
-typedef struct
-{
-    char filename[MAX_PATH_LEN];
-    u32 mode;
-} cmd_mkdir_t;
-
-typedef struct
-{
-    char filename[MAX_PATH_LEN];
-} cmd_remove_t;
-
-typedef struct
-{
-    char filename[MAX_PATH_LEN];
-    u32 mode;
-} cmd_chmod_t;
 
 typedef struct
 {
@@ -323,139 +275,6 @@ error:
     return result;
 }
 
-bool handle_open(int sockfd)
-{
-    TRACE("enter");
-    int result = false;
-    cmd_open_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    TRACE("filename: %s, mode: %d", cmd.filename, cmd.mode);
-
-    s64 fd = open(cmd.filename, cmd.mode);
-    CHECK(sendall(sockfd, (char *)&fd, sizeof(fd)));
-
-    result = true;
-
-error:
-    return result;
-}
-
-bool handle_close(int sockfd)
-{
-    TRACE("enter");
-    int result = false;
-    cmd_close_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    s64 err = close(cmd.fd);
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
-
-    result = true;
-
-error:
-    return result;
-}
-
-bool handle_write(int sockfd)
-{
-    TRACE("enter");
-    char *data = NULL;
-    int result = false;
-    cmd_write_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-    TRACE("fd: %d size: %d", cmd.fd, cmd.size);
-
-    data = (char *)malloc(sizeof(char) * cmd.size);
-    CHECK(NULL != data);
-    CHECK(recvall(sockfd, data, cmd.size));
-
-    s64 n = write(cmd.fd, data, cmd.size);
-    CHECK(sendall(sockfd, (char *)&n, sizeof(n)));
-
-    result = true;
-
-error:
-    if (data)
-    {
-        free(data);
-    }
-
-    return result;
-}
-
-bool handle_read(int sockfd)
-{
-    TRACE("enter");
-    int result = false;
-    char *buf = NULL;
-    cmd_read_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    buf = (char *)malloc(sizeof(char) * cmd.size);
-    CHECK(NULL != buf);
-
-    s64 n = read(cmd.fd, buf, cmd.size);
-    CHECK(sendall(sockfd, (char *)&n, sizeof(n)));
-
-    if (n > 0)
-    {
-        CHECK(sendall(sockfd, buf, n));
-    }
-
-    result = true;
-
-error:
-    if (buf)
-    {
-        free(buf);
-    }
-    return result;
-}
-
-bool handle_mkdir(int sockfd)
-{
-    int result = false;
-    cmd_mkdir_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    s64 err = mkdir(cmd.filename, cmd.mode);
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
-
-error:
-    return result;
-}
-
-bool handle_remove(int sockfd)
-{
-    int result = false;
-    cmd_remove_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    s64 err = remove(cmd.filename);
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
-
-    result = true;
-
-error:
-    return result;
-}
-
-bool handle_chmod(int sockfd)
-{
-    int result = false;
-    cmd_chmod_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
-    s64 err = chmod(cmd.filename, cmd.mode);
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
-
-    result = true;
-
-error:
-    return result;
-}
-
 bool handle_dlopen(int sockfd)
 {
     int result = false;
@@ -636,41 +455,6 @@ void handle_client(int sockfd)
         case CMD_EXEC:
         {
             handle_exec(sockfd);
-            break;
-        }
-        case CMD_OPEN:
-        {
-            handle_open(sockfd);
-            break;
-        }
-        case CMD_CLOSE:
-        {
-            handle_close(sockfd);
-            break;
-        }
-        case CMD_READ:
-        {
-            handle_read(sockfd);
-            break;
-        }
-        case CMD_WRITE:
-        {
-            handle_write(sockfd);
-            break;
-        }
-        case CMD_REMOVE:
-        {
-            handle_remove(sockfd);
-            break;
-        }
-        case CMD_MKDIR:
-        {
-            handle_mkdir(sockfd);
-            break;
-        }
-        case CMD_CHMOD:
-        {
-            handle_chmod(sockfd);
             break;
         }
         case CMD_DLOPEN:

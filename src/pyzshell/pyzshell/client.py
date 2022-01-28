@@ -19,9 +19,9 @@ from construct import Int64sl
 from traitlets.config import Config
 
 from pyzshell.command import CommandsMeta, command
-from pyzshell.exceptions import ArgumentError, SymbolAbsentError
+from pyzshell.exceptions import ArgumentError, SymbolAbsentError, ZShellError
 from pyzshell.ls import Ls
-from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
+from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
 from pyzshell.structs import utsname_linux, utsname_darwin
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
@@ -30,9 +30,11 @@ DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
 
 USAGE = '''
-Welcome to iShell!
+Welcome to iShell! You interactive shell for controlling the remote zShell server.
 Use show_commands() to see all available commands at your disposal.
 Feel free to just call any C function you desire via the "symbols" object.
+
+Have a nice flight ✈️!
 '''
 
 
@@ -182,12 +184,13 @@ class Client(metaclass=CommandsMeta):
     def write_file(self, filename: str, buf: bytes):
         """ write file at target """
         fd = self.symbols.open(filename, os.O_WRONLY | os.O_CREAT, 0o0777)
-        assert fd != 0xffffffff
+        if fd == 0xffffffff:
+            raise ZShellError(f'failed to open: {filename} for writing')
 
         while buf:
             err = self.symbols.write(fd, buf, len(buf))
             if err == 0xffffffffffffffff:
-                raise IOError()
+                raise ZShellError(f'write failed for: {filename}')
             buf = buf[err:]
 
         self.symbols.close(fd)
@@ -197,7 +200,8 @@ class Client(metaclass=CommandsMeta):
     def read_file(self, filename: str) -> bytes:
         """ read file at target """
         fd = self.symbols.open(filename, os.O_RDONLY)
-        assert fd != 0xffffffff
+        if fd == 0xffffffff:
+            raise ZShellError(f'failed to open: {filename} for reading')
 
         buf = b''
         with self.safe_malloc(CHUNK_SIZE) as chunk:
@@ -206,7 +210,7 @@ class Client(metaclass=CommandsMeta):
                 if err == 0:
                     break
                 elif err < 0:
-                    raise IOError()
+                    raise ZShellError(f'read failed for: {filename}')
                 buf += chunk.peek(err)
         self.symbols.close(fd)
         return buf
