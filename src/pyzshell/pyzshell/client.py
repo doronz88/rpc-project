@@ -1,16 +1,24 @@
+import ast
 import atexit
+import builtins
+import contextlib
 import logging
 import os
 import sys
 import termios
 import typing
+from functools import partial
 from select import select
 from socket import socket
 
+import IPython
 from construct import Int64sl
+from traitlets.config import Config
 
-from pyzshell.exceptions import ArgumentError
+from pyzshell.command import CommandsMeta
+from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
+from pyzshell.structs import utsname_linux, utsname_darwin
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
 
@@ -18,7 +26,7 @@ DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
 
 
-class Client:
+class Client(metaclass=CommandsMeta):
     DEFAULT_ARGV = ['/bin/sh']
 
     def __init__(self, hostname: str, port: int = None):
@@ -28,6 +36,37 @@ class Client:
         self._old_settings = None
         self._reconnect()
         self.symbols = SymbolsJar.create(self)
+
+    @contextlib.contextmanager
+    def safe_malloc(self, size: int):
+        x = self.symbols.malloc(size)
+        try:
+            yield x
+        finally:
+            self.symbols.free(x)
+
+    @property
+    def os_family(self):
+        with self.safe_malloc(1024 * 20) as block:
+            assert 0 == self.symbols.uname(block)
+            return block.peek_str().lower().decode()
+
+    @property
+    def uname(self):
+        utsname = utsname_linux
+        if self.os_family == 'darwin':
+            utsname = utsname_darwin
+        with self.safe_malloc(utsname.sizeof()) as uname:
+            assert 0 == self.symbols.uname(uname)
+            return utsname.parse(uname.peek(utsname.sizeof()))
+
+    def info(self):
+        uname = self.uname
+        print('sysname:', uname.sysname)
+        print('nodename:', uname.nodename)
+        print('release:', uname.release)
+        print('version:', uname.version)
+        print('machine:', uname.machine)
 
     def open(self, filename: str, mode: int):
         message = protocol_message_t.build({
@@ -236,6 +275,63 @@ class Client:
 
     def symbol(self, symbol: int):
         return Symbol.create(symbol, self)
+
+    @staticmethod
+    def _add_global(name, value, reserved_names=None):
+        if reserved_names is None or name not in reserved_names:
+            # don't override existing symbols
+            globals()[name] = value
+
+    def _globalize_commands(self):
+        """ Make all command available in global scope. """
+        reserved_names = list(globals().keys()) + dir(builtins)
+
+        for command_name, function in self.commands:
+            command_func = partial(function, self)
+            command_func.__doc__ = function.__doc__
+
+            self._add_global(command_name, command_func, reserved_names)
+
+    def _ipython_run_cell_hook(self, info):
+        """
+        Enable lazy loading for symbols
+        :param info: IPython's CellInfo object
+        """
+        for node in ast.walk(ast.parse(info.raw_cell)):
+            if not isinstance(node, ast.Name):
+                # we are only interested in names
+                continue
+
+            if node.id in locals() or node.id in globals() or node.id in dir(builtins):
+                # That are undefined
+                continue
+
+            if not hasattr(SymbolsJar, node.id):
+                # ignore SymbolsJar properties
+                try:
+                    symbol = getattr(self.symbols, node.id)
+                except SymbolAbsentError:
+                    pass
+                else:
+                    self._add_global(
+                        node.id,
+                        symbol
+                    )
+
+    def interactive(self):
+        """ Start an interactive shell """
+        self._globalize_commands()
+
+        sys.argv = ['a']
+        c = Config()
+        c.IPCompleter.use_jedi = False
+        c.InteractiveShellApp.exec_lines = [
+            '''IPython.get_ipython().events.register('pre_run_cell', self._ipython_run_cell_hook)'''
+        ]
+        namespace = globals()
+        namespace.update(locals())
+
+        IPython.start_ipython(config=c, user_ns=namespace)
 
     def _reconnect(self):
         self._sock = socket()

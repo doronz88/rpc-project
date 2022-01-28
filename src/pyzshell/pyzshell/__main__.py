@@ -57,8 +57,7 @@ def push(ctx, src, dst):
 @cli.command()
 @click.pass_context
 def ishell(ctx):
-    client = ctx.obj['client']
-    IPython.embed()
+    ctx.obj['client'].interactive()
 
 
 if __name__ == '__main__':
