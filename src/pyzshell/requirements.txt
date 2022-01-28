@@ -3,4 +3,4 @@ click
 coloredlogs
 IPython
 traitlets
-cached_property
+cached-property
