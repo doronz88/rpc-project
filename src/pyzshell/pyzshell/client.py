@@ -9,7 +9,9 @@ from socket import socket
 
 from construct import Int64sl
 
-from protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
+from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
+from pyzshell.symbol import Symbol
+from pyzshell.symbols_jar import SymbolsJar
 
 DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
@@ -24,6 +26,7 @@ class Client:
         self._sock = None
         self._old_settings = None
         self._reconnect()
+        self.symbols = SymbolsJar.create(self)
 
     def open(self, filename: str, mode: int):
         message = protocol_message_t.build({
@@ -121,13 +124,35 @@ class Client:
         return err
 
     def call(self, address: int, argv: typing.List[int] = None):
+        fixed_argv = []
+        free_list = []
+
+        for arg in argv:
+            tmp = arg
+
+            if isinstance(arg, str):
+                tmp = self.symbols.malloc(len(arg) + 1)
+                tmp.poke(arg.encode() + b'\0')
+                free_list.append(tmp)
+
+            elif isinstance(arg, bytes):
+                tmp = self.symbols.malloc(len(arg))
+                tmp.poke(arg)
+                free_list.append(tmp)
+
+            fixed_argv.append(tmp)
+
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_CALL,
-            'data': {'address': address, 'argv': argv},
+            'data': {'address': address, 'argv': fixed_argv},
         })
         self._sock.sendall(message)
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
+
+        for f in free_list:
+            self.symbols.free(f)
+
+        return self.symbol(err)
 
     def peek(self, address: int, size: int) -> bytes:
         message = protocol_message_t.build({
@@ -193,8 +218,8 @@ class Client:
 
         return result
 
-
-
+    def symbol(self, symbol: int):
+        return Symbol.create(symbol, self)
 
     def _reconnect(self):
         self._sock = socket()
@@ -259,5 +284,3 @@ class Client:
                         sys.stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
                         return exitcode_t.parse(data)
-
-

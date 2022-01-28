@@ -5,7 +5,7 @@ import IPython
 import click
 import coloredlogs
 
-from client import DEFAULT_PORT, Client
+from pyzshell.client import DEFAULT_PORT, Client
 
 coloredlogs.install(level=logging.DEBUG)
 

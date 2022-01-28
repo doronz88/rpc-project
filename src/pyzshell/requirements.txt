@@ -1,0 +1,4 @@
+construct>=2.9.29
+click
+coloredlogs
+IPython

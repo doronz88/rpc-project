@@ -36,6 +36,7 @@ src/shell
 
 # Python cache
 __pycache__
+*.egg-info
 
 # Debug files
 *.dSYM/

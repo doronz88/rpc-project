@@ -129,13 +129,13 @@ typedef struct
     u64 argv[0];
 } cmd_call_t;
 
-typedef struct 
+typedef struct
 {
     u64 address;
     u64 size;
 } cmd_peek_t;
 
-typedef struct 
+typedef struct
 {
     u64 address;
     u64 size;
@@ -505,6 +505,16 @@ bool handle_call(int sockfd)
 {
     typedef u64 (*call_argc0_t)();
     typedef u64 (*call_argc1_t)(u64);
+    typedef u64 (*call_argc2_t)(u64, u64);
+    typedef u64 (*call_argc3_t)(u64, u64, u64);
+    typedef u64 (*call_argc4_t)(u64, u64, u64, u64);
+    typedef u64 (*call_argc5_t)(u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc6_t)(u64, u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc7_t)(u64, u64, u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc8_t)(u64, u64, u64, u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc9_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc10_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64, u64);
+    typedef u64 (*call_argc11_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, u64);
 
     TRACE("enter");
     s64 err = 0;
@@ -523,6 +533,36 @@ bool handle_call(int sockfd)
         break;
     case 1:
         err = ((call_argc1_t)cmd.address)(argv[0]);
+        break;
+    case 2:
+        err = ((call_argc2_t)cmd.address)(argv[0], argv[1]);
+        break;
+    case 3:
+        err = ((call_argc3_t)cmd.address)(argv[0], argv[1], argv[2]);
+        break;
+    case 4:
+        err = ((call_argc4_t)cmd.address)(argv[0], argv[1], argv[2], argv[3]);
+        break;
+    case 5:
+        err = ((call_argc5_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4]);
+        break;
+    case 6:
+        err = ((call_argc6_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+        break;
+    case 7:
+        err = ((call_argc7_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+        break;
+    case 8:
+        err = ((call_argc8_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
+        break;
+    case 9:
+        err = ((call_argc9_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);
+        break;
+    case 10:
+        err = ((call_argc10_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9]);
+        break;
+    case 11:
+        err = ((call_argc11_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9], argv[10]);
         break;
     }
 
