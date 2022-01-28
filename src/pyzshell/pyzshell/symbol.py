@@ -157,11 +157,11 @@ class Symbol(int):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
         return self._client.symbol(
-            struct.unpack(self._client.endianness + fmt, self._client.peek(addr, self.item_size))[0])
+            struct.unpack(self._client._endianness + fmt, self._client.peek(addr, self.item_size))[0])
 
     def __setitem__(self, item, value):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
-        value = struct.pack(self._client.endianness + fmt, int(value))
+        value = struct.pack(self._client._endianness + fmt, int(value))
         self._client.poke(self + item * self.item_size, value)
 
     def __repr__(self):

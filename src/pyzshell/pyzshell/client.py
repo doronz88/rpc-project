@@ -6,20 +6,17 @@ import logging
 import os
 import sys
 import termios
-import textwrap
 import typing
-from functools import partial
 from select import select
 from socket import socket
 
 import IPython
-import docstring_parser
 from cached_property import cached_property
 from construct import Int64sl
 from traitlets.config import Config
 
-from pyzshell.command import CommandsMeta, command
-from pyzshell.exceptions import ArgumentError, SymbolAbsentError, ZShellError
+from pyzshell.exceptions import ArgumentError, SymbolAbsentError
+from pyzshell.fs import Fs
 from pyzshell.ls import Ls
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
 from pyzshell.structs import utsname_linux, utsname_darwin
@@ -31,14 +28,14 @@ CHUNK_SIZE = 1024
 
 USAGE = '''
 Welcome to iShell! You interactive shell for controlling the remote zShell server.
-Use show_commands() to see all available commands at your disposal.
+Use the global "d" as the target device you are working on.
 Feel free to just call any C function you desire via the "symbols" object.
 
 Have a nice flight ✈️!
 '''
 
 
-class Client(metaclass=CommandsMeta):
+class Client:
     DEFAULT_ARGV = ['/bin/sh']
 
     def __init__(self, hostname: str, port: int = None):
@@ -48,19 +45,10 @@ class Client(metaclass=CommandsMeta):
         self._old_settings = None
         self._reconnect()
         self._ls = Ls(self)
-        self.endianness = '<'
+        self._endianness = '<'
         self.symbols = SymbolsJar.create(self)
+        self.fs = Fs(self)
 
-    @command()
-    def show_commands(self):
-        """ show available commands. """
-        for command_name, command_func in self.commands:
-            doc = docstring_parser.parse(command_func.__doc__)
-            print(f'👾 {command_name} - {doc.short_description}')
-            if doc.long_description:
-                print(textwrap.indent(doc.long_description, '    '))
-
-    @command()
     def info(self):
         """ print information about current target """
         uname = self.uname
@@ -70,12 +58,8 @@ class Client(metaclass=CommandsMeta):
         print('version:', uname.version)
         print('machine:', uname.machine)
 
-    @command()
     def dlopen(self, filename: str, mode: int) -> Symbol:
-        """
-        call dlopen() at remote and return its handle.
-        see the man page for more details.
-        """
+        """ call dlopen() at remote and return its handle. see the man page for more details. """
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLOPEN,
             'data': {'filename': filename, 'mode': mode},
@@ -84,12 +68,8 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return self.symbol(err)
 
-    @command()
     def dlclose(self, lib: int):
-        """
-        call dlclose() at remote and return its handle.
-        see the man page for more details.
-        """
+        """ call dlclose() at remote and return its handle. see the man page for more details. """
         lib &= 0xffffffffffffffff
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLCLOSE,
@@ -99,12 +79,8 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
-    @command()
     def dlsym(self, lib: int, symbol_name: str):
-        """
-        call dlsym() at remote and return its handle.
-        see the man page for more details.
-        """
+        """ call dlsym() at remote and return its handle. see the man page for more details. """
         lib &= 0xffffffffffffffff
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLSYM,
@@ -114,7 +90,6 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
-    @command()
     def call(self, address: int, argv: typing.List[int] = None) -> Symbol:
         """ call a remote function and retrieve its return value as Symbol object """
         fixed_argv = []
@@ -155,7 +130,6 @@ class Client(metaclass=CommandsMeta):
 
         return self.symbol(err)
 
-    @command()
     def peek(self, address: int, size: int) -> bytes:
         """ peek data at given address """
         message = protocol_message_t.build({
@@ -165,7 +139,6 @@ class Client(metaclass=CommandsMeta):
         self._sock.sendall(message)
         return self._recvall(size)
 
-    @command()
     def poke(self, address: int, data: bytes):
         """ poke data at given address """
         message = protocol_message_t.build({
@@ -174,48 +147,11 @@ class Client(metaclass=CommandsMeta):
         })
         self._sock.sendall(message)
 
-    @command()
     def peek_str(self, address: int) -> str:
         """ peek string at given address """
         s = self.symbol(address)
         return s.peek(self.symbols.strlen(s))
 
-    @command()
-    def write_file(self, filename: str, buf: bytes):
-        """ write file at target """
-        fd = self.symbols.open(filename, os.O_WRONLY | os.O_CREAT, 0o0777)
-        if fd == 0xffffffff:
-            raise ZShellError(f'failed to open: {filename} for writing')
-
-        while buf:
-            err = self.symbols.write(fd, buf, len(buf))
-            if err == 0xffffffffffffffff:
-                raise ZShellError(f'write failed for: {filename}')
-            buf = buf[err:]
-
-        self.symbols.close(fd)
-        return buf
-
-    @command()
-    def read_file(self, filename: str) -> bytes:
-        """ read file at target """
-        fd = self.symbols.open(filename, os.O_RDONLY)
-        if fd == 0xffffffff:
-            raise ZShellError(f'failed to open: {filename} for reading')
-
-        buf = b''
-        with self.safe_malloc(CHUNK_SIZE) as chunk:
-            while True:
-                err = self.symbols.read(fd, chunk, CHUNK_SIZE)
-                if err == 0:
-                    break
-                elif err < 0:
-                    raise ZShellError(f'read failed for: {filename}')
-                buf += chunk.peek(err)
-        self.symbols.close(fd)
-        return buf
-
-    @command()
     def spawn(self, argv: typing.List[str] = None):
         """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
@@ -239,12 +175,10 @@ class Client(metaclass=CommandsMeta):
 
         return result
 
-    @command()
     def objc_call(self, objc_object: int, selector, *params):
         """ call an objc method on a given object """
         return self.symbols.objc_msgSend(objc_object, self.symbols.sel_getUid(selector), *params)
 
-    @command()
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
         return Symbol.create(symbol, self)
@@ -274,36 +208,18 @@ class Client(metaclass=CommandsMeta):
 
     def interactive(self):
         """ Start an interactive shell """
-        self._globalize_commands()
-
         sys.argv = ['a']
         c = Config()
         c.IPCompleter.use_jedi = False
         c.InteractiveShellApp.exec_lines = [
-            '''IPython.get_ipython().events.register('pre_run_cell', self._ipython_run_cell_hook)'''
+            '''IPython.get_ipython().events.register('pre_run_cell', d._ipython_run_cell_hook)'''
         ]
         namespace = globals()
-        namespace.update(locals())
+        namespace.update({'d': self, 'symbols': self.symbols})
+        IPython.start_ipython(header=USAGE, config=c, user_ns=namespace)
 
-        print(USAGE)
-
-        IPython.start_ipython(config=c, user_ns=namespace)
-
-    @staticmethod
-    def _add_global(name, value, reserved_names=None):
-        if reserved_names is None or name not in reserved_names:
-            # don't override existing symbols
-            globals()[name] = value
-
-    def _globalize_commands(self):
-        """ Make all command available in global scope. """
-        reserved_names = list(globals().keys()) + dir(builtins)
-
-        for command_name, function in self.commands:
-            command_func = partial(function, self)
-            command_func.__doc__ = function.__doc__
-
-            self._add_global(command_name, command_func, reserved_names)
+    def _add_global(self, name, value):
+        globals()[name] = value
 
     def _ipython_run_cell_hook(self, info):
         """
