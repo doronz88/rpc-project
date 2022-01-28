@@ -17,7 +17,7 @@ class SymbolsJar(dict):
         client = self.__dict__['_client']
         s = client.dlsym(-2, name)
         if 0 == s:
-            raise SymbolAbsentError()
+            raise SymbolAbsentError(f'no such loaded symbol: {name}')
         self[name] = client.symbol(s)
         return self[name]
 
@@ -33,7 +33,7 @@ class SymbolsJar(dict):
             client = self.__dict__['_client']
             s = client.dlsym(-2, name)
             if 0 == s:
-                raise SymbolAbsentError()
+                raise SymbolAbsentError(f'no such loaded symbol: {name}')
             self[name] = client.symbol(s)
             return self[name]
 

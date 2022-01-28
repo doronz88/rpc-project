@@ -9,6 +9,7 @@ from socket import socket
 
 from construct import Int64sl
 
+from pyzshell.exceptions import ArgumentError
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
@@ -101,7 +102,7 @@ class Client:
         })
         self._sock.sendall(message)
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
+        return self.symbol(err)
 
     def dlclose(self, lib: int):
         lib &= 0xffffffffffffffff
@@ -140,6 +141,14 @@ class Client:
                 tmp.poke(arg)
                 free_list.append(tmp)
 
+            elif isinstance(arg, int) or isinstance(arg, Symbol):
+                pass
+
+            else:
+                raise ArgumentError(f'invalid parameter type: {arg}')
+
+            tmp &= 0xffffffffffffffff
+
             fixed_argv.append(tmp)
 
         message = protocol_message_t.build({
@@ -168,6 +177,10 @@ class Client:
             'data': {'address': address, 'size': len(data), 'data': data},
         })
         self._sock.sendall(message)
+
+    def peek_str(self, address: int) -> str:
+        s = self.symbol(address)
+        return s.peek(self.symbols.strlen(s))
 
     def put_file(self, filename: str, buf: bytes):
         fd = self.open(filename, os.O_WRONLY | os.O_CREAT)
@@ -217,6 +230,9 @@ class Client:
         self._reconnect()
 
         return result
+
+    def objc_call(self, objc_object: int, selector, *params):
+        return self.symbols.objc_msgSend(objc_object, self.symbols.sel_getUid(selector), *params)
 
     def symbol(self, symbol: int):
         return Symbol.create(symbol, self)
