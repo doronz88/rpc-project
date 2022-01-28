@@ -4,3 +4,4 @@ coloredlogs
 IPython
 traitlets
 cached-property
+docstring_parser

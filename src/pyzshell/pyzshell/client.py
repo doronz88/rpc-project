@@ -6,18 +6,21 @@ import logging
 import os
 import sys
 import termios
+import textwrap
 import typing
 from functools import partial
 from select import select
 from socket import socket
 
 import IPython
+import docstring_parser
 from cached_property import cached_property
 from construct import Int64sl
 from traitlets.config import Config
 
 from pyzshell.command import CommandsMeta, command
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
+from pyzshell.ls import Ls
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, fd_t
 from pyzshell.structs import utsname_linux, utsname_darwin
 from pyzshell.symbol import Symbol
@@ -25,6 +28,12 @@ from pyzshell.symbols_jar import SymbolsJar
 
 DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
+
+USAGE = '''
+Welcome to iShell!
+Use show_commands() to see all available commands at your disposal.
+Feel free to just call any C function you desire via the "symbols" object.
+'''
 
 
 class Client(metaclass=CommandsMeta):
@@ -36,33 +45,22 @@ class Client(metaclass=CommandsMeta):
         self._sock = None
         self._old_settings = None
         self._reconnect()
+        self._ls = Ls(self)
+        self.endianness = '<'
         self.symbols = SymbolsJar.create(self)
 
-    @contextlib.contextmanager
-    def safe_malloc(self, size: int):
-        x = self.symbols.malloc(size)
-        try:
-            yield x
-        finally:
-            self.symbols.free(x)
-
-    @cached_property
-    def os_family(self):
-        with self.safe_malloc(1024 * 20) as block:
-            assert 0 == self.symbols.uname(block)
-            return block.peek_str().lower().decode()
-
-    @property
-    def uname(self):
-        utsname = utsname_linux
-        if self.os_family == 'darwin':
-            utsname = utsname_darwin
-        with self.safe_malloc(utsname.sizeof()) as uname:
-            assert 0 == self.symbols.uname(uname)
-            return utsname.parse(uname.peek(utsname.sizeof()))
+    @command()
+    def show_commands(self):
+        """ show available commands. """
+        for command_name, command_func in self.commands:
+            doc = docstring_parser.parse(command_func.__doc__)
+            print(f'👾 {command_name} - {doc.short_description}')
+            if doc.long_description:
+                print(textwrap.indent(doc.long_description, '    '))
 
     @command()
     def info(self):
+        """ print information about current target """
         uname = self.uname
         print('sysname:', uname.sysname)
         print('nodename:', uname.nodename)
@@ -70,73 +68,12 @@ class Client(metaclass=CommandsMeta):
         print('version:', uname.version)
         print('machine:', uname.machine)
 
-    def open(self, filename: str, mode: int):
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_OPEN,
-            'data': {'filename': filename, 'mode': mode},
-        })
-        self._sock.sendall(message)
-        fd = fd_t.parse(self._recvall(fd_t.sizeof()))
-        return fd
-
-    def close(self, fd: int) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_CLOSE,
-            'data': {'fd': fd},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
-
-    def read(self, fd: int, size: int = CHUNK_SIZE):
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_READ,
-            'data': {'fd': fd, 'size': size},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        buf = b''
-        if err > 0:
-            buf = self._recvall(err)
-        return err, buf
-
-    def write(self, fd: int, buf: bytes) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_WRITE,
-            'data': {'fd': fd, 'size': len(buf), 'data': buf},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
-
-    def mkdir(self, filename: str, mode: int) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_MKDIR,
-            'data': {'filename': filename, 'mode': mode},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
-
-    def remove(self, filename: str) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_REMOVE,
-            'data': {'filename': filename},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
-
-    def chmod(self, filename: str, mode: int) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_CHMOD,
-            'data': {'filename': filename, 'mode': mode},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
-
-    def dlopen(self, filename: str, mode: int):
+    @command()
+    def dlopen(self, filename: str, mode: int) -> Symbol:
+        """
+        call dlopen() at remote and return its handle.
+        see the man page for more details.
+        """
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLOPEN,
             'data': {'filename': filename, 'mode': mode},
@@ -145,7 +82,12 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return self.symbol(err)
 
+    @command()
     def dlclose(self, lib: int):
+        """
+        call dlclose() at remote and return its handle.
+        see the man page for more details.
+        """
         lib &= 0xffffffffffffffff
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLCLOSE,
@@ -155,7 +97,12 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
+    @command()
     def dlsym(self, lib: int, symbol_name: str):
+        """
+        call dlsym() at remote and return its handle.
+        see the man page for more details.
+        """
         lib &= 0xffffffffffffffff
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_DLSYM,
@@ -165,7 +112,9 @@ class Client(metaclass=CommandsMeta):
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
-    def call(self, address: int, argv: typing.List[int] = None):
+    @command()
+    def call(self, address: int, argv: typing.List[int] = None) -> Symbol:
+        """ call a remote function and retrieve its return value as Symbol object """
         fixed_argv = []
         free_list = []
 
@@ -204,7 +153,9 @@ class Client(metaclass=CommandsMeta):
 
         return self.symbol(err)
 
+    @command()
     def peek(self, address: int, size: int) -> bytes:
+        """ peek data at given address """
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_PEEK,
             'data': {'address': address, 'size': size},
@@ -212,45 +163,57 @@ class Client(metaclass=CommandsMeta):
         self._sock.sendall(message)
         return self._recvall(size)
 
+    @command()
     def poke(self, address: int, data: bytes):
+        """ poke data at given address """
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_POKE,
             'data': {'address': address, 'size': len(data), 'data': data},
         })
         self._sock.sendall(message)
 
+    @command()
     def peek_str(self, address: int) -> str:
+        """ peek string at given address """
         s = self.symbol(address)
         return s.peek(self.symbols.strlen(s))
 
-    def put_file(self, filename: str, buf: bytes):
-        fd = self.open(filename, os.O_WRONLY | os.O_CREAT)
-        assert fd >= 0
+    @command()
+    def write_file(self, filename: str, buf: bytes):
+        """ write file at target """
+        fd = self.symbols.open(filename, os.O_WRONLY | os.O_CREAT, 0o0777)
+        assert fd != 0xffffffff
 
         while buf:
-            err = self.write(fd, buf)
-            if err < 0:
+            err = self.symbols.write(fd, buf, len(buf))
+            if err == 0xffffffffffffffff:
                 raise IOError()
             buf = buf[err:]
 
-        self.close(fd)
+        self.symbols.close(fd)
         return buf
 
-    def get_file(self, filename: str) -> bytes:
-        fd = self.open(filename, os.O_RDONLY)
-        assert fd >= 0
+    @command()
+    def read_file(self, filename: str) -> bytes:
+        """ read file at target """
+        fd = self.symbols.open(filename, os.O_RDONLY)
+        assert fd != 0xffffffff
+
         buf = b''
-        while True:
-            err, chunk = self.read(fd)
-            buf += chunk
-            if err == 0:
-                break
-            elif err < 0:
-                raise IOError()
-        self.close(fd)
+        with self.safe_malloc(CHUNK_SIZE) as chunk:
+            while True:
+                err = self.symbols.read(fd, chunk, CHUNK_SIZE)
+                if err == 0:
+                    break
+                elif err < 0:
+                    raise IOError()
+                buf += chunk.peek(err)
+        self.symbols.close(fd)
         return buf
 
-    def shell(self, argv: typing.List[str] = None):
+    @command()
+    def spawn(self, argv: typing.List[str] = None):
+        """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
             argv = self.DEFAULT_ARGV
 
@@ -272,11 +235,55 @@ class Client(metaclass=CommandsMeta):
 
         return result
 
+    @command()
     def objc_call(self, objc_object: int, selector, *params):
+        """ call an objc method on a given object """
         return self.symbols.objc_msgSend(objc_object, self.symbols.sel_getUid(selector), *params)
 
+    @command()
     def symbol(self, symbol: int):
+        """ at a symbol object from a given address """
         return Symbol.create(symbol, self)
+
+    @contextlib.contextmanager
+    def safe_malloc(self, size: int):
+        x = self.symbols.malloc(size)
+        try:
+            yield x
+        finally:
+            self.symbols.free(x)
+
+    @cached_property
+    def os_family(self):
+        with self.safe_malloc(1024 * 20) as block:
+            assert 0 == self.symbols.uname(block)
+            return block.peek_str().lower().decode()
+
+    @property
+    def uname(self):
+        utsname = utsname_linux
+        if self.os_family == 'darwin':
+            utsname = utsname_darwin
+        with self.safe_malloc(utsname.sizeof()) as uname:
+            assert 0 == self.symbols.uname(uname)
+            return utsname.parse(uname.peek(utsname.sizeof()))
+
+    def interactive(self):
+        """ Start an interactive shell """
+        self._globalize_commands()
+
+        sys.argv = ['a']
+        c = Config()
+        c.IPCompleter.use_jedi = False
+        c.InteractiveShellApp.exec_lines = [
+            '''IPython.get_ipython().events.register('pre_run_cell', self._ipython_run_cell_hook)'''
+        ]
+        namespace = globals()
+        namespace.update(locals())
+
+        print(USAGE)
+
+        IPython.start_ipython(config=c, user_ns=namespace)
 
     @staticmethod
     def _add_global(name, value, reserved_names=None):
@@ -319,21 +326,6 @@ class Client(metaclass=CommandsMeta):
                         node.id,
                         symbol
                     )
-
-    def interactive(self):
-        """ Start an interactive shell """
-        self._globalize_commands()
-
-        sys.argv = ['a']
-        c = Config()
-        c.IPCompleter.use_jedi = False
-        c.InteractiveShellApp.exec_lines = [
-            '''IPython.get_ipython().events.register('pre_run_cell', self._ipython_run_cell_hook)'''
-        ]
-        namespace = globals()
-        namespace.update(locals())
-
-        IPython.start_ipython(config=c, user_ns=namespace)
 
     def _reconnect(self):
         self._sock = socket()
