@@ -19,7 +19,8 @@ from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.fs import Fs
 from pyzshell.processes import Processes
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
-from pyzshell.structs import utsname_linux, utsname_darwin
+from pyzshell.structs.linux import utsname as utsname_linux
+from pyzshell.structs.darwin import utsname as utsname_darwin
 from pyzshell.symbol import Symbol, DrawinSymbol
 from pyzshell.symbols_jar import SymbolsJar
 
@@ -202,6 +203,7 @@ class Client:
 
     @cached_property
     def uname(self):
+        # by default, assume linux
         utsname = utsname_linux
         if self.os_family == 'darwin':
             utsname = utsname_darwin

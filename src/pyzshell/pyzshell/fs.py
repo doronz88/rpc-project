@@ -1,6 +1,7 @@
 import os
 
-from pyzshell.exceptions import ZShellError
+from pyzshell.exceptions import ZShellError, BadReturnValueError
+from pyzshell.structs.generic import dirent
 
 
 class Fs:
@@ -20,6 +21,20 @@ class Fs:
     def mkdir(self, filename: str, mode: int):
         """ mkdir() filename at remote. read man for more details. """
         return self._client.symbols.mkdir(filename, mode)
+
+    def dirlist(self, dirname: str) -> list:
+        result = []
+        dp = self._client.symbols.opendir(dirname)
+        if 0 == dp:
+            raise BadReturnValueError(f'failed to opendir(): {dirname}')
+        while True:
+            ep = self._client.symbols.readdir(dp)
+            if ep == 0:
+                break
+            entry = dirent.parse_stream(ep)
+            result.append(entry)
+        self._client.symbols.closedir(dp)
+        return result
 
     def write_file(self, filename: str, buf: bytes):
         """ write file at target """
