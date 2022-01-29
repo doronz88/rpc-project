@@ -21,14 +21,14 @@ class SymbolFormatField(FormatField):
 
 
 class Symbol(int):
-    PROXY_METHODS = ['peek', 'poke', 'peek_str', 'objc_call']
+    PROXY_METHODS = ['peek', 'poke']
 
     @classmethod
     def create(cls, value: int, client):
         """
         Create a Symbol object.
         :param value: Symbol address.
-        :param client.Client client: zShell client.
+        :param pyzshell.client.Client client: zShell client.
         :return: Symbol object.
         :rtype: Symbol
         """
@@ -73,8 +73,9 @@ class Symbol(int):
     def poke(self, buf):
         return self._client.poke(self, buf)
 
-    def peek_str(self):
-        return self._client.peek_str(self)
+    def peek_str(self) -> str:
+        """ peek string at given address """
+        return self.peek(self._client.symbols.strlen(self)).decode()
 
     def close(self):
         """ Construct compliance. """
@@ -173,7 +174,18 @@ class Symbol(int):
     def __call__(self, *args, **kwargs):
         return self._client.call(self, args)
 
-    # TODO: Move to AppleSymbol
+
+class DrawinSymbol(Symbol):
+    @classmethod
+    def create(cls, value: int, client):
+        symbol = Symbol.create(value, client)
+        symbol.__class__ = cls
+        return symbol
+
+    def objc_call(self, selector, *params):
+        """ call an objc method on a given object """
+        return self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid(selector), *params)
+
     @property
     def cfdesc(self):
         """
@@ -181,9 +193,6 @@ class Symbol(int):
         :return: CFCopyDescription()'s output as a string
         """
         return self._client.symbols.CFCopyDescription(self).cfstr.peek_str()
-
-    def objc_call(self, selector, *params):
-        return self._client.objc_call(self, selector, *params)
 
     @property
     def cfstr(self):

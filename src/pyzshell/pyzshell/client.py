@@ -17,10 +17,9 @@ from traitlets.config import Config
 
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.fs import Fs
-from pyzshell.ls import Ls
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
 from pyzshell.structs import utsname_linux, utsname_darwin
-from pyzshell.symbol import Symbol
+from pyzshell.symbol import Symbol, DrawinSymbol
 from pyzshell.symbols_jar import SymbolsJar
 
 DEFAULT_PORT = 5910
@@ -28,8 +27,10 @@ CHUNK_SIZE = 1024
 
 USAGE = '''
 Welcome to iShell! You interactive shell for controlling the remote zShell server.
-Use the global "d" as the target device you are working on.
-Feel free to just call any C function you desire via the "symbols" object.
+Feel free to use the following globals:
+
+p - the injected process
+symbols - process global symbols
 
 Have a nice flight ✈️!
 '''
@@ -44,7 +45,6 @@ class Client:
         self._sock = None
         self._old_settings = None
         self._reconnect()
-        self._ls = Ls(self)
         self._endianness = '<'
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
@@ -57,6 +57,13 @@ class Client:
         print('release:', uname.release)
         print('version:', uname.version)
         print('machine:', uname.machine)
+        print('pid:', int(self.symbols.getpid()))
+        print('ppid:', int(self.symbols.getppid()))
+        print('progname:', self.symbols.getprogname().peek_str())
+
+    def iter_libraries(self):
+        for i in range(self.symbols._dyld_image_count()):
+            yield self.symbols._dyld_get_image_name(i).peek_str()
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
@@ -147,11 +154,6 @@ class Client:
         })
         self._sock.sendall(message)
 
-    def peek_str(self, address: int) -> str:
-        """ peek string at given address """
-        s = self.symbol(address)
-        return s.peek(self.symbols.strlen(s))
-
     def spawn(self, argv: typing.List[str] = None):
         """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
@@ -175,13 +177,9 @@ class Client:
 
         return result
 
-    def objc_call(self, objc_object: int, selector, *params):
-        """ call an objc method on a given object """
-        return self.symbols.objc_msgSend(objc_object, self.symbols.sel_getUid(selector), *params)
-
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
-        return Symbol.create(symbol, self)
+        return DrawinSymbol.create(symbol, self)
 
     @contextlib.contextmanager
     def safe_malloc(self, size: int):
@@ -195,9 +193,9 @@ class Client:
     def os_family(self):
         with self.safe_malloc(1024 * 20) as block:
             assert 0 == self.symbols.uname(block)
-            return block.peek_str().lower().decode()
+            return block.peek_str().lower()
 
-    @property
+    @cached_property
     def uname(self):
         utsname = utsname_linux
         if self.os_family == 'darwin':
@@ -212,10 +210,10 @@ class Client:
         c = Config()
         c.IPCompleter.use_jedi = False
         c.InteractiveShellApp.exec_lines = [
-            '''IPython.get_ipython().events.register('pre_run_cell', d._ipython_run_cell_hook)'''
+            '''IPython.get_ipython().events.register('pre_run_cell', p._ipython_run_cell_hook)'''
         ]
         namespace = globals()
-        namespace.update({'d': self, 'symbols': self.symbols})
+        namespace.update({'p': self, 'symbols': self.symbols})
         IPython.start_ipython(header=USAGE, config=c, user_ns=namespace)
 
     def _add_global(self, name, value):
