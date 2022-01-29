@@ -29,10 +29,11 @@ USAGE = '''
 Welcome to iShell! You interactive shell for controlling the remote zShell server.
 Feel free to use the following globals:
 
-p - the injected process
-symbols - process global symbols
+🌍 p - the injected process
+🌍 symbols - process global symbols
 
 Have a nice flight ✈️!
+Starting an IPython shell... 🐍
 '''
 
 
@@ -214,7 +215,8 @@ class Client:
         ]
         namespace = globals()
         namespace.update({'p': self, 'symbols': self.symbols})
-        IPython.start_ipython(header=USAGE, config=c, user_ns=namespace)
+        print(USAGE)
+        IPython.start_ipython(config=c, user_ns=namespace)
 
     def _add_global(self, name, value):
         globals()[name] = value
@@ -308,3 +310,9 @@ class Client:
                         sys.stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
                         return exitcode_t.parse(data)
+
+    def __repr__(self):
+        buf = '<'
+        buf += f'PID:{self.symbols.getpid():d} VERSION:{self.uname.version}'
+        buf += '>'
+        return buf

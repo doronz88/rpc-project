@@ -27,6 +27,7 @@
 #define DEFAULT_SHELL ("/bin/sh")
 #define USAGE ("Usage: %s [-p port] [-s shell]")
 #define MAGIC (0x12345678)
+#define MAX_CONNECTIONS (1024)
 
 #define MAX_PATH_LEN (1024)
 #define MAX_OPTION_LEN (256)
@@ -545,7 +546,7 @@ int main(int argc, const char *argv[])
 
     freeaddrinfo(servinfo); // all done with this structure
 
-    CHECK(0 == listen(server_fd, 10));
+    CHECK(0 == listen(server_fd, MAX_CONNECTIONS));
 
     struct sigaction sa;
     sa.sa_handler = sigchld_handler; // reap all dead processes
