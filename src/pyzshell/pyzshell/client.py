@@ -17,6 +17,7 @@ from traitlets.config import Config
 
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.fs import Fs
+from pyzshell.processes import Processes
 from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
 from pyzshell.structs import utsname_linux, utsname_darwin
 from pyzshell.symbol import Symbol, DrawinSymbol
@@ -49,6 +50,7 @@ class Client:
         self._endianness = '<'
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
+        self.processes = Processes(self)
 
     def info(self):
         """ print information about current target """
@@ -58,9 +60,11 @@ class Client:
         print('release:', uname.release)
         print('version:', uname.version)
         print('machine:', uname.machine)
-        print('pid:', int(self.symbols.getpid()))
-        print('ppid:', int(self.symbols.getppid()))
-        print('progname:', self.symbols.getprogname().peek_str())
+        print(f'uid: {self.symbols.getuid():d}')
+        print(f'gid: {self.symbols.getgid():d}')
+        print(f'pid: {self.symbols.getpid():d}')
+        print(f'ppid: {self.symbols.getppid():d}')
+        print(f'progname: {self.symbols.getprogname().peek_str()}')
 
     def iter_libraries(self):
         for i in range(self.symbols._dyld_image_count()):
@@ -313,6 +317,7 @@ class Client:
 
     def __repr__(self):
         buf = '<'
-        buf += f'PID:{self.symbols.getpid():d} VERSION:{self.uname.version}'
+        buf += f'PID:{self.symbols.getpid():d} UID:{self.symbols.getuid():d} GID:{self.symbols.getgid():d} ' \
+               f'VERSION:{self.uname.version}'
         buf += '>'
         return buf

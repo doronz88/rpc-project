@@ -8,3 +8,7 @@ class SymbolAbsentError(ZShellError):
 
 class ArgumentError(ZShellError):
     pass
+
+
+class BadReturnValueError(ZShellError):
+    pass
