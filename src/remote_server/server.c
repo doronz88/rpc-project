@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <util.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
