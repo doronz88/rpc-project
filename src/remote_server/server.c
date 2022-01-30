@@ -219,7 +219,7 @@ bool handle_exec(int sockfd)
 
     pid_t pid;
 
-    master = internal_spawn((char *const *)argv, (char *const *)envp, &pid);
+    master = internal_spawn((char *const *)argv, envc ? (char *const *)envp : environ, &pid);
     CHECK(master >= 0);
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
 
@@ -608,7 +608,7 @@ int main(int argc, const char *argv[])
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
         pthread_t thread;
-        CHECK(0 == pthread_create(&thread, NULL, (void *_Nullable (*_Nonnull)(void *_Nullable))handle_client, (void *)(long)client_fd));
+        CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))handle_client, (void *)(long)client_fd));
     }
 
 error:
