@@ -21,7 +21,7 @@ def recvall(sock, size: int) -> bytes:
 def create_client(hostname: str, port: int = DEFAULT_PORT):
     sock = socket()
     sock.connect((hostname, port))
-    uname_version = recvall(sock, UNAME_VERSION_LEN).decode()
+    uname_version = recvall(sock, UNAME_VERSION_LEN).split(b'\x00', 1)[0].decode()
     logging.info(f'connected system uname.version: {uname_version}')
     os_flavor = uname_version.split()[0].lower()
 

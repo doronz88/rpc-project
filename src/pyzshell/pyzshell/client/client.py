@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import termios
+import tty
 import typing
 from select import select
 from socket import socket
@@ -263,20 +264,26 @@ class Client:
         return pid
 
     def _restore_terminal(self):
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, self._old_settings)
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._old_settings)
 
     def _prepare_terminal(self):
-        fd = sys.stdin.fileno()
+        fd = sys.stdin
+
         self._old_settings = termios.tcgetattr(fd)
 
         atexit.register(self._restore_terminal)
 
-        new = termios.tcgetattr(fd)
-        new[3] &= ~(termios.ECHO | termios.ICANON)
-        new[6][termios.VMIN] = 1
-        new[6][termios.VTIME] = 0
+        tty.setraw(fd)
 
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, new)
+        # new = termios.tcgetattr(fd)
+        # new[3] &= ~(termios.ECHO | termios.ICANON)
+        # new[6][termios.VMIN] = 1
+        # new[6][termios.VTIME] = 0
+        # new[6][termios.VINTR] = 0
+        # new[6][termios.VQUIT] = 0
+        # new[6][termios.VSUSP] = 0
+
+        # termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, new)
 
     def _recvall(self, size: int) -> bytes:
         buf = b''
@@ -296,6 +303,7 @@ class Client:
             for fd in rlist:
                 if fd == sys.stdin:
                     buf = os.read(sys.stdin.fileno(), CHUNK_SIZE)
+                    # print(buf)
                     self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:
