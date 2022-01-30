@@ -1,0 +1,19 @@
+name: Server application
+
+on:
+  push:
+    branches: [ '**' ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+
+    steps:
+      - name: Test build
+        run: |
+          cd src/remote_server
+          make clean all
