@@ -10,6 +10,7 @@ cmd_type_t = Enum(Int32ul,
                   CMD_PEEK=5,
                   CMD_POKE=6,
                   )
+DEFAULT_PORT = 5910
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 UNAME_VERSION_LEN = 256

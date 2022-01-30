@@ -3,7 +3,7 @@ from socket import socket
 
 from pyzshell.client.client import Client
 from pyzshell.client.darwin_client import DarwinClient
-from pyzshell.protocol import UNAME_VERSION_LEN
+from pyzshell.protocol import UNAME_VERSION_LEN, DEFAULT_PORT
 
 
 def recvall(sock, size: int) -> bytes:
@@ -18,7 +18,7 @@ def recvall(sock, size: int) -> bytes:
     return buf
 
 
-def create_client(hostname: str, port: int = None):
+def create_client(hostname: str, port: int = DEFAULT_PORT):
     sock = socket()
     sock.connect((hostname, port))
     uname_version = recvall(sock, UNAME_VERSION_LEN).decode()

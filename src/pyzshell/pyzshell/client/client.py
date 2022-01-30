@@ -22,7 +22,6 @@ from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
 
-DEFAULT_PORT = 5910
 CHUNK_SIZE = 1024
 
 USAGE = '''

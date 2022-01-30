@@ -4,8 +4,8 @@ import sys
 import click
 import coloredlogs
 
-from pyzshell.client.client import DEFAULT_PORT
 from pyzshell.client.client_factory import create_client
+from pyzshell.protocol import DEFAULT_PORT
 
 coloredlogs.install(level=logging.DEBUG)
 
