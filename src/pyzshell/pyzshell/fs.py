@@ -1,5 +1,5 @@
 from pyzshell.exceptions import ZShellError, BadReturnValueError
-from pyzshell.structs.generic import dirent
+from pyzshell.structs.generic import dirent32, dirent64
 
 
 class Fs:
@@ -26,6 +26,10 @@ class Fs:
         return self._client.symbols.mkdir(filename, mode)
 
     def dirlist(self, dirname: str) -> list:
+        dirent = dirent32
+        if self._client.is_idevice:
+            dirent = dirent64
+
         result = []
         dp = self._client.symbols.opendir(dirname)
         if 0 == dp:

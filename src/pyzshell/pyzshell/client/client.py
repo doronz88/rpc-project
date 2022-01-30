@@ -187,6 +187,15 @@ class Client:
         return Symbol.create(symbol, self)
 
     @contextlib.contextmanager
+    def safe_calloc(self, size: int):
+        with self.safe_malloc(size) as x:
+            x.poke(b'\x00' * size)
+            try:
+                yield x
+            finally:
+                pass
+
+    @contextlib.contextmanager
     def safe_malloc(self, size: int):
         x = self.symbols.malloc(size)
         try:

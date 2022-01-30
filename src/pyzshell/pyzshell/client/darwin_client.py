@@ -23,6 +23,11 @@ class DarwinClient(Client):
 
     @cached_property
     def uname(self):
-        with self.safe_malloc(utsname.sizeof()) as uname:
+        with self.safe_calloc(utsname.sizeof()) as uname:
+            uname.poke(b'\x00' * utsname.sizeof())
             assert 0 == self.symbols.uname(uname)
-            return utsname.parse(uname.peek(utsname.sizeof()))
+            return utsname.parse_stream(uname)
+
+    @cached_property
+    def is_idevice(self):
+        return self.uname.machine.startswith('i')
