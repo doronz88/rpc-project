@@ -1,4 +1,4 @@
-# zShell
+# pyzShell
 
 ## Description
 
