@@ -20,6 +20,7 @@
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/utsname.h>
 
 #include "common.h"
 
@@ -32,6 +33,7 @@
 #define MAX_PATH_LEN (1024)
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
+#define UNAME_VERSION_LEN (256)
 
 extern char **environ;
 
@@ -441,6 +443,11 @@ error:
 void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
+
+    // notify client of the connected target os version
+    struct utsname uname_buf;
+    CHECK(0 == uname(&uname_buf));
+    CHECK(sendall(sockfd, uname_buf.version, UNAME_VERSION_LEN));
 
     while (true)
     {

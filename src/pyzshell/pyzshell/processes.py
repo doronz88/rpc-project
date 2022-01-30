@@ -5,7 +5,7 @@ class Processes:
     def __init__(self, client):
         """
         process manager
-        :param pyzshell.client.Client client: zshell client
+        :param pyzshell.darwin_client.Client client: zshell client
         """
         self._client = client
 

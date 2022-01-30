@@ -11,17 +11,15 @@ from select import select
 from socket import socket
 
 import IPython
-from cached_property import cached_property
 from construct import Int64sl
 from traitlets.config import Config
 
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.fs import Fs
 from pyzshell.processes import Processes
-from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t
-from pyzshell.structs.linux import utsname as utsname_linux
-from pyzshell.structs.darwin import utsname as utsname_darwin
-from pyzshell.symbol import Symbol, DrawinSymbol
+from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, \
+    UNAME_VERSION_LEN
+from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
 
 DEFAULT_PORT = 5910
@@ -42,13 +40,14 @@ Starting an IPython shell... 🐍
 class Client:
     DEFAULT_ARGV = ['/bin/sh']
 
-    def __init__(self, hostname: str, port: int = None):
+    def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
         self._hostname = hostname
         self._port = port
-        self._sock = None
+        self._sock = sock
         self._old_settings = None
         self._reconnect()
         self._endianness = '<'
+        self._uname_version = uname_version
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
         self.processes = Processes(self)
@@ -185,7 +184,7 @@ class Client:
 
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
-        return DrawinSymbol.create(symbol, self)
+        return Symbol.create(symbol, self)
 
     @contextlib.contextmanager
     def safe_malloc(self, size: int):
@@ -194,22 +193,6 @@ class Client:
             yield x
         finally:
             self.symbols.free(x)
-
-    @cached_property
-    def os_family(self):
-        with self.safe_malloc(1024 * 20) as block:
-            assert 0 == self.symbols.uname(block)
-            return block.peek_str().lower()
-
-    @cached_property
-    def uname(self):
-        # by default, assume linux
-        utsname = utsname_linux
-        if self.os_family == 'darwin':
-            utsname = utsname_darwin
-        with self.safe_malloc(utsname.sizeof()) as uname:
-            assert 0 == self.symbols.uname(uname)
-            return utsname.parse(uname.peek(utsname.sizeof()))
 
     def interactive(self):
         """ Start an interactive shell """
@@ -256,6 +239,7 @@ class Client:
     def _reconnect(self):
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
+        self._recvall(UNAME_VERSION_LEN)
 
     def _execute(self, argv: typing.List[str]) -> int:
         message = protocol_message_t.build({
@@ -320,6 +304,6 @@ class Client:
     def __repr__(self):
         buf = '<'
         buf += f'PID:{self.symbols.getpid():d} UID:{self.symbols.getuid():d} GID:{self.symbols.getgid():d} ' \
-               f'VERSION:{self.uname.version}'
+               f'VERSION:{self._uname_version}'
         buf += '>'
         return buf

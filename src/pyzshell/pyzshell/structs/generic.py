@@ -7,3 +7,7 @@ dirent = Struct(
     'd_namelen' / Int8ul,
     'd_name' / PaddedString(this.d_namelen, 'utf8'),
 )
+
+# kinfo_proc = Struct(
+#     ''
+# )

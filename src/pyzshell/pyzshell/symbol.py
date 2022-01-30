@@ -28,7 +28,7 @@ class Symbol(int):
         """
         Create a Symbol object.
         :param value: Symbol address.
-        :param pyzshell.client.Client client: zShell client.
+        :param pyzshell.darwin_client.Client client: zShell client.
         :return: Symbol object.
         :rtype: Symbol
         """
@@ -175,13 +175,7 @@ class Symbol(int):
         return self._client.call(self, args)
 
 
-class DrawinSymbol(Symbol):
-    @classmethod
-    def create(cls, value: int, client):
-        symbol = Symbol.create(value, client)
-        symbol.__class__ = cls
-        return symbol
-
+class DarwinSymbol(Symbol):
     def objc_call(self, selector, *params):
         """ call an objc method on a given object """
         return self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid(selector), *params)

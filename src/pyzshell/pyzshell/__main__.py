@@ -4,7 +4,8 @@ import sys
 import click
 import coloredlogs
 
-from pyzshell.client import DEFAULT_PORT, Client
+from pyzshell.client.client import DEFAULT_PORT
+from pyzshell.client.client_factory import create_client
 
 coloredlogs.install(level=logging.DEBUG)
 
@@ -20,7 +21,7 @@ logging.getLogger('parso.python.diff').disabled = True
 @click.pass_context
 def cli(ctx, hostname, port):
     ctx.ensure_object(dict)
-    ctx.obj['client'] = Client(hostname, port=port)
+    ctx.obj['client'] = create_client(hostname, port=port)
 
 
 @cli.command()

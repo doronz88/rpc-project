@@ -1,10 +1,13 @@
-import os
-
 from pyzshell.exceptions import ZShellError, BadReturnValueError
 from pyzshell.structs.generic import dirent
 
 
 class Fs:
+    O_RDONLY = 0
+    O_WRONLY = 1
+    O_RDWR = 2
+    O_CREAT = 0x100
+
     CHUNK_SIZE = 1024
 
     def __init__(self, client):
@@ -38,7 +41,7 @@ class Fs:
 
     def write_file(self, filename: str, buf: bytes):
         """ write file at target """
-        fd = self._client.symbols.open(filename, os.O_WRONLY | os.O_CREAT, 0o0777)
+        fd = self._client.symbols.open(filename, self.O_WRONLY | self.O_CREAT, 0o0777)
         if fd == 0xffffffff:
             raise ZShellError(f'failed to open: {filename} for writing')
 
@@ -53,7 +56,7 @@ class Fs:
 
     def read_file(self, filename: str) -> bytes:
         """ read file at target """
-        fd = self._client.symbols.open(filename, os.O_RDONLY)
+        fd = self._client.symbols.open(filename, self.O_RDONLY)
         if fd == 0xffffffff:
             raise ZShellError(f'failed to open: {filename} for reading')
 

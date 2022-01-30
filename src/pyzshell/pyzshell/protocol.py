@@ -12,6 +12,7 @@ cmd_type_t = Enum(Int32ul,
                   )
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
+UNAME_VERSION_LEN = 256
 
 cmd_exec_t = Struct(
     'argv' / PrefixedArray(Int32ul, PascalString(Int32ul, 'utf8')),
