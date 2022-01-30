@@ -39,6 +39,7 @@ Starting an IPython shell... 🐍
 
 class Client:
     DEFAULT_ARGV = ['/bin/sh']
+    DEFAULT_ENVP = []
 
     def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
         self._hostname = hostname
@@ -159,12 +160,15 @@ class Client:
         })
         self._sock.sendall(message)
 
-    def spawn(self, argv: typing.List[str] = None):
+    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None):
         """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
             argv = self.DEFAULT_ARGV
 
-        pid = self._execute(argv)
+        if envp is None:
+            envp = self.DEFAULT_ENVP
+
+        pid = self._execute(argv, envp)
         logging.info(f'shell process started as pid: {pid}')
 
         self._sock.setblocking(False)
@@ -250,10 +254,10 @@ class Client:
         self._sock.connect((self._hostname, self._port))
         self._recvall(UNAME_VERSION_LEN)
 
-    def _execute(self, argv: typing.List[str]) -> int:
+    def _execute(self, argv: typing.List[str], envp: typing.List[str]) -> int:
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_EXEC,
-            'data': {'argv': argv},
+            'data': {'argv': argv, 'envp': envp},
         })
         self._sock.sendall(message)
         pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))

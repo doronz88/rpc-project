@@ -16,6 +16,7 @@ UNAME_VERSION_LEN = 256
 
 cmd_exec_t = Struct(
     'argv' / PrefixedArray(Int32ul, PascalString(Int32ul, 'utf8')),
+    'envp' / PrefixedArray(Int32ul, PascalString(Int32ul, 'utf8')),
 )
 
 cmd_dlopen_t = Struct(

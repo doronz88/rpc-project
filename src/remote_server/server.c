@@ -118,7 +118,7 @@ void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
     return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-int internal_spawn(char *const *argv, pid_t *pid)
+int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
 {
     int master_fd = -1;
     int slave_fd = -1;
@@ -148,7 +148,7 @@ int internal_spawn(char *const *argv, pid_t *pid)
     CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
-    CHECK(0 == posix_spawnp(pid, argv[0], &actions, NULL, argv, environ));
+    CHECK(0 == posix_spawnp(pid, argv[0], &actions, NULL, argv, envp));
 
     close(slave_fd);
     slave_fd = -1;
@@ -172,7 +172,10 @@ bool handle_exec(int sockfd)
     int master = -1;
     int result = false;
     char **argv = NULL;
+    char **envp = NULL;
     u32 argc;
+    u32 envc;
+    
     CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
 
     // +1 for additional NULL at end of list
@@ -194,9 +197,30 @@ bool handle_exec(int sockfd)
         argv[i][len] = '\0';
     }
 
+    CHECK(recvall(sockfd, (char *)&envc, sizeof(envc)));
+
+    // +1 for additional NULL at end of list
+    size_t envp_size = (envc + 1) * sizeof(char *);
+    envp = (char **)malloc(envp_size * sizeof(char *));
+    memset(envp, 0, envp_size * sizeof(char *));
+
+    for (u32 i = 0; i < envc; ++i)
+    {
+        u32 len;
+        CHECK(recvall(sockfd, (char *)&len, sizeof(len)));
+
+        // +1 for additional \0 at end of each string
+        size_t str_size = (len + 1) * sizeof(char);
+        envp[i] = malloc(str_size * sizeof(char));
+        CHECK(envp[i] != NULL);
+
+        CHECK(recvall(sockfd, envp[i], len * sizeof(char)));
+        envp[i][len] = '\0';
+    }
+
     pid_t pid;
 
-    master = internal_spawn((char *const *)argv, &pid);
+    master = internal_spawn((char *const *)argv, (char *const *)envp, &pid);
     CHECK(master >= 0);
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
 
@@ -264,6 +288,18 @@ error:
             }
         }
         free(argv);
+    }
+
+    if (envp)
+    {
+        for (u32 i = 0; i < envc; ++i)
+        {
+            if (envp[i])
+            {
+                free(envp[i]);
+            }
+        }
+        free(envp);
     }
 
     if (-1 != master)
