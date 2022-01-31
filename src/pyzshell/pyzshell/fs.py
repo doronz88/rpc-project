@@ -1,5 +1,5 @@
 from pyzshell.exceptions import ZShellError, BadReturnValueError
-from pyzshell.structs.generic import dirent32, dirent64
+from pyzshell.structs.generic import dirent32, dirent64, stat32, stat64
 
 
 class Fs:
@@ -25,6 +25,17 @@ class Fs:
     def mkdir(self, filename: str, mode: int):
         """ mkdir() filename at remote. read man for more details. """
         return self._client.symbols.mkdir(filename, mode)
+
+    def stat(self, filename: str):
+        """ stat() filename at remote. read man for more details. """
+        stat = stat32
+        if self._client.inode64:
+            stat = stat64
+        with self._client.safe_malloc(stat.sizeof()) as buf:
+            err = self._client.symbols.stat(filename, buf)
+            if err != 0:
+                raise BadReturnValueError(f'failed to stat(): {filename}')
+            return stat.parse(buf.peek(stat.sizeof()))
 
     def dirlist(self, dirname: str) -> list:
         dirent = dirent32
