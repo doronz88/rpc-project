@@ -179,13 +179,13 @@ class Client:
         self._prepare_terminal()
         try:
             result = self._execution_loop()
-        except Exception:
+        except:
             self._restore_terminal()
-            self._reconnect()
+            self.reconnect()
             raise
 
         self._restore_terminal()
-        self._reconnect()
+        self.reconnect()
 
         return result
 
@@ -252,7 +252,7 @@ class Client:
                         symbol
                     )
 
-    def _reconnect(self):
+    def reconnect(self):
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
         self._recvall(UNAME_VERSION_LEN)
@@ -271,22 +271,9 @@ class Client:
 
     def _prepare_terminal(self):
         fd = sys.stdin
-
         self._old_settings = termios.tcgetattr(fd)
-
         atexit.register(self._restore_terminal)
-
         tty.setraw(fd)
-
-        # new = termios.tcgetattr(fd)
-        # new[3] &= ~(termios.ECHO | termios.ICANON)
-        # new[6][termios.VMIN] = 1
-        # new[6][termios.VTIME] = 0
-        # new[6][termios.VINTR] = 0
-        # new[6][termios.VQUIT] = 0
-        # new[6][termios.VSUSP] = 0
-
-        # termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, new)
 
     def _recvall(self, size: int) -> bytes:
         buf = b''

@@ -1,3 +1,5 @@
+import typing
+
 from cached_property import cached_property
 
 from pyzshell.client.client import Client
@@ -13,7 +15,7 @@ class DarwinClient(Client):
             self.inode64 = True
 
     @property
-    def modules(self):
+    def modules(self) -> typing.List[str]:
         m = []
         for i in range(self.symbols._dyld_image_count()):
             m.append(self.symbols._dyld_get_image_name(i).peek_str())

@@ -21,5 +21,5 @@ cd ..
 cp remote_server/server basic_shell/shell .
 
 for i in server shell; do
-    codesign -s - --generate-entitlement-der $i
+    codesign -s - --entitlements ents.plist --generate-entitlement-der $i
 done
