@@ -117,6 +117,7 @@ void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
     return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
+/*
 int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
 {
     int master_fd = -1;
@@ -172,6 +173,7 @@ error:
     }
     return -1;
 }
+*/
 
 bool handle_exec(int sockfd)
 {
@@ -226,8 +228,8 @@ bool handle_exec(int sockfd)
 
     pid_t pid;
 
-    master = internal_spawn((char *const *)argv, envc ? (char *const *)envp : environ, &pid);
-    CHECK(master >= 0);
+//    master = internal_spawn((char *const *)argv, envc ? (char *const *)envp : environ, &pid);
+//    CHECK(master >= 0);
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
 
     fd_set readfds;
