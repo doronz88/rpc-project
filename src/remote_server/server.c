@@ -1,3 +1,8 @@
+#ifndef __APPLE__
+#define _XOPEN_SOURCE (600) 
+#define _GNU_SOURCE (1)
+#endif  // __APPLE__
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -5,7 +10,6 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -131,9 +135,8 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     CHECK(0 == grantpt(master_fd));
     CHECK(0 == unlockpt(master_fd));
 
-    // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
     char slave_pty_name[128];
-    CHECK(-1 != ioctl(master_fd, TIOCPTYGNAME, slave_pty_name));
+    CHECK(0 == ptsname_r(master_fd, slave_pty_name, sizeof(slave_pty_name)));
 
     TRACE("slave_pty_name: %s", slave_pty_name);
 
@@ -143,7 +146,10 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     // call setsid() on child so Ctrl-C can be interpret
     posix_spawnattr_t attr;
     CHECK(0 == posix_spawnattr_init(&attr));
+
+#if __APPLE__
     CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID));
+#endif  // __APPLE__
 
     posix_spawn_file_actions_t actions;
     CHECK(0 == posix_spawn_file_actions_init(&actions));

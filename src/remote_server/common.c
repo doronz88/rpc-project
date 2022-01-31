@@ -9,7 +9,7 @@
 
 void trace(const char *prefix, const char *fmt, ...)
 {
-    char line[1024];
+    char line[1022];
     char prefixed_line[1024];
 
     va_list args;
