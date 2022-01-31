@@ -38,6 +38,11 @@ bool recvall(int sockfd, char *buf, size_t len)
     return true;
 
 error:
+    if (0 == bytes)
+    {
+        TRACE("client fd: %d disconnected", sockfd);
+    }
+
     return false;
 }
 

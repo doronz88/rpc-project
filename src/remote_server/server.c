@@ -147,6 +147,8 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
+    
+
     CHECK(0 == posix_spawnp(pid, argv[0], &actions, NULL, argv, envp));
 
     close(slave_fd);
@@ -228,13 +230,15 @@ bool handle_exec(int sockfd)
     int maxfd = master > sockfd ? master : sockfd;
     int nbytes = 0;
 
+    fd_set errfds;
+
     while (true)
     {
         FD_ZERO(&readfds);
         FD_SET(master, &readfds);
         FD_SET(sockfd, &readfds);
 
-        CHECK(select(maxfd + 1, &readfds, NULL, NULL, NULL) != -1);
+        CHECK(select(maxfd + 1, &readfds, NULL, &errfds, NULL) != -1);
 
         if (FD_ISSET(master, &readfds))
         {
@@ -491,7 +495,7 @@ void handle_client(int sockfd)
         CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
         CHECK(cmd.magic == MAGIC);
 
-        TRACE("cmd type: %d", cmd.cmd_type);
+        TRACE("client fd: %d, cmd type: %d", sockfd, cmd.cmd_type);
 
         switch (cmd.cmd_type)
         {

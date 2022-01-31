@@ -46,7 +46,6 @@ class Client:
         self._port = port
         self._sock = sock
         self._old_settings = None
-        self._reconnect()
         self._endianness = '<'
         self._uname_version = uname_version
         self.symbols = SymbolsJar.create(self)
@@ -303,7 +302,7 @@ class Client:
             for fd in rlist:
                 if fd == sys.stdin:
                     buf = os.read(sys.stdin.fileno(), CHUNK_SIZE)
-                    # print(buf)
+                    # print('send', buf)
                     self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:

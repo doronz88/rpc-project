@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <errno.h>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -16,7 +17,7 @@ typedef unsigned long s64;
 #define CHECK(expression)            \
     if (!(expression))               \
     {                                \
-        perror(__PRETTY_FUNCTION__); \
+        if (errno) perror(__PRETTY_FUNCTION__); \
         goto error;                  \
     }
 
