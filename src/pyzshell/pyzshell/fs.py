@@ -44,7 +44,7 @@ class Fs:
         self._client.symbols.closedir(dp)
         return result
 
-    def write_file(self, filename: str, buf: bytes, mode: int = 0o777):
+    def write_file(self, filename: str, buf: bytes, mode: int = 0o777) -> None:
         """ write file at target """
         fd = self._client.symbols.open(filename, self.O_WRONLY | self.O_CREAT | self.O_TRUNC, mode)
         if fd == 0xffffffff:
@@ -56,7 +56,7 @@ class Fs:
                 raise ZShellError(f'write failed for: {filename}')
             buf = buf[err:]
 
-        return self._client.symbols.close(fd)
+        self._client.symbols.close(fd)
 
     def read_file(self, filename: str) -> bytes:
         """ read file at target """
