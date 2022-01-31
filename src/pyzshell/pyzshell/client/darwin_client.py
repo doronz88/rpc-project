@@ -9,6 +9,8 @@ class DarwinClient(Client):
 
     def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
         super().__init__(sock, uname_version, hostname, port)
+        if self.is_idevice:
+            self.inode64 = True
 
     @property
     def modules(self):

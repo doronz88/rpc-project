@@ -28,7 +28,7 @@ class Fs:
 
     def dirlist(self, dirname: str) -> list:
         dirent = dirent32
-        if self._client.is_idevice:
+        if self._client.inode64:
             dirent = dirent64
 
         result = []

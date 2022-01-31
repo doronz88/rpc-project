@@ -48,6 +48,10 @@ class Client:
         self._old_settings = None
         self._endianness = '<'
         self._uname_version = uname_version
+
+        # whether the system uses inode structs of 64 bits
+        self.inode64 = False
+
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
         self.processes = Processes(self)
