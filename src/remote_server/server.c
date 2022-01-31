@@ -146,10 +146,7 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     // call setsid() on child so Ctrl-C can be interpret
     posix_spawnattr_t attr;
     CHECK(0 == posix_spawnattr_init(&attr));
-
-#if __APPLE__
     CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID));
-#endif  // __APPLE__
 
     posix_spawn_file_actions_t actions;
     CHECK(0 == posix_spawn_file_actions_init(&actions));
