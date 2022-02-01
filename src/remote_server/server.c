@@ -143,7 +143,8 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     slave_fd = open(slave_pty_name, O_RDWR);
     CHECK(-1 != slave_fd);
 
-    // call setsid() on child so Ctrl-C can be interpret
+    // call setsid() on child so Ctrl-C and all other control characters are set in a different terminal
+    // and process group
     posix_spawnattr_t attr;
     CHECK(0 == posix_spawnattr_init(&attr));
     CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID));
@@ -156,8 +157,10 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
     
-
     CHECK(0 == posix_spawnp(pid, argv[0], &actions, &attr, argv, envp));
+
+    posix_spawnattr_destroy(&attr);
+    posix_spawn_file_actions_destroy(&actions);
 
     close(slave_fd);
     slave_fd = -1;
