@@ -1,6 +1,5 @@
-from pyzshell.exceptions import ZShellError, BadReturnValueError
+from pyzshell.exceptions import ZShellError
 from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC
-from pyzshell.structs.generic import dirent32, dirent64, stat32, stat64
 
 
 class Fs:
@@ -20,35 +19,6 @@ class Fs:
     def mkdir(self, filename: str, mode: int):
         """ mkdir() filename at remote. read man for more details. """
         return self._client.symbols.mkdir(filename, mode)
-
-    def stat(self, filename: str):
-        """ stat() filename at remote. read man for more details. """
-        stat = stat32
-        if self._client.inode64:
-            stat = stat64
-        with self._client.safe_malloc(stat.sizeof()) as buf:
-            err = self._client.symbols.stat(filename, buf)
-            if err != 0:
-                raise BadReturnValueError(f'failed to stat(): {filename}')
-            return stat.parse(buf.peek(stat.sizeof()))
-
-    def dirlist(self, dirname: str) -> list:
-        dirent = dirent32
-        if self._client.inode64:
-            dirent = dirent64
-
-        result = []
-        dp = self._client.symbols.opendir(dirname)
-        if 0 == dp:
-            raise BadReturnValueError(f'failed to opendir(): {dirname}')
-        while True:
-            ep = self._client.symbols.readdir(dp)
-            if ep == 0:
-                break
-            entry = dirent.parse_stream(ep)
-            result.append(entry)
-        self._client.symbols.closedir(dp)
-        return result
 
     def write_file(self, filename: str, buf: bytes, mode: int = 0o777) -> None:
         """ write file at target """

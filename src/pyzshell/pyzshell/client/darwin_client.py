@@ -2,6 +2,7 @@ import typing
 
 from cached_property import cached_property
 
+from pyzshell.DarwinFs import DarwinFs
 from pyzshell.client.client import Client
 from pyzshell.structs.darwin import utsname
 from pyzshell.symbol import DarwinSymbol
@@ -13,6 +14,7 @@ class DarwinClient(Client):
         super().__init__(sock, uname_version, hostname, port)
         if self.is_idevice:
             self.inode64 = True
+        self.fs = DarwinFs(self)
 
     @property
     def modules(self) -> typing.List[str]:
