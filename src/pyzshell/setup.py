@@ -20,7 +20,8 @@ def parse_requirements():
 
 
 def get_description():
-    return (BASE_DIR / 'README.md').read_text()
+    # on Windows, read_text() will replace the emoji unicode characters
+    return (BASE_DIR / 'README.md').read_text(errors='ignore')
 
 
 def get_data_files():

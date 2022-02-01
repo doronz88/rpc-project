@@ -5,8 +5,6 @@ import contextlib
 import logging
 import os
 import sys
-import termios
-import tty
 import typing
 from select import select
 from socket import socket
@@ -22,6 +20,15 @@ from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_
     UNAME_VERSION_LEN
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
+
+tty_support = False
+try:
+    import termios
+    import tty
+
+    tty_support = True
+except ImportError:
+    logging.warning('termios not available on your system. some functionality may not work as expected')
 
 CHUNK_SIZE = 1024
 
@@ -179,7 +186,9 @@ class Client:
         self._prepare_terminal()
         try:
             result = self._execution_loop()
-        except:
+        except:  # noqa: E722
+            # this is important to really catch every exception here, even exceptions not inheriting from Exception
+            # so the controlling terminal will remain working with its previous settings
             self._restore_terminal()
             self.reconnect()
             raise
@@ -233,7 +242,7 @@ class Client:
         """
         if info.raw_cell.startswith('!'):
             return
-        
+
         for node in ast.walk(ast.parse(info.raw_cell)):
             if not isinstance(node, ast.Name):
                 # we are only interested in names
@@ -270,9 +279,13 @@ class Client:
         return pid
 
     def _restore_terminal(self):
+        if not tty_support:
+            return
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._old_settings)
 
     def _prepare_terminal(self):
+        if not tty_support:
+            return
         fd = sys.stdin
         self._old_settings = termios.tcgetattr(fd)
         atexit.register(self._restore_terminal)
