@@ -21,7 +21,7 @@ class Fs:
         return self._client.symbols.mkdir(filename, mode)
 
     def write_file(self, filename: str, buf: bytes, mode: int = 0o777) -> None:
-        """ write file at target """
+        """ write file at remote """
         fd = self._client.symbols.open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode)
         if fd == 0xffffffff:
             raise ZShellError(f'failed to open: {filename} for writing')
@@ -35,7 +35,7 @@ class Fs:
         self._client.symbols.close(fd)
 
     def read_file(self, filename: str) -> bytes:
-        """ read file at target """
+        """ read file at remote """
         fd = self._client.symbols.open(filename, O_RDONLY)
         if fd == 0xffffffff:
             raise ZShellError(f'failed to open: {filename} for reading')
@@ -51,3 +51,10 @@ class Fs:
                 buf += chunk.peek(err)
         self._client.symbols.close(fd)
         return buf
+
+    def symlink(self, target: str, linkpath: str) -> int:
+        """ symlink(target, linkpath) at remote. read man for more details. """
+        err = self._client.symbols.symlink(target, linkpath)
+        if err < 0:
+            raise ZShellError(f'symlink failed for {target} and {linkpath}')
+        return err
