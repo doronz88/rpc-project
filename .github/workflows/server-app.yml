@@ -1,0 +1,23 @@
+name: Server application
+
+on:
+  push:
+    branches: [ '**' ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: ./src/remote_server
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Test make
+        run: |
+          make clean all
