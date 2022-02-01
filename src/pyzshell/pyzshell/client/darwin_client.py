@@ -2,7 +2,7 @@ import typing
 
 from cached_property import cached_property
 
-from pyzshell.DarwinFs import DarwinFs
+from pyzshell.darwin_fs import DarwinFs
 from pyzshell.client.client import Client
 from pyzshell.structs.darwin import utsname
 from pyzshell.symbol import DarwinSymbol
