@@ -55,6 +55,7 @@ class Client:
         self._old_settings = None
         self._endianness = '<'
         self._uname_version = uname_version
+        self._dlsym_global_handle = -1  # RTLD_NEXT
 
         # whether the system uses inode structs of 64 bits
         self.inode64 = False

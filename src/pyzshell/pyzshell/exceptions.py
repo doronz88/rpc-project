@@ -12,3 +12,11 @@ class ArgumentError(ZShellError):
 
 class BadReturnValueError(ZShellError):
     pass
+
+
+class NoSuchPreference(ZShellError):
+    pass
+
+
+class CfSerializationError(ZShellError):
+    pass
