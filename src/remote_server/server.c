@@ -278,8 +278,8 @@ bool handle_exec(int sockfd)
         }
     }
 
-    // TODO: real value
     s32 err = 0;
+    CHECK(pid == waitpid(pid, &err, 0));
     cmd_exec_chunk_t chunk;
     chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
     chunk.size = sizeof(err);
