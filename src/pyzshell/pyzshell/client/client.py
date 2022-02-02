@@ -239,7 +239,7 @@ class Client:
     def _ipython_run_cell_hook(self, info):
         """
         Enable lazy loading for symbols
-        :param info: IPython's CellInfo object
+        :param info: IPython's CellInf4o object
         """
         if info.raw_cell.startswith('!') or info.raw_cell.endswith('?'):
             return

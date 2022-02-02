@@ -1,4 +1,5 @@
-from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl
+from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
+    Bytes, Computed
 
 from pyzshell.structs.generic import uid_t, gid_t, long, mode_t
 
@@ -22,6 +23,8 @@ nlink_t = Int16ul
 blkcnt_t = Int32ul
 blksize_t = Int32ul
 ino64_t = Int64ul
+fsid_t = Int64ul
+
 timespec = Struct(
     'tv_sec' / long,
     'tv_nsec' / long,
@@ -81,4 +84,149 @@ stat64 = Struct(
     'st_gen' / Int32ul,  # user defined flags for file
     'st_lspare' / Int32ul,
     'st_qspare' / Array(2, Int64sl),
+)
+
+PROC_ALL_PIDS = 1
+
+# Flavors for proc_pidinfo()
+PROC_PIDLISTFDS = 1
+PROC_PIDTASKALLINFO = 2
+PROC_PIDTBSDINFO = 3
+PROC_PIDTASKINFO = 4
+PROC_PIDTHREADINFO = 5
+PROC_PIDLISTTHREADS = 6
+PROC_PIDREGIONINFO = 7
+PROC_PIDREGIONPATHINFO = 8
+PROC_PIDVNODEPATHINFO = 9
+PROC_PIDTHREADPATHINFO = 10
+PROC_PIDPATHINFO = 11
+PROC_PIDWORKQUEUEINFO = 12
+PROC_PIDT_SHORTBSDINFO = 13
+PROC_PIDLISTFILEPORTS = 14
+PROC_PIDTHREADID64INFO = 15
+PROC_PID_RUSAGE = 16
+PROC_PIDUNIQIDENTIFIERINFO = 17
+PROC_PIDT_BSDINFOWITHUNIQID = 18
+PROC_PIDARCHINFO = 19
+PROC_PIDCOALITIONINFO = 20
+PROC_PIDNOTEEXIT = 21
+PROC_PIDREGIONPATHINFO2 = 22
+PROC_PIDREGIONPATHINFO3 = 23
+
+# Flavors for proc_pidfdinfo
+PROC_PIDFDVNODEINFO = 1
+PROC_PIDFDVNODEPATHINFO = 2
+PROC_PIDFDSOCKETINFO = 3
+PROC_PIDFDPSEMINFO = 4
+PROC_PIDFDPSHMINFO = 5
+PROC_PIDFDPIPEINFO = 6
+PROC_PIDFDKQUEUEINFO = 7
+PROC_PIDFDATALKINFO = 8
+
+# Flavors for proc_pidfileportinfo
+PROC_PIDFILEPORTVNODEPATHINFO = 2  # out: vnode_fdinfowithpath
+PROC_PIDFILEPORTPSHMINFO = 5  # out: pshm_fdinfo
+PROC_PIDFILEPORTPIPEINFO = 6  # out: pipe_fdinfo
+# used for proc_setcontrol
+PROC_SELFSET_PCONTROL = 1
+PROC_SELFSET_THREADNAME = 2
+PROC_SELFSET_VMRSRCOWNER = 3
+PROC_SELFSET_DELAYIDLESLEEP = 4
+# used for proc_dirtycontrol
+PROC_DIRTYCONTROL_TRACK = 1
+PROC_DIRTYCONTROL_SET = 2
+PROC_DIRTYCONTROL_GET = 3
+PROC_DIRTYCONTROL_CLEAR = 4
+# proc_track_dirty() flags
+PROC_DIRTY_TRACK = 0x1
+PROC_DIRTY_ALLOW_IDLE_EXIT = 0x2
+PROC_DIRTY_DEFER = 0x4
+PROC_DIRTY_LAUNCH_IN_PROGRESS = 0x8
+# proc_get_dirty() flags
+PROC_DIRTY_TRACKED = 0x1
+PROC_DIRTY_ALLOWS_IDLE_EXIT = 0x2
+PROC_DIRTY_IS_DIRTY = 0x4
+PROC_DIRTY_LAUNCH_IS_IN_PROGRESS = 0x8
+
+# Flavors for proc_pidoriginatorinfo
+PROC_PIDORIGINATOR_UUID = 0x1
+PROC_PIDORIGINATOR_BGSTATE = 0x2
+# __proc_info() call numbers
+PROC_INFO_CALL_LISTPIDS = 0x1
+PROC_INFO_CALL_PIDINFO = 0x2
+PROC_INFO_CALL_PIDFDINFO = 0x3
+PROC_INFO_CALL_KERNMSGBUF = 0x4
+PROC_INFO_CALL_SETCONTROL = 0x5
+PROC_INFO_CALL_PIDFILEPORTINFO = 0x6
+PROC_INFO_CALL_TERMINATE = 0x7
+PROC_INFO_CALL_DIRTYCONTROL = 0x8
+PROC_INFO_CALL_PIDRUSAGE = 0x9
+PROC_INFO_CALL_PIDORIGINATORINFO = 0xa
+
+# defns of process file desc type
+PROX_FDTYPE_ATALK = 0
+PROX_FDTYPE_VNODE = 1
+PROX_FDTYPE_SOCKET = 2
+PROX_FDTYPE_PSHM = 3
+PROX_FDTYPE_PSEM = 4
+PROX_FDTYPE_KQUEUE = 5
+PROX_FDTYPE_PIPE = 6
+PROX_FDTYPE_FSEVENTS = 7
+
+proc_regioninfo = Struct(
+    'pri_protection' / Int32ul,
+    'pri_max_protection' / Int32ul,
+    'pri_inheritance' / Int32ul,
+    'pri_flags' / Int32ul,  # shared, external pager, is submap
+    'pri_offset' / Int64ul,
+    'pri_behavior' / Int32ul,
+    'pri_user_wired_count' / Int32ul,
+    'pri_user_tag' / Int32ul,
+    'pri_pages_resident' / Int32ul,
+    'pri_pages_shared_now_private' / Int32ul,
+    'pri_pages_swapped_out' / Int32ul,
+    'pri_pages_dirtied' / Int32ul,
+    'pri_ref_count' / Int32ul,
+    'pri_shadow_depth' / Int32ul,
+    'pri_share_mode' / Int32ul,
+    'pri_private_pages_resident' / Int32ul,
+    'pri_shared_pages_resident' / Int32ul,
+    'pri_obj_id' / Int32ul,
+    'pri_depth' / Int32ul,
+    'pri_address' / Int64ul,
+    'pri_size' / Int64ul,
+)
+
+proc_fdinfo = Struct(
+    'proc_fd' / Int32sl,
+    'proc_fdtype' / Int32ul,
+)
+
+proc_fileinfo = Struct(
+    'fi_openflags' / Int32ul,
+    'fi_status' / Int32ul,
+    'fi_offset' / off_t,
+    'fi_guardflags' / Int32ul,
+)
+
+# A copy of stat64 with static sized fields.
+vinfo_stat = stat64
+
+vnode_info = Struct(
+    'vi_stat' / vinfo_stat,
+    'vi_type' / Int32sl,
+    'vi_pad' / Int32sl,
+    'vi_fsid' / fsid_t,
+)
+
+vnode_info_path = Struct(
+    'vip_vi' / vnode_info,
+    Padding(8),
+    '_vip_path' / Bytes(MAXPATHLEN),
+    'vip_path' / Computed(lambda x: x._vip_path.split(b'\x00', 1)[0].decode()),
+)
+
+vnode_fdinfowithpath = Struct(
+    'pfi' / proc_fileinfo,
+    'pvip' / vnode_info_path,
 )
