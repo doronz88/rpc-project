@@ -112,15 +112,13 @@ void handle_signal(int signo)
 
 void shell_init()
 {
+    TRACE("pid: %d pgid: %d sid: %d", getpid(), getpgid(0), getsid(0));
+
     /* See if we are running interactively.  */
     exec_shell_terminal = STDIN_FILENO;
     exec_shell_is_interactive = isatty(exec_shell_terminal);
     if (exec_shell_is_interactive)
     {
-        // /* Loop until we are in the foreground.  */
-        // while (tcgetpgrp(exec_shell_terminal) != (exec_shell_pgid = getpgrp()))
-        //     kill(-exec_shell_pgid, SIGTTIN);
-
         /* Ignore interactive and job-control signals.  */
         signal(SIGINT, handle_signal);
         signal(SIGQUIT, SIG_IGN);
@@ -129,12 +127,15 @@ void shell_init()
         signal(SIGTTOU, SIG_IGN);
         // signal (SIGCHLD, SIG_IGN);
 
-        /* Put ourselves in our own process group.  */
-        exec_shell_pgid = getpid();
-        if (setpgid(exec_shell_pgid, exec_shell_pgid) < 0)
+        if (getpgid(0) != getpid())
         {
-            perror("Couldn't put the shell in its own process group");
-            exit(1);
+            /* Put ourselves in our own process group.  */
+            exec_shell_pgid = getpid();
+            if (setpgid(exec_shell_pgid, exec_shell_pgid) < 0)
+            {
+                perror("Couldn't put the shell in its own process group");
+                exit(1);
+            }
         }
 
         /* Grab control of the terminal.  */
