@@ -15,7 +15,7 @@ class SymbolsJar(dict):
 
     def get_lazy(self, name):
         client = self.__dict__['_client']
-        s = client.dlsym(-1, name)
+        s = client.dlsym(client._dlsym_global_handle, name)
         if 0 == s:
             raise SymbolAbsentError(f'no such loaded symbol: {name}')
         self[name] = client.symbol(s)
@@ -31,7 +31,7 @@ class SymbolsJar(dict):
     def __getattr__(self, name):
         if name not in self:
             client = self.__dict__['_client']
-            s = client.dlsym(-1, name)
+            s = client.dlsym(client._dlsym_global_handle, name)
             if 0 == s:
                 raise SymbolAbsentError(f'no such loaded symbol: {name}')
             self[name] = client.symbol(s)

@@ -1,5 +1,8 @@
+import posixpath
+
 from pyzshell.exceptions import BadReturnValueError
 from pyzshell.fs import Fs
+from pyzshell.structs.consts import S_IFDIR
 from pyzshell.structs.darwin import dirent32, dirent64, stat32, stat64
 
 
@@ -17,7 +20,7 @@ class DarwinFs(Fs):
                 raise BadReturnValueError(f'failed to stat(): {filename}')
             return stat.parse(buf.peek(stat.sizeof()))
 
-    def dirlist(self, dirname: str) -> list:
+    def listdir(self, dirname: str) -> list:
         dirent = dirent32
         if self._client.inode64:
             dirent = dirent64
@@ -34,3 +37,23 @@ class DarwinFs(Fs):
             result.append(entry)
         self._client.symbols.closedir(dp)
         return result
+
+    def walk(self, dirname: str):
+        dirs = []
+        files = []
+        for file in self.listdir(dirname):
+            filename = file.d_name
+            if filename in ('.', '..', ''):
+                continue
+            infos = self.stat(posixpath.join(dirname, filename))
+            if infos.st_mode & S_IFDIR:
+                dirs.append(filename)
+            else:
+                files.append(filename)
+
+        yield dirname, dirs, files
+
+        if dirs:
+            for d in dirs:
+                for walk_result in self.walk(posixpath.join(dirname, d)):
+                    yield walk_result
