@@ -4,6 +4,7 @@ from cached_property import cached_property
 
 from pyzshell.client.client import Client
 from pyzshell.darwin_fs import DarwinFs
+from pyzshell.darwin_processes import DarwinProcesses
 from pyzshell.preferences import Preferences
 from pyzshell.structs.darwin import utsname
 from pyzshell.symbol import DarwinSymbol
@@ -31,6 +32,7 @@ class DarwinClient(Client):
             self.inode64 = True
         self.fs = DarwinFs(self)
         self.prefs = Preferences(self)
+        self.processes = DarwinProcesses(self)
 
     @property
     def modules(self) -> typing.List[str]:

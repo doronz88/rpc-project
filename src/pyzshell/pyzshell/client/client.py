@@ -16,8 +16,8 @@ from traitlets.config import Config
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError
 from pyzshell.fs import Fs
 from pyzshell.processes import Processes
-from pyzshell.protocol import protocol_message_t, cmd_type_t, pid_t, exec_chunk_t, exec_chunk_type_t, exitcode_t, \
-    UNAME_VERSION_LEN
+from pyzshell.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN
+from pyzshell.structs.darwin import pid_t, exitcode_t
 from pyzshell.symbol import Symbol
 from pyzshell.symbols_jar import SymbolsJar
 
@@ -241,7 +241,7 @@ class Client:
         Enable lazy loading for symbols
         :param info: IPython's CellInfo object
         """
-        if info.raw_cell.startswith('!'):
+        if info.raw_cell.startswith('!') or info.raw_cell.endswith('?'):
             return
 
         for node in ast.walk(ast.parse(info.raw_cell)):

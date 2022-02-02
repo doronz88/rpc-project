@@ -1,5 +1,5 @@
-from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, Int32sl, \
-    PaddedString, Bytes, Int64ul
+from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
+    Int64ul
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -73,6 +73,3 @@ exec_chunk_t = Struct(
     'chunk_type' / exec_chunk_type_t,
     'size' / Int32ul,
 )
-
-pid_t = Int32ul
-exitcode_t = Int32sl
