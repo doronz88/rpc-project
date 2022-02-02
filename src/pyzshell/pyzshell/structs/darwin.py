@@ -2,6 +2,7 @@ from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, t
 
 from pyzshell.structs.generic import uid_t, gid_t, long, mode_t
 
+MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
 
 utsname = Struct(
@@ -12,6 +13,8 @@ utsname = Struct(
     'machine' / PaddedString(_SYS_NAMELEN, 'utf8'),
 )
 
+pid_t = Int32ul
+exitcode_t = Int32sl
 ino_t = Int32ul
 dev_t = Int32ul
 off_t = Int32ul
