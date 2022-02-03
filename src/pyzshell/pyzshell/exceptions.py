@@ -20,3 +20,7 @@ class NoSuchPreference(ZShellError):
 
 class CfSerializationError(ZShellError):
     pass
+
+
+class SpawnError(ZShellError):
+    pass
