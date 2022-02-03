@@ -13,7 +13,7 @@ import IPython
 from construct import Int64sl
 from traitlets.config import Config
 
-from pyzshell.exceptions import ArgumentError, SymbolAbsentError
+from pyzshell.exceptions import ArgumentError, SymbolAbsentError, SpawnError
 from pyzshell.fs import Fs
 from pyzshell.processes import Processes
 from pyzshell.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN
@@ -30,6 +30,7 @@ try:
 except ImportError:
     logging.warning('termios not available on your system. some functionality may not work as expected')
 
+INVALID_PID = 0xffffffff
 CHUNK_SIZE = 1024
 
 USAGE = '''
@@ -171,7 +172,8 @@ class Client:
         })
         self._sock.sendall(message)
 
-    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None):
+    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
+              tty=False):
         """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
             argv = self.DEFAULT_ARGV
@@ -179,22 +181,31 @@ class Client:
         if envp is None:
             envp = self.DEFAULT_ENVP
 
-        pid = self._execute(argv, envp)
+        try:
+            pid = self._execute(argv, envp)
+        except SpawnError:
+            # depends on where the error occurred, the socket might be closed
+            self.reconnect()
+            raise
+
         logging.info(f'shell process started as pid: {pid}')
 
         self._sock.setblocking(False)
 
-        self._prepare_terminal()
+        if tty:
+            self._prepare_terminal()
         try:
-            result = self._execution_loop()
+            result = self._execution_loop(stdin, stdout)
         except:  # noqa: E722
             # this is important to really catch every exception here, even exceptions not inheriting from Exception
             # so the controlling terminal will remain working with its previous settings
-            self._restore_terminal()
+            if tty:
+                self._restore_terminal()
             self.reconnect()
             raise
 
-        self._restore_terminal()
+        if tty:
+            self._restore_terminal()
         self.reconnect()
 
         return result
@@ -287,6 +298,8 @@ class Client:
         })
         self._sock.sendall(message)
         pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))
+        if pid == INVALID_PID:
+            raise SpawnError(f'failed to spawn: {argv}')
         return pid
 
     def _restore_terminal(self):
@@ -313,14 +326,16 @@ class Client:
             buf += chunk
         return buf
 
-    def _execution_loop(self):
+    def _execution_loop(self, stdin=sys.stdin, stdout=sys.stdout):
         while True:
-            rlist, _, _ = select([sys.stdin, self._sock], [], [])
+            rlist, _, _ = select([stdin, self._sock], [], [])
 
             for fd in rlist:
                 if fd == sys.stdin:
-                    buf = os.read(sys.stdin.fileno(), CHUNK_SIZE)
-                    # print('send', buf)
+                    if stdin == sys.stdin:
+                        buf = os.read(stdin.fileno(), CHUNK_SIZE)
+                    else:
+                        buf = stdin.read(CHUNK_SIZE)
                     self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:
@@ -333,8 +348,8 @@ class Client:
                     data = self._recvall(exec_chunk.size)
 
                     if exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_STDOUT:
-                        sys.stdout.write(data.decode())
-                        sys.stdout.flush()
+                        stdout.write(data.decode())
+                        stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
                         return exitcode_t.parse(data)
 

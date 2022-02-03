@@ -37,6 +37,7 @@
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
 #define UNAME_VERSION_LEN (256)
+#define INVALID_PID (0xffffffff)
 
 extern char **environ;
 
@@ -176,11 +177,13 @@ error:
     {
         close(slave_fd);
     }
+    *pid = INVALID_PID;
     return -1;
 }
 
 bool handle_exec(int sockfd)
 {
+    pid_t pid = INVALID_PID;
     int master = -1;
     int result = false;
     char **argv = NULL;
@@ -189,6 +192,7 @@ bool handle_exec(int sockfd)
     u32 envc;
     
     CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
+    CHECK(argc > 0);
 
     // +1 for additional NULL at end of list
     size_t argv_size = (argc + 1) * sizeof(char *);
@@ -230,11 +234,9 @@ bool handle_exec(int sockfd)
         envp[i][len] = '\0';
     }
 
-    pid_t pid;
-
     master = internal_spawn((char *const *)argv, envc ? (char *const *)envp : environ, &pid);
-    CHECK(master >= 0);
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
+    CHECK(master >= 0);
 
     fd_set readfds;
     char buf[BUFFERSIZE];
@@ -279,7 +281,9 @@ bool handle_exec(int sockfd)
     }
 
     s32 err = 0;
-    CHECK(pid == waitpid(pid, &err, 0));
+
+    // dont exit on error here so client is notified right away when the process dies
+    waitpid(pid, &err, 0);
     cmd_exec_chunk_t chunk;
     chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
     chunk.size = sizeof(err);
@@ -292,6 +296,12 @@ bool handle_exec(int sockfd)
     result = true;
 
 error:
+    if (INVALID_PID == pid)
+    {
+        // failed to create process somewhere in the prolog, at least notify
+        sendall(sockfd, (char *)&pid, sizeof(u32));
+    }
+
     if (argv)
     {
         for (u32 i = 0; i < argc; ++i)
