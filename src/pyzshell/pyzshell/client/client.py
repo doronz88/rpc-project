@@ -203,6 +203,16 @@ class Client:
         """ at a symbol object from a given address """
         return Symbol.create(symbol, self)
 
+    @property
+    def environ(self) -> typing.List[str]:
+        result = []
+        environ = self.symbols.environ[0]
+        i = 0
+        while environ[i]:
+            result.append(environ[i].peek_str())
+            i += 1
+        return result
+
     @contextlib.contextmanager
     def safe_calloc(self, size: int):
         with self.safe_malloc(size) as x:
