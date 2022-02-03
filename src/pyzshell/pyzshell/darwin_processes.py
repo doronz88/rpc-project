@@ -24,7 +24,7 @@ class DarwinProcesses(Processes):
         result = []
         size = self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, 0, 0)
 
-        vi_size = 4096
+        vi_size = vnode_fdinfowithpath.sizeof()
         with self._client.safe_malloc(vi_size) as vi_buf:
             with self._client.safe_malloc(size) as fdinfo_buf:
                 size = int(self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
