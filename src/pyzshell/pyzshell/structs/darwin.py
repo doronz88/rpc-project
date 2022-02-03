@@ -173,6 +173,61 @@ PROX_FDTYPE_KQUEUE = 5
 PROX_FDTYPE_PIPE = 6
 PROX_FDTYPE_FSEVENTS = 7
 
+MAXCOMLEN = 16
+
+proc_bsdinfo = Struct(
+    'pbi_flags' / Int32ul,  # 64bit emulated etc
+    'pbi_status' / Int32ul,
+    'pbi_xstatus' / Int32ul,
+    'pbi_pid' / Int32ul,
+    'pbi_ppid' / Int32ul,
+    'pbi_uid' / uid_t,
+    'pbi_gid' / gid_t,
+    'pbi_ruid' / uid_t,
+    'pbi_rgid' / gid_t,
+    'pbi_svuid' / uid_t,
+    'pbi_svgid' / gid_t,
+    'rfu_1' / Int32ul,  # reserved
+    '_pbi_comm' / Bytes(MAXCOMLEN),
+    'pbi_comm' / Computed(lambda x: x._pbi_comm.split(b'\x00', 1)[0].decode()),
+    '_pbi_name' / Bytes(2 * MAXCOMLEN),  # empty if no name is registered
+    'pbi_name' / Computed(lambda x: x._pbi_name.split(b'\x00', 1)[0].decode()),
+    'pbi_nfiles' / Int32ul,
+    'pbi_pgid' / Int32ul,
+    'pbi_pjobc' / Int32ul,
+    'e_tdev' / Int32ul,  # controlling tty dev
+    'e_tpgid' / Int32ul,  # tty process group id
+    'pbi_nice' / Int32sl,
+    'pbi_start_tvsec' / Int64ul,
+    'pbi_start_tvusec' / Int64ul,
+)
+
+proc_taskinfo = Struct(
+    'pti_virtual_size' / Int64ul,  # virtual memory size (bytes)
+    'pti_resident_size' / Int64ul,  # resident memory size (bytes)
+    'pti_total_user' / Int64ul,  # total time
+    'pti_total_system' / Int64ul,
+    'pti_threads_user' / Int64ul,  # existing threads only
+    'pti_threads_system' / Int64ul,
+    'pti_policy' / Int32sl,  # default policy for new threads
+    'pti_faults' / Int32sl,  # number of page faults
+    'pti_pageins' / Int32sl,  # number of actual pageins
+    'pti_cow_faults' / Int32sl,  # number of copy-on-write faults
+    'pti_messages_sent' / Int32sl,  # number of messages sent
+    'pti_messages_received' / Int32sl,  # number of messages received
+    'pti_syscalls_mach' / Int32sl,  # number of mach system calls
+    'pti_syscalls_unix' / Int32sl,  # number of unix system calls
+    'pti_csw' / Int32sl,  # number of context switches
+    'pti_threadnum' / Int32sl,  # number of threads in the task
+    'pti_numrunning' / Int32sl,  # number of running threads
+    'pti_priority' / Int32sl,  # task priority
+)
+
+proc_taskallinfo = Struct(
+    'pbsd' / proc_bsdinfo,
+    'ptinfo' / proc_taskinfo,
+)
+
 proc_regioninfo = Struct(
     'pri_protection' / Int32ul,
     'pri_max_protection' / Int32ul,

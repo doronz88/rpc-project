@@ -6,7 +6,7 @@ from construct import Array
 from pyzshell.exceptions import ZShellError
 from pyzshell.processes import Processes
 from pyzshell.structs.darwin import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
-    vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO
+    vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO
 
 Process = namedtuple('Process', 'pid path')
 Fd = namedtuple('Fd', 'fd path')
@@ -42,6 +42,12 @@ class DarwinProcesses(Processes):
                         result.append(Fd(fd=fd.proc_fd, path=vi.pvip.vip_path))
 
             return result
+
+    def get_task_all_info(self, pid: int):
+        with self._client.safe_malloc(proc_taskallinfo.sizeof()) as pti:
+            if not self._client.symbols.proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
+                raise ZShellError('proc_pidinfo(PROC_PIDTASKALLINFO) failed')
+            return proc_taskallinfo.parse_stream(pti)
 
     def list(self) -> list:
         n = self._client.symbols.proc_listallpids(0, 0)
