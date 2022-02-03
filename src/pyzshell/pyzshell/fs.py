@@ -58,3 +58,13 @@ class Fs:
         if err < 0:
             raise ZShellError(f'symlink failed for {target} and {linkpath}')
         return err
+
+    def pwd(self) -> str:
+        """ calls getcwd(buf, size_t) and prints current path.
+            with the special values NULL,NULL the buffer is allocated dynamically """
+        chunk = self._client.symbols.getcwd(0, 0)
+        if chunk == 0:
+            raise ZShellError('pwd failed.')
+        buf = chunk.peek_str()
+        self._client.symbols.free(chunk)
+        return buf
