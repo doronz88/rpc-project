@@ -33,7 +33,6 @@ class DarwinProcesses(Processes):
 
                 for fd in Array(size // proc_fdinfo.sizeof(), proc_fdinfo).parse(fdinfo_buf.peek(size)):
                     if fd.proc_fdtype == PROX_FDTYPE_VNODE:
-                        vi_buf.poke(b'\x00' * vi_size)
                         vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, vi_buf,
                                                                  vi_size)
                         if not vs:
