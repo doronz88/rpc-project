@@ -81,9 +81,9 @@ class Client:
         print(f'ppid: {self.symbols.getppid():d}')
         print(f'progname: {self.symbols.getprogname().peek_str()}')
 
-    def iter_libraries(self):
-        for i in range(self.symbols._dyld_image_count()):
-            yield self.symbols._dyld_get_image_name(i).peek_str()
+    def uname(self):
+        """ get the utsname struct from remote"""
+        raise NotImplementedError()
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
