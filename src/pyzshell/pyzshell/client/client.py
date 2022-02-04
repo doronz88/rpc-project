@@ -15,6 +15,7 @@ from traitlets.config import Config
 
 from pyzshell.exceptions import ArgumentError, SymbolAbsentError, SpawnError
 from pyzshell.fs import Fs
+from pyzshell.network import Network
 from pyzshell.processes import Processes
 from pyzshell.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN
 from pyzshell.structs.darwin import pid_t, exitcode_t
@@ -64,6 +65,7 @@ class Client:
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
         self.processes = Processes(self)
+        self.network = Network(self)
 
     def info(self):
         """ print information about current target """
