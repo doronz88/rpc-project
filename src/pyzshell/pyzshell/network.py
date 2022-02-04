@@ -78,7 +78,7 @@ class Network:
             while current:
                 family = sockaddr.parse(current.ifa_addr.peek(sockaddr.sizeof())).sa_family
 
-                if family in (AF_INET,):
+                if family == AF_INET:
                     address = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_addr).sin_addr)
                     netmask = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_netmask).sin_addr)
                     broadcast = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_dstaddr).sin_addr)
