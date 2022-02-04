@@ -1,6 +1,8 @@
-from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, Const, PaddedString
+from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, Const, PaddedString, Pointer, \
+    this, CString, LazyBound, Padding, If, Int8ul
 
 from pyzshell.structs.consts import AF_UNIX, AF_INET
+from pyzshell.symbol import SymbolFormatField
 
 UNIX_PATH_MAX = 108
 
@@ -12,7 +14,7 @@ mode_t = Int16ul
 in_addr = Bytes(4)
 
 sockaddr_in = Struct(
-    'sin_family' / Const(AF_INET, Int16sl),
+    'sin_family' / Default(Int16sl, AF_INET),
     'sin_port' / Int16ul,
     'sin_addr' / in_addr,
     'sin_zero' / Default(Bytes(8), b'\x00' * 8),
@@ -22,3 +24,25 @@ sockaddr_un = Struct(
     'sun_family' / Const(AF_UNIX, Int16sl),
     'sun_path' / PaddedString(UNIX_PATH_MAX, 'utf8'),
 )
+
+sockaddr = Struct(
+    Padding(1),
+    'sa_family' / Int8ul,
+)
+
+
+def ifaddrs(client):
+    return Struct(
+        '_ifa_next' / SymbolFormatField(client),
+        'ifa_next' / If(this._ifa_next != 0, LazyBound(lambda: Pointer(this._ifa_next, ifaddrs(client)))),
+
+        '_ifa_name' / SymbolFormatField(client),
+        'ifa_name' / If(this._ifa_name != 0, Pointer(this._ifa_name, CString('utf8'))),
+
+        'ifa_flags' / Int32ul,
+        Padding(4),
+        'ifa_addr' / SymbolFormatField(client),
+        'ifa_netmask' / SymbolFormatField(client),
+        'ifa_dstaddr' / SymbolFormatField(client),
+        'ifa_data' / SymbolFormatField(client),
+    )
