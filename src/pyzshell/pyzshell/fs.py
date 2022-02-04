@@ -11,7 +11,7 @@ class Fs:
         self._client = client
 
     def chmod(self, filename: str, mode: int):
-        """ chmod(filename, mode)at remote. read man for more details. """
+        """ chmod(filename, mode) at remote. read man for more details. """
         if self._client.symbols.chmod(filename, mode).c_int32 < 0:
             raise ZShellError(f'failed to chmod: {filename}')
 
@@ -87,23 +87,20 @@ class Fs:
         return buf
 
     def listdir(self, dirname: str) -> list:
+        """ get directory listing for a given dirname """
         raise NotImplementedError()
 
     def stat(self, filename: str):
+        """ stat(filename) at remote. read man for more details. """
         raise NotImplementedError()
 
-    def walk(self, dirname: str, blacklist=None):
-        if blacklist is None:
-            blacklist = []
-
-        if dirname in blacklist:
-            return
-
+    def walk(self, dirname: str):
+        """ provides the same results as os.walk(dirname) """
         dirs = []
         files = []
         for file in self.listdir(dirname):
             filename = file.d_name
-            if filename in ('.', '..', ''):
+            if filename in ('.', '..'):
                 continue
             infos = self.stat(posixpath.join(dirname, filename))
             if infos.st_mode & S_IFMT == infos.st_mode & S_IFDIR:
@@ -112,9 +109,8 @@ class Fs:
                 files.append(filename)
 
         yield dirname, dirs, files
-        blacklist.append(dirname)
 
         if dirs:
             for d in dirs:
-                for walk_result in self.walk(posixpath.join(dirname, d), blacklist):
+                for walk_result in self.walk(posixpath.join(dirname, d)):
                     yield walk_result
