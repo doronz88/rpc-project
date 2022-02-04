@@ -1,3 +1,4 @@
+import ctypes
 import os
 import struct
 import time
@@ -109,6 +110,21 @@ class Symbol(int):
     def tell(self):
         """ Construct compliance. """
         return self + self._offset
+
+    @property
+    def c_int64(self):
+        """ cast to c_int64 """
+        return ctypes.c_int64(self).value
+
+    @property
+    def c_int32(self):
+        """ cast to c_int32 """
+        return ctypes.c_int32(self).value
+
+    @property
+    def c_int16(self):
+        """ cast to c_int16 """
+        return ctypes.c_int16(self).value
 
     def __add__(self, other):
         try:
