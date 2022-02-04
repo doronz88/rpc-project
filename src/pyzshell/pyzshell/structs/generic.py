@@ -1,8 +1,8 @@
 from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, Const, PaddedString
 
+from pyzshell.structs.consts import AF_UNIX, AF_INET
+
 UNIX_PATH_MAX = 108
-AF_UNIX = 1
-AF_INET = 2
 
 uid_t = Int32ul
 gid_t = Int32ul

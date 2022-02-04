@@ -1,9 +1,9 @@
 import socket as pysock
 
 from pyzshell.exceptions import ZShellError
-from pyzshell.structs.generic import sockaddr_in, AF_INET, sockaddr_un, AF_UNIX
+from pyzshell.structs.generic import sockaddr_in, sockaddr_un
+from pyzshell.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
 
-SOCK_STREAM = 1
 CHUNK_SIZE = 1024
 
 
