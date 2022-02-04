@@ -6,6 +6,8 @@ Simple python3 client achieving a nice remote shell allowing:
 * Remote C function calls
 * Remote shell commands
 * Remote filesystem management
+* Remote process management
+* Remote network apis (create tcp connections, unix domain, and more...)
 
 ## Installing python client
 
@@ -20,7 +22,7 @@ python3 -m pip install --user -U .
 Connecting via:
 
 ```shell
-python3 -m pyzshell ishell <HOST>
+python3 -m pyzshell <HOST> ishell
 ```
 
 Here are some examples of things you may do:

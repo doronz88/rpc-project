@@ -2,10 +2,12 @@
 
 ## Description
 
-Simple C server for achieving a nice remote shell allowing:
-* Remote C function calls
-* Remote shell commands
-* Remote filesystem management
+Simple remote control process requiring a single executable to be uploaded and run on the remote host.
+This executable then provides a protocol to call native C functions which makes it possible to control
+every aspect of the connected machine.
+
+For more information about the client which utilizes these abilities, please view its README here:
+https://github.com/doronz88/zshell/tree/master/src/pyzshell
 
 ## Building C Server
 
@@ -42,5 +44,5 @@ To execute the server:
 Connecting via:
 
 ```shell
-python3 -m pyzshell ishell <HOST>
+python3 -m pyzshell <HOST> ishell
 ```
