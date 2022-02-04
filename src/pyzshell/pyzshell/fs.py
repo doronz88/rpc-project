@@ -26,30 +26,35 @@ class Fs:
             raise ZShellError(f'failed to mkdir: {filename}')
 
     def chdir(self, filename: str):
-        """ chdir(filename) filename at remote. read man for more details. """
+        """ chdir(filename) at remote. read man for more details. """
         if self._client.symbols.chdir(filename).c_int64 < 0:
             raise ZShellError(f'failed to chdir: {filename}')
 
-    def write_file(self, filename: str, buf: bytes, mode: int = 0o777) -> None:
-        """ write file at remote """
-        fd = self._client.symbols.open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode).c_int32
+    def open(self, filename: str, mode, access: int = 0o777) -> int:
+        """ open(filename, mode) at remote. read man for more details. """
+        fd = self._client.symbols.open(filename, mode, access).c_int32
         if fd < 0:
             raise ZShellError(f'failed to open: {filename} for writing')
+        return fd
 
+    def write(self, fd: int, buf: bytes, size: int) -> int:
+        """ write(fd, buf, size) at remote. read man for more details. """
+        n = self._client.symbols.write(fd, buf, size).c_int64
+        if n < 0:
+            raise ZShellError(f'failed to write on fd: {fd}')
+        return n
+
+    def write_file(self, filename: str, buf: bytes, access: int = 0o777) -> None:
+        """ write file at remote """
+        fd = self.open(filename, O_WRONLY | O_CREAT | O_TRUNC, access)
         while buf:
-            err = self._client.symbols.write(fd, buf, len(buf)).c_int64
-            if err < 0:
-                raise ZShellError(f'write failed for: {filename}')
+            err = self.write(fd, buf, len(buf))
             buf = buf[err:]
-
         self._client.symbols.close(fd)
 
     def read_file(self, filename: str) -> bytes:
         """ read file at remote """
-        fd = self._client.symbols.open(filename, O_RDONLY).c_int32
-        if fd < 0:
-            raise ZShellError(f'failed to open: {filename} for reading')
-
+        fd = self.open(filename, O_RDONLY)
         buf = b''
         with self._client.safe_malloc(self.CHUNK_SIZE) as chunk:
             while True:
