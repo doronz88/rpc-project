@@ -7,7 +7,7 @@ class DarwinFs(Fs):
     CHUNK_SIZE = 1024
 
     def stat(self, filename: str):
-        """ stat() filename at remote. read man for more details. """
+        """ stat(filename) at remote. read man for more details. """
         stat = stat32
         if self._client.inode64:
             stat = stat64
@@ -18,6 +18,7 @@ class DarwinFs(Fs):
             return stat.parse(buf.peek(stat.sizeof()))
 
     def listdir(self, dirname: str) -> list:
+        """ get directory listing for a given dirname """
         dirent = dirent32
         if self._client.inode64:
             dirent = dirent64
