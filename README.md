@@ -1,5 +1,5 @@
-[![Server application](https://img.shields.io/github/workflow/status/doronz88/zshell/Server%20application?label=python%20package&style=plastic)](https://github.com/doronz88/pymobiledevice3/actions/zshell/server-app.yml "Server application action")
-[![Python application](https://img.shields.io/github/workflow/status/doronz88/zshell/Python%20application?label=server%20build&style=plastic)](https://github.com/doronz88/pymobiledevice3/actions/zshell/python-app.yml "Python application action")
+[![Server application](https://img.shields.io/github/workflow/status/doronz88/zshell/Server%20application?label=python%20package&style=plastic)](https://github.com/doronz88/zshell/actions/workflows/server-app.yml "Server application action")
+[![Python application](https://img.shields.io/github/workflow/status/doronz88/zshell/Python%20application?label=server%20build&style=plastic)](https://github.com/doronz88/zshell/actions/workflows/python-app.yml "Python application action")
 
 # zShell
 
