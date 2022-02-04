@@ -23,6 +23,11 @@ class Fs:
         if self._client.symbols.mkdir(filename, mode).c_int64 < 0:
             raise ZShellError(f'failed to mkdir: {filename}')
 
+    def chdir(self, filename: str):
+        """ chdir(filename) filename at remote. read man for more details. """
+        if self._client.symbols.chdir(filename).c_int64 < 0:
+            raise ZShellError(f'failed to chdir: {filename}')
+
     def write_file(self, filename: str, buf: bytes, mode: int = 0o777) -> None:
         """ write file at remote """
         fd = self._client.symbols.open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode).c_int32
