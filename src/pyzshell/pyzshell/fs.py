@@ -1,5 +1,7 @@
+import posixpath
+
 from pyzshell.exceptions import ZShellError
-from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC
+from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR
 
 
 class Fs:
@@ -83,3 +85,36 @@ class Fs:
         buf = chunk.peek_str()
         self._client.symbols.free(chunk)
         return buf
+
+    def listdir(self, dirname: str) -> list:
+        raise NotImplementedError()
+
+    def stat(self, filename: str):
+        raise NotImplementedError()
+
+    def walk(self, dirname: str, blacklist=None):
+        if blacklist is None:
+            blacklist = []
+
+        if dirname in blacklist:
+            return
+
+        dirs = []
+        files = []
+        for file in self.listdir(dirname):
+            filename = file.d_name
+            if filename in ('.', '..', ''):
+                continue
+            infos = self.stat(posixpath.join(dirname, filename))
+            if infos.st_mode & S_IFMT == infos.st_mode & S_IFDIR:
+                dirs.append(filename)
+            else:
+                files.append(filename)
+
+        yield dirname, dirs, files
+        blacklist.append(dirname)
+
+        if dirs:
+            for d in dirs:
+                for walk_result in self.walk(posixpath.join(dirname, d), blacklist):
+                    yield walk_result
