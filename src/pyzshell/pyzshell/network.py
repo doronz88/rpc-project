@@ -6,9 +6,59 @@ from pyzshell.exceptions import ZShellError
 from pyzshell.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
 from pyzshell.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr
 
-CHUNK_SIZE = 1024
-
 Interface = namedtuple('Interface', 'name address netmask broadcast')
+
+
+class Socket:
+    CHUNK_SIZE = 1024
+
+    def __init__(self, client, fd: int):
+        self._client = client
+        self.fd = fd
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        """ close(fd) at remote. read man for more details. """
+        fd = self._client.symbols.close(self.fd).c_int32
+        if fd < 0:
+            raise ZShellError(f'failed to close fd: {fd}')
+
+    def send(self, buf: bytes, size: int) -> int:
+        """ send(fd, buf, size, 0) at remote. read man for more details. """
+        n = self._client.symbols.send(self.fd, buf, size, 0).c_int64
+        if n < 0:
+            raise ZShellError(f'failed to send on fd: {self.fd}')
+        return n
+
+    def sendall(self, buf: bytes):
+        """ continue call send() until """
+        while buf:
+            err = self.send(buf, len(buf))
+            buf = buf[err:]
+
+    def recv(self, size: int = CHUNK_SIZE) -> bytes:
+        """ recv(fd, buf, size, 0) at remote. read man for more details. """
+        with self._client.safe_malloc(size) as chunk:
+            err = self._client.symbols.recv(self.fd, chunk, self.CHUNK_SIZE).c_int64
+            if err < 0:
+                raise ZShellError(f'read failed for fd: {self.fd}')
+            return chunk.peek(err)
+
+    def recvall(self, size: int) -> bytes:
+        """ recv at remote until all buffer is received """
+        buf = b''
+        with self._client.safe_malloc(self.CHUNK_SIZE) as chunk:
+            while len(buf) < size:
+                err = self._client.symbols.read(self.fd, chunk, self.CHUNK_SIZE).c_int64
+                if err <= 0:
+                    raise ZShellError(f'read failed for fd: {self.fd}')
+                buf += chunk.peek(err)
+        return buf
 
 
 class Network:
@@ -22,8 +72,8 @@ class Network:
             raise ZShellError(f'failed to create socket: {result}')
         return result
 
-    def tcp_connect(self, address: str, port: int) -> int:
-        """ make target connect to given address:port and get connection fd """
+    def tcp_connect(self, address: str, port: int) -> Socket:
+        """ make target connect to given address:port and get socket object """
         sockfd = self.socket(family=AF_INET, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_in.build(
             {'sin_addr': pysock.inet_aton(address), 'sin_port': pysock.htons(port)})
@@ -31,38 +81,17 @@ class Network:
         self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if self._client.errno:
             raise ZShellError(f'failed connecting to: {address}:{port} ({self._client.errno})')
-        return sockfd
+        return Socket(self._client, sockfd)
 
-    def unix_connect(self, filename: str) -> int:
-        """ make target connect to given unix path and get connection fd """
+    def unix_connect(self, filename: str) -> Socket:
+        """ make target connect to given unix path and get socket object """
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
         self._client.symbols.errno[0] = 0
         self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if self._client.errno:
             raise ZShellError(f'failed connecting to: {filename} ({self._client.errno})')
-        return sockfd
-
-    def send(self, fd: int, buf: bytes, size: int, flags: int = 0) -> int:
-        """ send(fd, buf, size, flags) at remote. read man for more details. """
-        n = self._client.symbols.send(fd, buf, size, flags).c_int64
-        if n < 0:
-            raise ZShellError(f'failed to write on fd: {fd}')
-        return n
-
-    def sendall(self, sockfd: int, buf: bytes):
-        """ call send(sockfd, buf) till all buffer is sent """
-        while buf:
-            err = self.send(sockfd, buf, len(buf), 0)
-            buf = buf[err:]
-
-    def recv(self, sockfd: int, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
-        """ recv(fd, buf, size, flags) at remote. read man for more details. """
-        with self._client.safe_malloc(size) as buf:
-            n = self._client.symbols.recv(sockfd, buf, size, flags).c_int64
-            if n < 0:
-                raise ZShellError(f'failed to write on fd: {sockfd}')
-            return buf
+        return Socket(self._client, sockfd)
 
     @property
     def interfaces(self) -> typing.List[Interface]:
