@@ -10,9 +10,11 @@ class Processes:
         self._client = client
 
     def kill(self, pid: int, sig: int):
+        """ kill(pid, sig) at remote. read man for more details. """
         return self._client.kill(pid, sig)
 
     def waitpid(self, pid: int):
+        """ waitpid(pid, sig) at remote. read man for more details. """
         with self._client.safe_malloc(8) as stat_loc:
             err = self._client.symbols.waitpid(pid, stat_loc, 0)
             if err:

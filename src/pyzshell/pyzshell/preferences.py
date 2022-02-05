@@ -1,7 +1,5 @@
 import typing
 
-import pyzshell
-
 kCFPreferencesCurrentUser = 'kCFPreferencesCurrentUser'
 kCFPreferencesAnyUser = 'kCFPreferencesAnyUser'
 kCFPreferencesCurrentHost = 'kCFPreferencesCurrentHost'
@@ -10,7 +8,10 @@ kCFPreferencesAnyHost = 'kCFPreferencesAnyHost'
 
 class Preferences:
     def __init__(self, client):
-        self._client = client  # type: pyzshell.client.darwin_client.DarwinClient
+        """
+        :param pyzshell.client.darwin_client.DarwinClient client:
+        """
+        self._client = client
 
     def copy_key_list(self, application_id: str, username: str = kCFPreferencesCurrentUser,
                       hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:

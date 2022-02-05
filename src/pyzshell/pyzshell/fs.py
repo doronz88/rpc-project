@@ -8,6 +8,10 @@ class File:
     CHUNK_SIZE = 1024
 
     def __init__(self, client, fd: int):
+        """
+        :param pyzshell.client.client.Client client:
+        :param fd:
+        """
         self._client = client
         self.fd = fd
 
