@@ -3,6 +3,7 @@ from socket import socket
 
 from pyzshell.client.client import Client
 from pyzshell.client.darwin_client import DarwinClient
+from pyzshell.client.linux_client import LinuxClient
 from pyzshell.protocol import UNAME_VERSION_LEN, DEFAULT_PORT
 
 
@@ -27,5 +28,7 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
 
     if os_flavor == 'darwin':
         return DarwinClient(sock, uname_version, hostname, port)
+    elif 'Ubuntu' in uname_version:
+        return LinuxClient(sock, uname_version, hostname, port)
 
     return Client(sock, uname_version, hostname, port)
