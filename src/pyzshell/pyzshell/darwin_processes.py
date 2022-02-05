@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Optional
+from typing import Optional, List
 
 from construct import Array
 
@@ -14,6 +14,7 @@ Fd = namedtuple('Fd', 'fd path')
 
 class DarwinProcesses(Processes):
     def get_proc_path(self, pid: int) -> Optional[str]:
+        """ call proc_pidpath(filename, ...) at remote. review xnu header for more details. """
         with self._client.safe_malloc(MAXPATHLEN) as path:
             path_len = self._client.symbols.proc_pidpath(pid, path, MAXPATHLEN)
             if not path_len:
@@ -21,6 +22,7 @@ class DarwinProcesses(Processes):
             return path.peek(path_len).decode()
 
     def get_fds(self, pid: int) -> Optional[list]:
+        """ get a list of process opened file descriptors """
         result = []
         size = self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, 0, 0)
 
@@ -44,12 +46,14 @@ class DarwinProcesses(Processes):
             return result
 
     def get_task_all_info(self, pid: int):
+        """ get a list of process opened file descriptors """
         with self._client.safe_malloc(proc_taskallinfo.sizeof()) as pti:
             if not self._client.symbols.proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
                 raise ZShellError('proc_pidinfo(PROC_PIDTASKALLINFO) failed')
             return proc_taskallinfo.parse_stream(pti)
 
-    def list(self) -> list:
+    def list(self) -> List[Process]:
+        """ list all currently running processes """
         n = self._client.symbols.proc_listallpids(0, 0)
         pid_buf_size = pid_t.sizeof() * n
         with self._client.safe_malloc(pid_buf_size) as pid_buf:

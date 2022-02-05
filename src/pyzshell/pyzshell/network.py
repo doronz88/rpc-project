@@ -13,6 +13,10 @@ class Socket:
     CHUNK_SIZE = 1024
 
     def __init__(self, client, fd: int):
+        """
+        :param pyzshell.client.client.Client client:
+        :param fd:
+        """
         self._client = client
         self.fd = fd
 
@@ -63,6 +67,9 @@ class Socket:
 
 class Network:
     def __init__(self, client):
+        """
+        :param pyzshell.client.client.Client client:
+        """
         self._client = client
 
     def socket(self, family=AF_INET, type=SOCK_STREAM, proto=0) -> int:
