@@ -4,9 +4,10 @@ from collections import namedtuple
 
 from pyzshell.exceptions import ZShellError
 from pyzshell.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
-from pyzshell.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr
+from pyzshell.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
+Hostentry = namedtuple('Hostentry', 'name aliases addresses')
 
 
 class Socket:
@@ -99,6 +100,27 @@ class Network:
         if self._client.errno:
             raise ZShellError(f'failed connecting to: {filename} ({self._client.errno})')
         return Socket(self._client, sockfd)
+
+    def gethostbyname(self, name: str) -> Hostentry:
+        aliases = []
+        addresses = []
+
+        result = hostent(self._client).parse_stream(self._client.symbols.gethostbyname(name))
+        p_aliases = result.h_aliases
+
+        i = 0
+        while p_aliases[i]:
+            aliases.append(p_aliases[i].peek_str())
+            i += 1
+
+        addr_list = result.h_addr_list
+
+        i = 0
+        while addr_list[i]:
+            addresses.append(pysock.inet_ntoa(addr_list[i].peek(4)))
+            i += 1
+
+        return Hostentry(name=result.h_name, aliases=aliases, addresses=addresses)
 
     @property
     def interfaces(self) -> typing.List[Interface]:
