@@ -9,6 +9,7 @@ utsname = Struct(
     'release' / PaddedString(_UTSNAME_LENGTH, 'utf8'),
     'version' / PaddedString(_UTSNAME_LENGTH, 'utf8'),
     'machine' / PaddedString(_UTSNAME_LENGTH, 'utf8'),
+    'domainname' / PaddedString(_UTSNAME_LENGTH, 'utf8'),
 )
 
 dirent = Struct(

@@ -13,6 +13,5 @@ class LinuxClient(Client):
     @cached_property
     def uname(self):
         with self.safe_calloc(utsname.sizeof()) as uname:
-            uname.poke(b'\x00' * utsname.sizeof())
             assert 0 == self.symbols.uname(uname)
             return utsname.parse_stream(uname)
