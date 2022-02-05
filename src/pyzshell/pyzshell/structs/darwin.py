@@ -1,5 +1,5 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed
+    Bytes, Computed, FlagsEnum
 
 from pyzshell.structs.generic import uid_t, gid_t, long, mode_t
 
@@ -173,10 +173,45 @@ PROX_FDTYPE_KQUEUE = 5
 PROX_FDTYPE_PIPE = 6
 PROX_FDTYPE_FSEVENTS = 7
 
+pbi_flags_t = FlagsEnum(Int32ul,
+                        # pbi_flags values
+                        PROC_FLAG_SYSTEM=1,  # System process
+                        PROC_FLAG_TRACED=2,  # process currently being traced, possibly by gdb
+                        PROC_FLAG_INEXIT=4,  # process is working its way in exit()
+                        PROC_FLAG_PPWAIT=8,
+                        PROC_FLAG_LP64=0x10,  # 64bit process
+                        PROC_FLAG_SLEADER=0x20,  # The process is the session leader
+                        PROC_FLAG_CTTY=0x40,  # process has a control tty
+                        PROC_FLAG_CONTROLT=0x80,  # Has a controlling terminal
+                        PROC_FLAG_THCWD=0x100,  # process has a thread with cwd
+                        # process control bits for resource starvation
+                        PROC_FLAG_PC_THROTTLE=0x200,
+                        # In resource starvation situations, this process is to be throttled
+                        PROC_FLAG_PC_SUSP=0x400,  # In resource starvation situations, this process is to be suspended
+                        PROC_FLAG_PC_KILL=0x600,  # In resource starvation situations, this process is to be terminated
+                        PROC_FLAG_PC_MASK=0x600,
+                        # process action bits for resource starvation
+                        PROC_FLAG_PA_THROTTLE=0x800,  # The process is currently throttled due to resource starvation
+                        PROC_FLAG_PA_SUSP=0x1000,  # The process is currently suspended due to resource starvation
+                        PROC_FLAG_PSUGID=0x2000,  # process has set privileges since last exec
+                        PROC_FLAG_EXEC=0x4000,  # process has called exec
+                        PROC_FLAG_DARWINBG=0x8000,  # process in darwin background
+                        PROC_FLAG_EXT_DARWINBG=0x10000,  # process in darwin background - external enforcement
+                        PROC_FLAG_IOS_APPLEDAEMON=0x20000,  # Process is apple daemon
+                        PROC_FLAG_DELAYIDLESLEEP=0x40000,  # Process is marked to delay idle sleep on disk IO
+                        PROC_FLAG_IOS_IMPPROMOTION=0x80000,  # Process is daemon which receives importane donation
+                        PROC_FLAG_ADAPTIVE=0x100000,  # Process is adaptive
+                        PROC_FLAG_ADAPTIVE_IMPORTANT=0x200000,  # Process is adaptive, and is currently important
+                        PROC_FLAG_IMPORTANCE_DONOR=0x400000,  # Process is marked as an importance donor
+                        PROC_FLAG_SUPPRESSED=0x800000,  # Process is suppressed
+                        PROC_FLAG_APPLICATION=0x1000000,  # Process is an application
+                        PROC_FLAG_IOS_APPLICATION=0x1000000,  # Process is an application
+                        )
+
 MAXCOMLEN = 16
 
 proc_bsdinfo = Struct(
-    'pbi_flags' / Int32ul,  # 64bit emulated etc
+    'pbi_flags' / pbi_flags_t,  # 64bit emulated etc
     'pbi_status' / Int32ul,
     'pbi_xstatus' / Int32ul,
     'pbi_pid' / Int32ul,
