@@ -1,7 +1,7 @@
 import posixpath
 
 from pyzshell.exceptions import ZShellError, InvalidArgumentError
-from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR
+from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR
 
 
 class File:
@@ -15,23 +15,27 @@ class File:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.fd != -1:
-            self.close()
-
-    def __del__(self):
-        if self.fd != -1:
-            self.close()
+        self.close()
 
     def close(self):
         """ close(fd) at remote. read man for more details. """
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
             raise ZShellError(f'failed to close fd: {fd}')
-        self.fd = -1
 
-    def write(self, buf: bytes, size: int) -> int:
+    def seek(self, offset: int, whence: int) -> int:
+        """ lseek(fd, offset, whence) at remote. read man for more details. """
+        err = self._client.symbols.lseek(self.fd, offset, whence).c_int32
+        if err < 0:
+            raise ZShellError(f'failed to lseek fd: {self.fd}')
+        return err
+
+    def tell(self) -> int:
+        return self.seek(0, SEEK_CUR)
+
+    def write(self, buf: bytes) -> int:
         """ write(fd, buf, size) at remote. read man for more details. """
-        n = self._client.symbols.write(self.fd, buf, size).c_int64
+        n = self._client.symbols.write(self.fd, buf, len(buf)).c_int64
         if n < 0:
             raise ZShellError(f'failed to write on fd: {self.fd}')
         return n
@@ -39,7 +43,7 @@ class File:
     def writeall(self, buf: bytes):
         """ continue call write() until """
         while buf:
-            err = self.write(buf, len(buf))
+            err = self.write(buf)
             buf = buf[err:]
 
     def read(self, size: int = CHUNK_SIZE) -> bytes:
@@ -94,16 +98,25 @@ class Fs:
         call open(filename, mode, access) at remote and get a context manager
         file object
         :param filename: filename to be opened
-        :param mode: 'r' for read or 'w' for write
+        :param mode: one of:
+            'r' - read only
+            'r+' - read and write. exception if file doesn't exist
+            'rw' - read and write. create if it doesn't exist. also truncate.
+            'w' - write only. create if it doesn't exist. also truncate.
+            'w+' - read and write. create if doesn't exist.
         :param access: access mode as octal value
         :return: a context manager file object
         """
-        if mode == 'r':
-            mode = O_RDONLY
-        elif mode == 'w':
-            mode = O_WRONLY | O_CREAT | O_TRUNC
-        else:
-            raise InvalidArgumentError(f'mode can be either "r" or "w". got: {mode}')
+        available_modes = {
+            'r': O_RDONLY,
+            'r+': O_RDWR,
+            'rw': O_RDWR | O_CREAT | O_TRUNC,
+            'w': O_WRONLY | O_CREAT | O_TRUNC,
+            'w+': O_RDWR | O_CREAT,
+        }
+        mode = available_modes.get(mode)
+        if mode is None:
+            raise InvalidArgumentError(f'mode can be only one of: {available_modes.keys()}')
 
         fd = self._client.symbols.open(filename, mode, access).c_int32
         if fd < 0:
