@@ -38,7 +38,8 @@ def shell(ctx, argv):
 @click.argument('dst', required=False)
 @click.pass_context
 def pull(ctx, src, dst):
-    buf = ctx.obj['client'].fs.read_file(src)
+    with ctx.obj['client'].fs.open(src, 'r') as f:
+        buf = f.readall()
     if dst:
         with open(dst, 'wb') as f:
             f.write(buf)
@@ -51,7 +52,8 @@ def pull(ctx, src, dst):
 @click.argument('dst')
 @click.pass_context
 def push(ctx, src, dst):
-    ctx.obj['client'].fs.write_file(dst, src.read())
+    with ctx.obj['client'].fs.open(dst, 'w') as f:
+        f.write(src.read())
 
 
 @cli.command()

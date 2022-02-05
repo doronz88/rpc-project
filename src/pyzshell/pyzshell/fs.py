@@ -1,12 +1,65 @@
 import posixpath
 
-from pyzshell.exceptions import ZShellError
+from pyzshell.exceptions import ZShellError, InvalidArgumentError
 from pyzshell.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR
 
 
-class Fs:
+class File:
     CHUNK_SIZE = 1024
 
+    def __init__(self, client, fd: int):
+        self._client = client
+        self.fd = fd
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        """ close(fd) at remote. read man for more details. """
+        fd = self._client.symbols.close(self.fd).c_int32
+        if fd < 0:
+            raise ZShellError(f'failed to close fd: {fd}')
+
+    def write(self, buf: bytes, size: int) -> int:
+        """ write(fd, buf, size) at remote. read man for more details. """
+        n = self._client.symbols.write(self.fd, buf, size).c_int64
+        if n < 0:
+            raise ZShellError(f'failed to write on fd: {self.fd}')
+        return n
+
+    def writeall(self, buf: bytes):
+        """ continue call write() until """
+        while buf:
+            err = self.write(buf, len(buf))
+            buf = buf[err:]
+
+    def read(self, size: int = CHUNK_SIZE) -> bytes:
+        """ read file at remote """
+        with self._client.safe_malloc(size) as chunk:
+            err = self._client.symbols.read(self.fd, chunk, self.CHUNK_SIZE).c_int64
+            if err < 0:
+                raise ZShellError(f'read failed for fd: {self.fd}')
+            return chunk.peek(err)
+
+    def readall(self, chunk_size: int = CHUNK_SIZE) -> bytes:
+        """ read file at remote """
+        buf = b''
+        with self._client.safe_malloc(chunk_size) as chunk:
+            while True:
+                err = self._client.symbols.read(self.fd, chunk, chunk_size).c_int64
+                if err == 0:
+                    # EOF
+                    break
+                if err < 0:
+                    raise ZShellError(f'read failed for fd: {self.fd}')
+                buf += chunk.peek(err)
+        return buf
+
+
+class Fs:
     def __init__(self, client):
         self._client = client
 
@@ -30,42 +83,26 @@ class Fs:
         if self._client.symbols.chdir(filename).c_int64 < 0:
             raise ZShellError(f'failed to chdir: {filename}')
 
-    def open(self, filename: str, mode, access: int = 0o777) -> int:
-        """ open(filename, mode) at remote. read man for more details. """
+    def open(self, filename: str, mode: str, access: int = 0o777) -> File:
+        """
+        call open(filename, mode, access) at remote and get a context manager
+        file object
+        :param filename: filename to be opened
+        :param mode: 'r' for read or 'w' for write
+        :param access: access mode as octal value
+        :return: a context manager file object
+        """
+        if mode == 'r':
+            mode = O_RDONLY
+        elif mode == 'w':
+            mode = O_WRONLY | O_CREAT | O_TRUNC
+        else:
+            raise InvalidArgumentError(f'mode can be either "r" or "w". got: {mode}')
+
         fd = self._client.symbols.open(filename, mode, access).c_int32
         if fd < 0:
             raise ZShellError(f'failed to open: {filename} for writing')
-        return fd
-
-    def write(self, fd: int, buf: bytes, size: int) -> int:
-        """ write(fd, buf, size) at remote. read man for more details. """
-        n = self._client.symbols.write(fd, buf, size).c_int64
-        if n < 0:
-            raise ZShellError(f'failed to write on fd: {fd}')
-        return n
-
-    def write_file(self, filename: str, buf: bytes, access: int = 0o777) -> None:
-        """ write file at remote """
-        fd = self.open(filename, O_WRONLY | O_CREAT | O_TRUNC, access)
-        while buf:
-            err = self.write(fd, buf, len(buf))
-            buf = buf[err:]
-        self._client.symbols.close(fd)
-
-    def read_file(self, filename: str) -> bytes:
-        """ read file at remote """
-        fd = self.open(filename, O_RDONLY)
-        buf = b''
-        with self._client.safe_malloc(self.CHUNK_SIZE) as chunk:
-            while True:
-                err = self._client.symbols.read(fd, chunk, self.CHUNK_SIZE).c_int64
-                if err == 0:
-                    break
-                elif err < 0:
-                    raise ZShellError(f'read failed for: {filename}')
-                buf += chunk.peek(err)
-        self._client.symbols.close(fd)
-        return buf
+        return File(self._client, fd)
 
     def symlink(self, target: str, linkpath: str) -> int:
         """ symlink(target, linkpath) at remote. read man for more details. """

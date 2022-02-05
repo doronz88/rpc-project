@@ -24,3 +24,7 @@ class CfSerializationError(ZShellError):
 
 class SpawnError(ZShellError):
     pass
+
+
+class InvalidArgumentError(ZShellError):
+    pass
