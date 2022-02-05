@@ -3,6 +3,6 @@ from pyzshell.linux_fs import LinuxFs
 
 
 class LinuxClient(Client):
-    def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
-        super().__init__(sock, uname_version, hostname, port)
+    def __init__(self, sock, sysname: str, hostname: str, port: int = None):
+        super().__init__(sock, sysname, hostname, port)
         self.fs = LinuxFs(self)

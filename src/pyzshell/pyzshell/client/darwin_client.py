@@ -12,8 +12,8 @@ from pyzshell.symbol import DarwinSymbol
 
 class DarwinClient(Client):
 
-    def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
-        super().__init__(sock, uname_version, hostname, port)
+    def __init__(self, sock, sysname: str, hostname: str, port: int = None):
+        super().__init__(sock, sysname, hostname, port)
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
 
         self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", 2)
