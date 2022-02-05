@@ -15,13 +15,19 @@ class File:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        if self.fd != -1:
+            self.close()
+
+    def __del__(self):
+        if self.fd != -1:
+            self.close()
 
     def close(self):
         """ close(fd) at remote. read man for more details. """
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
             raise ZShellError(f'failed to close fd: {fd}')
+        self.fd = -1
 
     def write(self, buf: bytes, size: int) -> int:
         """ write(fd, buf, size) at remote. read man for more details. """
