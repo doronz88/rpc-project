@@ -507,7 +507,7 @@ void handle_client(int sockfd)
     // notify client of the connected target os version
     struct utsname uname_buf;
     CHECK(0 == uname(&uname_buf));
-    CHECK(sendall(sockfd, uname_buf.version, UNAME_VERSION_LEN));
+    CHECK(sendall(sockfd, uname_buf.sysname, UNAME_VERSION_LEN));
 
     while (true)
     {

@@ -50,13 +50,13 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock, uname_version: str, hostname: str, port: int = None):
+    def __init__(self, sock, sysname: str, hostname: str, port: int = None):
         self._hostname = hostname
         self._port = port
         self._sock = sock
         self._old_settings = None
         self._endianness = '<'
-        self._uname_version = uname_version
+        self._sysname = sysname
         self._dlsym_global_handle = -1  # RTLD_NEXT
 
         # whether the system uses inode structs of 64 bits
@@ -367,6 +367,6 @@ class Client:
     def __repr__(self):
         buf = '<'
         buf += f'PID:{self.symbols.getpid():d} UID:{self.symbols.getuid():d} GID:{self.symbols.getgid():d} ' \
-               f'VERSION:{self._uname_version}'
+               f'SYSNAME:{self._sysname}'
         buf += '>'
         return buf
