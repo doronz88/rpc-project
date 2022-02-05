@@ -40,6 +40,17 @@ sockaddr = Struct(
 )
 
 
+def hostent(client):
+    return Struct(
+        '_h_name' / SymbolFormatField(client),
+        'h_name' / Pointer(this._h_name, CString('utf8')),
+        'h_aliases' / SymbolFormatField(client),
+        'h_addrtype' / Int32ul,
+        'h_length' / Int32ul,
+        'h_addr_list' / SymbolFormatField(client),
+    )
+
+
 def ifaddrs(client):
     return Struct(
         '_ifa_next' / SymbolFormatField(client),
