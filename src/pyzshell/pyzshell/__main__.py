@@ -13,6 +13,7 @@ logging.getLogger('asyncio').disabled = True
 logging.getLogger('parso').disabled = True
 logging.getLogger('parso.cache').disabled = True
 logging.getLogger('parso.python.diff').disabled = True
+logging.getLogger('blib2to3.pgen2.driver').disabled = True
 
 
 @click.group()
