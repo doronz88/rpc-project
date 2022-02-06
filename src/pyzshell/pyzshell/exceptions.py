@@ -28,3 +28,7 @@ class SpawnError(ZShellError):
 
 class InvalidArgumentError(ZShellError):
     pass
+
+
+class FailedToConnectError(ZShellError):
+    pass
