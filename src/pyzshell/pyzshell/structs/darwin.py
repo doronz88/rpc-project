@@ -1,5 +1,5 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum
+    Bytes, Computed, FlagsEnum, Int16sl
 
 from pyzshell.structs.generic import uid_t, gid_t, long, mode_t
 
@@ -84,6 +84,59 @@ stat64 = Struct(
     'st_gen' / Int32ul,  # user defined flags for file
     'st_lspare' / Int32ul,
     'st_qspare' / Array(2, Int64sl),
+)
+
+MFSNAMELEN = 15  # length of fs type name, not inc. nul
+MNAMELEN = 90  # length of buffer for returned name
+
+# when _DARWIN_FEATURE_64_BIT_INODE is NOT defined
+statfs64 = Struct(
+    'f_otype' / Int16sl,  # type of file system (reserved: zero)
+    'f_oflags' / Int16sl,  # copy of mount flags (reserved: zero)
+    Padding(4),
+    'f_bsize' / Int64ul,  # fundamental file system block size
+    'f_iosize' / Int64ul,  # optimal transfer block size
+    'f_blocks' / Int64ul,  # total data blocks in file system
+    'f_bfree' / Int64ul,  # free blocks in fs
+    'f_bavail' / Int64ul,  # free blocks avail to non-superuser
+    'f_files' / Int64ul,  # total file nodes in file system
+    'f_ffree' / Int64ul,  # free file nodes in fs
+    'f_fsid' / fsid_t,  # file system id
+    'f_owner' / uid_t,  # user that mounted the file system
+    Padding(4),
+    'f_reserved1' / Int16sl,  # reserved for future use
+    'f_type' / Int16sl,  # type of file system (reserved)
+    Padding(4),
+    'f_flags' / Int64ul,  # copy of mount flags
+    'f_reserved2' / Int64ul,  # reserved for future use
+    'f_fstypename' / PaddedString(MFSNAMELEN, 'utf8'),  # fs type name
+    'f_mntonname' / PaddedString(MNAMELEN, 'utf8'),  # directory on which mounted
+    'f_mntfromname' / PaddedString(MNAMELEN, 'utf8'),  # mounted file system
+    'f_reserved3' / Int8ul,  # reserved for future use
+    'f_reserved4' / Int64ul,  # reserved for future use
+)
+
+MFSTYPENAMELEN = 16  # length of fs type name including null
+MNAMELEN = MAXPATHLEN
+
+# when _DARWIN_FEATURE_64_BIT_INODE is defined
+statfs32 = Struct(
+    'f_bsize' / Int32ul,  # fundamental file system block size
+    'f_iosize' / Int32sl,  # optimal transfer block size
+    'f_blocks' / Int64ul,  # total data blocks in file system
+    'f_bfree' / Int64ul,  # free blocks in fs
+    'f_bavail' / Int64ul,  # free blocks avail to non-superuser
+    'f_files' / Int64ul,  # total file nodes in file system
+    'f_ffree' / Int64ul,  # free file nodes in fs
+    'f_fsid' / fsid_t,  # file system id
+    'f_owner' / uid_t,  # user that mounted the filesystem
+    'f_type' / Int32ul,  # type of filesystem
+    'f_flags' / Int32ul,  # copy of mount exported flags
+    'f_fssubtype' / Int32ul,  # fs sub-type (flavor)
+    'f_fstypename' / PaddedString(MFSTYPENAMELEN, 'utf8'),  # fs type name
+    'f_mntonname' / PaddedString(MAXPATHLEN, 'utf8'),  # directory on which mounted
+    'f_mntfromname' / PaddedString(MAXPATHLEN, 'utf8'),  # mounted filesystem
+    'f_reserved' / Int32ul[8],  # For future use
 )
 
 PROC_ALL_PIDS = 1

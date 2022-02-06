@@ -1,6 +1,6 @@
-from pyzshell.exceptions import BadReturnValueError
+from pyzshell.exceptions import BadReturnValueError, ZShellError
 from pyzshell.fs import Fs
-from pyzshell.structs.darwin import dirent32, dirent64, stat32, stat64
+from pyzshell.structs.darwin import dirent32, dirent64, stat32, stat64, statfs64, statfs32
 
 
 class DarwinFs(Fs):
@@ -35,3 +35,12 @@ class DarwinFs(Fs):
             result.append(entry)
         self._client.symbols.closedir(dp)
         return result
+
+    def statfs(self, path: str):
+        statfs = statfs64
+        if self._client.inode64:
+            statfs = statfs32
+        with self._client.safe_malloc(statfs.sizeof()) as buf:
+            if 0 != self._client.symbols.statfs(path, buf):
+                raise ZShellError(f'statfs failed for: {path}')
+            return statfs.parse_stream(buf)
