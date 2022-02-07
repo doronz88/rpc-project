@@ -51,5 +51,5 @@ To execute the server:
 Connecting via:
 
 ```shell
-python3 -m rpcclient <HOST> ishell
+python3 -m rpcclient <HOST> [-p port]
 ```
