@@ -175,7 +175,7 @@ class Client:
         self._sock.sendall(message)
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
-              tty=False):
+              tty=False, background=False):
         """ spawn a new process and forward its stdin, stdout & stderr """
         if argv is None:
             argv = self.DEFAULT_ARGV
@@ -191,6 +191,11 @@ class Client:
             raise
 
         logging.info(f'shell process started as pid: {pid}')
+
+        if background:
+            # if in background was requested, we can just detach this connection
+            self.reconnect()
+            return
 
         self._sock.setblocking(False)
 
