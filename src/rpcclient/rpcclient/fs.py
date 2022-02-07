@@ -175,22 +175,22 @@ class Fs:
     def chmod(self, filename: str, mode: int):
         """ chmod(filename, mode) at remote. read man for more details. """
         if self._client.symbols.chmod(filename, mode).c_int32 < 0:
-            raise BadReturnValueError(f'failed to chmod: {filename}')
+            raise BadReturnValueError(f'failed to chmod: {filename} ({self._client.last_error})')
 
     def remove(self, filename: str):
         """ remove(filename) at remote. read man for more details. """
         if self._client.symbols.remove(filename).c_int32 < 0:
-            raise BadReturnValueError(f'failed to remove: {filename}')
+            raise BadReturnValueError(f'failed to remove: {filename} ({self._client.last_error})')
 
     def mkdir(self, filename: str, mode: int):
         """ mkdir(filename, mode) at remote. read man for more details. """
         if self._client.symbols.mkdir(filename, mode).c_int64 < 0:
-            raise BadReturnValueError(f'failed to mkdir: {filename}')
+            raise BadReturnValueError(f'failed to mkdir: {filename} ({self._client.last_error})')
 
     def chdir(self, path: str):
         """ chdir(filename) at remote. read man for more details. """
         if self._client.symbols.chdir(path).c_int64 < 0:
-            raise BadReturnValueError(f'failed to chdir: {path}')
+            raise BadReturnValueError(f'failed to chdir: {path} ({self._client.last_error})')
 
     def open(self, filename: str, mode: str, access: int = 0o777) -> File:
         """
@@ -219,21 +219,22 @@ class Fs:
 
         fd = self._client.symbols.open(filename, mode, access).c_int32
         if fd < 0:
-            raise BadReturnValueError(f'failed to open: {filename} for writing')
+            raise BadReturnValueError(f'failed to open: {filename} ({self._client.last_error})')
         return File(self._client, fd)
 
     def symlink(self, target: str, linkpath: str) -> int:
         """ symlink(target, linkpath) at remote. read man for more details. """
         err = self._client.symbols.symlink(target, linkpath).c_int64
         if err < 0:
-            raise BadReturnValueError(f'symlink failed to create link: {linkpath}->{target}')
+            raise BadReturnValueError(
+                f'symlink failed to create link: {linkpath}->{target} ({self._client.last_error})')
         return err
 
     def link(self, target: str, linkpath: str) -> int:
         """ link(target, linkpath) - hardlink at remote. read man for more details. """
         err = self._client.symbols.link(target, linkpath).c_int64
         if err < 0:
-            raise BadReturnValueError(f'link failed to create link: {linkpath}->{target}')
+            raise BadReturnValueError(f'link failed to create link: {linkpath}->{target} ({self._client.last_error})')
         return err
 
     def pwd(self) -> str:
@@ -241,7 +242,7 @@ class Fs:
             with the special values NULL, 0 the buffer is allocated dynamically """
         chunk = self._client.symbols.getcwd(0, 0)
         if chunk == 0:
-            raise BadReturnValueError('pwd failed.')
+            raise BadReturnValueError(f'pwd failed ({self._client.last_error})')
         buf = chunk.peek_str()
         self._client.symbols.free(chunk)
         return buf
