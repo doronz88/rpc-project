@@ -76,10 +76,10 @@ class DirEntry:
 
 
 class ScandirIterator:
-    def __init__(self, path, client):
+    def __init__(self, path, dp, client):
         self.path = path
         self._client = client
-        self._dirp = 0
+        self._dirp = dp
 
     def __enter__(self):
         return self
