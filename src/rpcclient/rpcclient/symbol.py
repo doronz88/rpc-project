@@ -18,7 +18,7 @@ class SymbolFormatField(FormatField):
     """
 
     def __init__(self, client):
-        super(SymbolFormatField, self).__init__('<', 'Q')
+        super().__init__('<', 'Q')
         self._client = client
 
     def _parse(self, stream, context, path):
