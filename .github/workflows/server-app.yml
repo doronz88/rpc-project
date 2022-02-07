@@ -10,7 +10,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./src/remote_server
+        working-directory: ./src/rpcserver
 
     strategy:
       matrix:

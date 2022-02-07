@@ -6,20 +6,15 @@ SYSROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
 CC="$(xcrun -f --sdk $SDK clang)"
 CFLAGS="-arch $ARCH --sysroot=$SYSROOT"
 
-cd remote_server
+cd rpcserver
 make clean
 make all SERVER_CC="$CC" SERVER_CFLAGS="$CFLAGS"
 
 cd ..
 
-cd basic_shell
-make clean
-make all CC="$CC" CFLAGS="$CFLAGS" LEMON_CC="gcc" LEMON_CFLAGS=""
+server_binary=rpcserver_${SDK}_${ARCH}
+cp rpcserver/rpcserver $server_binary
 
-cd ..
-
-cp remote_server/server basic_shell/shell .
-
-for i in server shell; do
+for i in $server_binary ; do
     codesign -s - --entitlements ents.plist --generate-entitlement-der $i
 done
