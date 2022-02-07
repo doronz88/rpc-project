@@ -4,7 +4,7 @@ def test_stat_sanity(client, tmp_path):
     client_stat = client.fs.stat(file)
     path_stat = file.stat()
     assert path_stat.st_dev == client_stat.st_dev
-    # assert path_stat.st_ino == client_stat.st_ino
+    assert path_stat.st_ino == client_stat.st_ino  # TODO: verify why this test fails on github workflow
     assert path_stat.st_mode == client_stat.st_mode
     assert path_stat.st_nlink == client_stat.st_nlink
     assert path_stat.st_uid == client_stat.st_uid

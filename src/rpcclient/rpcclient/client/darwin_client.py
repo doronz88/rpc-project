@@ -28,7 +28,7 @@ class DarwinClient(Client):
             self.symbols.CFDictionaryGetTypeID(): 'dict',
         }
 
-        if self.is_idevice:
+        if self.uname.machine != 'x86_64':
             self.inode64 = True
         self.fs = DarwinFs(self)
         self.prefs = Preferences(self)
