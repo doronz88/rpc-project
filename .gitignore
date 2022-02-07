@@ -28,14 +28,12 @@
 *.i*86
 *.x86_64
 *.hex
-src/basic_shell/shell
-src/remote_server/server
-src/client
-src/server
-src/shell
+src/rpcserver/rpcserver
+src/rpcserver_*
 
-# Python cache
+# Caches
 __pycache__
+_CodeSignature
 *.egg-info
 
 # Debug files
