@@ -26,9 +26,6 @@ class DarwinDirEntry(DirEntry):
 
 class DarwinScandirIterator(ScandirIterator):
     def __enter__(self):
-        self._dirp = self._client.symbols.opendir(self.path)
-        if not self._dirp:
-            raise BadReturnValueError(f'failed to opendir(): {self.path}')
         return self
 
     def __iter__(self):
@@ -64,7 +61,10 @@ class DarwinFs(Fs):
     def scandir(self, path: Union[str, Path] = '.'):
         # In case path is instance of pathlib.Path
         path = str(path)
-        return DarwinScandirIterator(path, self._client)
+        dp = self._client.symbols.opendir(path)
+        if not dp:
+            raise BadReturnValueError(f'failed to opendir(): {path} ({self._client.last_error})')
+        return DarwinScandirIterator(path, dp, self._client)
 
     def statfs(self, path: str):
         statfs = statfs64
