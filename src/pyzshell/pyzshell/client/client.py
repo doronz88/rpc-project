@@ -218,12 +218,19 @@ class Client:
 
     @property
     def errno(self):
+        return self.symbols.errno[0]
+
+    @errno.setter
+    def errno(self, value):
+        self.symbols.errno[0] = value
+
+    @property
+    def last_error(self):
         """ get info about the last occurred error """
-        errno = self.symbols.errno[0]
-        if not errno:
-            return
-        err_str = self.symbols.strerror(errno).peek_str()
-        return f'[{errno}] {err_str}'
+        if not self.errno:
+            return ''
+        err_str = self.symbols.strerror(self.errno).peek_str()
+        return f'[{self.errno}] {err_str}'
 
     @property
     def environ(self) -> typing.List[str]:
