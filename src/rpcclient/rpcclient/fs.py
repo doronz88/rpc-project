@@ -167,6 +167,11 @@ class Fs:
     def __init__(self, client):
         self._client = client
 
+    def chown(self, filename: str, owner: int, group: int):
+        """ chmod(filename, mode) at remote. read man for more details. """
+        if self._client.symbols.chown(filename, owner, group).c_int32 < 0:
+            raise BadReturnValueError(f'failed to chown: {filename} ({self._client.last_error})')
+
     def chmod(self, filename: str, mode: int):
         """ chmod(filename, mode) at remote. read man for more details. """
         if self._client.symbols.chmod(filename, mode).c_int32 < 0:
