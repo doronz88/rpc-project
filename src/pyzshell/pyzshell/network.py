@@ -85,20 +85,20 @@ class Network:
         sockfd = self.socket(family=AF_INET, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_in.build(
             {'sin_addr': pysock.inet_aton(address), 'sin_port': pysock.htons(port)})
-        self._client.symbols.errno[0] = 0
+        self._client.errno = 0
         self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if self._client.errno:
-            raise ZShellError(f'failed connecting to: {address}:{port} ({self._client.errno})')
+            raise ZShellError(f'failed connecting to: {address}:{port} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
     def unix_connect(self, filename: str) -> Socket:
         """ make target connect to given unix path and get socket object """
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
-        self._client.symbols.errno[0] = 0
+        self._client.errno = 0
         self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if self._client.errno:
-            raise ZShellError(f'failed connecting to: {filename} ({self._client.errno})')
+            raise ZShellError(f'failed connecting to: {filename} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
     def gethostbyname(self, name: str) -> Hostentry:

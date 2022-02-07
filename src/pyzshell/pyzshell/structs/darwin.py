@@ -54,13 +54,21 @@ stat32 = Struct(
     'st_rdev' / dev_t,  # device type, for special file inode
 
     'st_atimespec' / timespec,  # time of last access
+    'st_atime' / Computed(this.st_atimespec.tv_sec + (this.st_atimespec.tv_nsec / 10**9)),
     'st_mtimespec' / timespec,  # time of last data modification
+    'st_mtime' / Computed(this.st_mtimespec.tv_sec + (this.st_mtimespec.tv_nsec / 10**9)),
     'st_ctimespec' / timespec,  # time of last file status change
-
-    'st_blksize' / Int32sl,  # optimal blocksize for I/O
-    'st_blocks' / Int32sl,  # blocks allocated for file
-    'st_flags' / Int32ul,  # blocks allocated for file
-    'st_gen' / Int32ul,  # user defined flags for file
+    'st_ctime' / Computed(this.st_ctimespec.tv_sec + (this.st_ctimespec.tv_nsec / 10**9)),
+    'st_size' / off_t,  # file size, in bytes
+    Padding(4),
+    'st_blocks' / blkcnt_t,  # blocks allocated for file
+    Padding(4),
+    'st_blksize' / blksize_t,  # optimal blocksize for I/O
+    'st_flags' / Int32ul,  # user defined flags for file
+    'st_gen' / Int32ul,
+    'st_lspare' / Int32sl,
+    'st_qspare' / Array(2, Int64sl),
+    Padding(24),  # Compiled size is 144
 )
 stat64 = Struct(
     'st_dev' / dev_t,  # device inode resides on
