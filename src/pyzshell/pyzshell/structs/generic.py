@@ -1,11 +1,15 @@
 from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, Const, PaddedString, Pointer, \
-    this, CString, LazyBound, Padding, If, Int8ul
+    this, CString, LazyBound, Padding, If, Int8ul, Int64ul
 
 from pyzshell.structs.consts import AF_UNIX, AF_INET, AF_INET6
 from pyzshell.symbol import SymbolFormatField
 
 UNIX_PATH_MAX = 108
 
+short = Int16sl
+u_short = Int16ul
+uint32_t = Int32ul
+uint64_t = Int64ul
 uid_t = Int32ul
 gid_t = Int32ul
 time_t = Int32ul

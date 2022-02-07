@@ -1,7 +1,7 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl
+    Bytes, Computed, FlagsEnum, Int16sl, Union
 
-from pyzshell.structs.generic import uid_t, gid_t, long, mode_t
+from pyzshell.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
@@ -380,4 +380,68 @@ vnode_info_path = Struct(
 vnode_fdinfowithpath = Struct(
     'pfi' / proc_fileinfo,
     'pvip' / vnode_info_path,
+)
+
+sockbuf_info = Struct(
+    'sbi_cc' / uint32_t,
+    'sbi_hiwat' / uint32_t,  # SO_RCVBUF, SO_SNDBUF
+    'sbi_mbcnt' / uint32_t,
+    'sbi_mbmax' / uint32_t,
+    'sbi_lowat' / uint32_t,
+    'sbi_flags' / short,
+    'sbi_timeo' / short,
+)
+
+# TCP Sockets
+
+TSI_T_REXMT = 0  # retransmit
+TSI_T_PERSIST = 1  # retransmit persistence
+TSI_T_KEEP = 2  # keep alive
+TSI_T_2MSL = 3  # 2*msl quiet time timer
+TSI_T_NTIMERS = 4
+
+tcp_sockinfo = Struct(
+    # 'tcpsi_ini' / in_sockinfo,  # TODO: complete
+    'in_sockinfo' / Int32sl,
+    'tcpsi_timer' / Int32sl[TSI_T_NTIMERS],
+    'tcpsi_mss' / Int32sl,
+    'tcpsi_flags' / uint32_t,
+    'rfu_1' / uint32_t,  # reserved
+    'tcpsi_tp' / uint64_t,  # opaque handle of TCP protocol control block
+)
+
+socket_info = Struct(
+    'soi_stat' / vinfo_stat,
+    'soi_so' / uint64_t,  # opaque handle of socket
+    'soi_pcb' / uint64_t,  # opaque handle of protocol control block
+    'soi_type' / Int32sl,
+    'soi_protocol' / Int32sl,
+    'soi_family' / Int32sl,
+    'soi_options' / short,
+    'soi_linger' / short,
+    'soi_state' / short,
+    'soi_qlen' / short,
+    'soi_incqlen' / short,
+    'soi_qlimit' / short,
+    'soi_timeo' / short,
+    'soi_error' / u_short,
+    'soi_oobmark' / uint32_t,
+    'soi_rcv' / sockbuf_info,
+    'soi_snd' / sockbuf_info,
+    'soi_kind' / Int32sl,
+    'rfu_1' / uint32_t,
+
+    'soi_proto' / Union(0,
+                        # 'pri_in' / in_sockinfo,
+                        # 'tcp_sockinfo' / pri_tcp,  # TODO: complete
+                        # 'un_sockinfo' / pri_un,
+                        # 'ndrv_info' / pri_ndrv,
+                        # 'kern_event_info' / pri_kern_event,
+                        # 'kern_ctl_info' / pri_kern_ctl,
+                        )
+)
+
+socket_fdinfo = Struct(
+    'pfi' / proc_fileinfo,
+    'psi' / socket_info,
 )
