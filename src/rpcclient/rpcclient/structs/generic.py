@@ -5,6 +5,7 @@ from rpcclient.structs.consts import AF_UNIX, AF_INET, AF_INET6
 from rpcclient.symbol import SymbolFormatField
 
 UNIX_PATH_MAX = 108
+CANON_NAME_MAX = 300
 
 uint8_t = Int8ul
 short = Int16sl
@@ -34,6 +35,20 @@ sockaddr_in6 = Struct(
     'sin6_addr' / in6_addr,
     'sin6_scope_id' / Int32ul,
 )
+
+
+def addrinfo(client):
+    return Struct(
+        'ai_flags' / Int64ul,  # AI_PASSIVE, AI_CANONNAME, etc.
+        'ai_family' / Int64ul,  # AF_INET, AF_INET6, AF_UNSPEC
+        'ai_socktype' / Int64ul,  # SOCK_STREAM, SOCK_DGRAM
+        'ai_protocol' / Int64ul,  # use 0 for "any"
+        'ai_addrlen' / Int64ul,  # size of ai_addr in bytes
+        'ai_addr' / SymbolFormatField(client),  # struct sockaddr *: sockaddr_in or _in6
+        'ai_canonname' / PaddedString(CANON_NAME_MAX),  # full canonical hostname
+        'ai_next' / SymbolFormatField(client)  # struct addrinfo *: linked list, next node
+    )
+
 
 sockaddr_un = Struct(
     'sun_family' / Const(AF_UNIX, Int16sl),

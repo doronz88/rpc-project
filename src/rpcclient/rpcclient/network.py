@@ -101,6 +101,28 @@ class Network:
             raise BadReturnValueError(f'failed connecting to: {filename} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
+    # def getaddrinfo(self, address: str) -> :
+
+        # struct addrinfo * res = NULL;
+        # getaddrinfo("google.com", "443", 0, & res);
+        #
+        # struct
+        # addrinfo * i;
+        #
+        # for (i=res; i != 0; res=res->ai_next)
+        #     {
+        #         printf("%s\n", res->ai_addr->sa_data);
+        #     }
+        # char
+        # str[INET6_ADDRSTRLEN];
+        # if (i->ai_addr->sa_family == AF_INET) {
+        # struct sockaddr_in * p = (struct sockaddr_in * )i->ai_addr;
+        # printf("%s\n", inet_ntop(AF_INET, & p->sin_addr, str, sizeof(str)));
+        # } else if (i->ai_addr->sa_family == AF_INET6) {
+        # struct sockaddr_in6 * p = (struct sockaddr_in6 * )i->ai_addr;
+        # printf("%s\n", inet_ntop(AF_INET6, & p->sin6_addr, str, sizeof(str)));
+        # }
+
     def gethostbyname(self, name: str) -> Hostentry:
         aliases = []
         addresses = []
