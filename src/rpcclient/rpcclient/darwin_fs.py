@@ -3,24 +3,21 @@ from typing import Union
 
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.fs import Fs, DirEntry, ScandirIterator
-from rpcclient.structs.darwin import dirent32, dirent64, stat32, stat64, statfs64, statfs32
+from rpcclient.structs.darwin import dirent32, dirent64, stat64, statfs64
 
 
 def do_stat(client, stat_name, filename):
     """ stat(filename) at remote. read man for more details. """
-    stat = stat32
-    if client.inode64:
-        stat = stat64
-    with client.safe_malloc(stat.sizeof()) as buf:
+    with client.safe_malloc(stat64.sizeof()) as buf:
         err = client.symbols[stat_name](filename, buf)
         if err != 0:
             raise BadReturnValueError(f'failed to stat(): {filename}')
-        return stat.parse_stream(buf)
+        return stat64.parse_stream(buf)
 
 
 class DarwinDirEntry(DirEntry):
     def _fetch_stat(self, follow_symlinks):
-        stat_name = 'stat' if follow_symlinks else 'lstat'
+        stat_name = 'stat64' if follow_symlinks else 'lstat64'
         return do_stat(self._client, stat_name, self.path)
 
 
@@ -56,7 +53,7 @@ class DarwinFs(Fs):
         """ stat(filename) at remote. read man for more details. """
         # In case path is instance of pathlib.Path
         path = str(path)
-        return do_stat(self._client, 'stat', path)
+        return do_stat(self._client, 'stat64', path)
 
     def scandir(self, path: Union[str, Path] = '.'):
         # In case path is instance of pathlib.Path
@@ -67,10 +64,7 @@ class DarwinFs(Fs):
         return DarwinScandirIterator(path, dp, self._client)
 
     def statfs(self, path: str):
-        statfs = statfs64
-        if self._client.inode64:
-            statfs = statfs32
-        with self._client.safe_malloc(statfs.sizeof()) as buf:
-            if 0 != self._client.symbols.statfs(path, buf):
+        with self._client.safe_malloc(statfs64.sizeof()) as buf:
+            if 0 != self._client.symbols.statfs64(path, buf):
                 raise BadReturnValueError(f'statfs failed for: {path}')
-            return statfs.parse_stream(buf)
+            return statfs64.parse_stream(buf)

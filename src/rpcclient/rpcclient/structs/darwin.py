@@ -19,12 +19,12 @@ pid_t = Int32ul
 exitcode_t = Int32sl
 ino_t = Int32ul
 dev_t = Int32ul
-off_t = Int32ul
+off_t = Int64ul
 nlink_t = Int16ul
-blkcnt_t = Int32ul
+blkcnt_t = Int64ul
 blksize_t = Int32ul
 ino64_t = Int64ul
-fsid_t = Int64ul
+fsid_t = Array(2, Int32sl)
 
 timespec = Struct(
     'tv_sec' / long,
@@ -61,9 +61,7 @@ stat32 = Struct(
     'st_ctimespec' / timespec,  # time of last file status change
     'st_ctime' / Computed(this.st_ctimespec.tv_sec + (this.st_ctimespec.tv_nsec / 10 ** 9)),
     'st_size' / off_t,  # file size, in bytes
-    Padding(4),
     'st_blocks' / blkcnt_t,  # blocks allocated for file
-    Padding(4),
     'st_blksize' / blksize_t,  # optimal blocksize for I/O
     'st_flags' / Int32ul,  # user defined flags for file
     'st_gen' / Int32ul,
@@ -82,16 +80,21 @@ stat64 = Struct(
     Padding(4),
 
     'st_atimespec' / timespec,  # time of last access
+    'st_atime' / Computed(this.st_atimespec.tv_sec + (this.st_atimespec.tv_nsec / 10 ** 9)),
     'st_mtimespec' / timespec,  # time of last data modification
+    'st_mtime' / Computed(this.st_mtimespec.tv_sec + (this.st_mtimespec.tv_nsec / 10 ** 9)),
     'st_ctimespec' / timespec,  # time of last file status change
+    'st_ctime' / Computed(this.st_ctimespec.tv_sec + (this.st_ctimespec.tv_nsec / 10 ** 9)),
     'st_birthtimespec' / timespec,  # time of file creation(birth)
+    'st_btime' / Computed(this.st_birthtimespec.tv_sec + (this.st_birthtimespec.tv_nsec / 10 ** 9)),
 
     'st_size' / off_t,
     'st_blocks' / blkcnt_t,  # blocks allocated for file
     'st_blksize' / blksize_t,  # optimal blocksize for I/O
     'st_flags' / Int32ul,  # blocks allocated for file
     'st_gen' / Int32ul,  # user defined flags for file
-    'st_lspare' / Int32ul,
+    # seems like this value doesn't really exist
+    # 'st_lspare' / Int32ul,
     'st_qspare' / Array(2, Int64sl),
 )
 
@@ -359,7 +362,6 @@ proc_fileinfo = Struct(
     'fi_status' / Int32ul,
     'fi_offset' / off_t,
     'fi_guardflags' / Int32ul,
-    Padding(8),
 )
 
 # A copy of stat64 with static sized fields.
