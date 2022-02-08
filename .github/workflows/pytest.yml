@@ -40,4 +40,4 @@ jobs:
       - name: pytest
         working-directory: ./src/rpcclient
         run: |
-          python -m pytest -k 'not test_stat_sanity'
+          python -m pytest
