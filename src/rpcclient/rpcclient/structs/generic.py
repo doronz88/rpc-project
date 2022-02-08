@@ -6,10 +6,12 @@ from rpcclient.symbol import SymbolFormatField
 
 UNIX_PATH_MAX = 108
 
+uint8_t = Int8ul
 short = Int16sl
 u_short = Int16ul
 uint32_t = Int32ul
 uint64_t = Int64ul
+u_int32_t = uint32_t
 uid_t = Int32ul
 gid_t = Int32ul
 time_t = Int32ul
