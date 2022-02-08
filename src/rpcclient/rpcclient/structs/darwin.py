@@ -1,7 +1,8 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl, Union
+    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum
 
-from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t
+from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
+    in_addr, uint8_t
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
@@ -54,11 +55,11 @@ stat32 = Struct(
     'st_rdev' / dev_t,  # device type, for special file inode
 
     'st_atimespec' / timespec,  # time of last access
-    'st_atime' / Computed(this.st_atimespec.tv_sec + (this.st_atimespec.tv_nsec / 10**9)),
+    'st_atime' / Computed(this.st_atimespec.tv_sec + (this.st_atimespec.tv_nsec / 10 ** 9)),
     'st_mtimespec' / timespec,  # time of last data modification
-    'st_mtime' / Computed(this.st_mtimespec.tv_sec + (this.st_mtimespec.tv_nsec / 10**9)),
+    'st_mtime' / Computed(this.st_mtimespec.tv_sec + (this.st_mtimespec.tv_nsec / 10 ** 9)),
     'st_ctimespec' / timespec,  # time of last file status change
-    'st_ctime' / Computed(this.st_ctimespec.tv_sec + (this.st_ctimespec.tv_nsec / 10**9)),
+    'st_ctime' / Computed(this.st_ctimespec.tv_sec + (this.st_ctimespec.tv_nsec / 10 ** 9)),
     'st_size' / off_t,  # file size, in bytes
     Padding(4),
     'st_blocks' / blkcnt_t,  # blocks allocated for file
@@ -358,6 +359,7 @@ proc_fileinfo = Struct(
     'fi_status' / Int32ul,
     'fi_offset' / off_t,
     'fi_guardflags' / Int32ul,
+    Padding(8),
 )
 
 # A copy of stat64 with static sized fields.
@@ -372,7 +374,6 @@ vnode_info = Struct(
 
 vnode_info_path = Struct(
     'vip_vi' / vnode_info,
-    Padding(8),
     '_vip_path' / Bytes(MAXPATHLEN),
     'vip_path' / Computed(lambda x: x._vip_path.split(b'\x00', 1)[0].decode()),
 )
@@ -400,8 +401,26 @@ TSI_T_KEEP = 2  # keep alive
 TSI_T_2MSL = 3  # 2*msl quiet time timer
 TSI_T_NTIMERS = 4
 
+in4in6_addr = Struct(
+    'i46a_pad32' / u_int32_t[3],
+    'i46a_addr4' / in_addr,
+)
+
+in_sockinfo = Struct(
+    'insi_fport' / Int32sl,
+    'insi_lport' / Int32sl,
+    'insi_gencnt' / uint64_t,
+    'insi_flags' / uint32_t,
+    'insi_flow' / uint32_t,
+    'insi_vflag' / uint8_t,
+    'insi_ip_ttl' / uint8_t,
+    'rfu_1' / uint32_t,
+
+    # TODO: complete
+)
+
 tcp_sockinfo = Struct(
-    # 'tcpsi_ini' / in_sockinfo,  # TODO: complete
+    'tcpsi_ini' / in_sockinfo,
     'in_sockinfo' / Int32sl,
     'tcpsi_timer' / Int32sl[TSI_T_NTIMERS],
     'tcpsi_mss' / Int32sl,
@@ -409,6 +428,16 @@ tcp_sockinfo = Struct(
     'rfu_1' / uint32_t,  # reserved
     'tcpsi_tp' / uint64_t,  # opaque handle of TCP protocol control block
 )
+
+so_kind_t = Enum(Int32ul,
+                 SOCKINFO_GENERIC=0,
+                 SOCKINFO_IN=1,
+                 SOCKINFO_TCP=2,
+                 SOCKINFO_UN=3,
+                 SOCKINFO_NDRV=4,
+                 SOCKINFO_KERN_EVENT=5,
+                 SOCKINFO_KERN_CTL=6
+                 )
 
 socket_info = Struct(
     'soi_stat' / vinfo_stat,
@@ -428,12 +457,12 @@ socket_info = Struct(
     'soi_oobmark' / uint32_t,
     'soi_rcv' / sockbuf_info,
     'soi_snd' / sockbuf_info,
-    'soi_kind' / Int32sl,
-    'rfu_1' / uint32_t,
+    'soi_kind' / so_kind_t,
+    'rfu_1' / uint32_t,  # reserved
 
-    'soi_proto' / Union(0,
-                        # 'pri_in' / in_sockinfo,
-                        # 'tcp_sockinfo' / pri_tcp,  # TODO: complete
+    'soi_proto' / Union(None,
+                        'pri_in' / in_sockinfo,
+                        # 'tcp_sockinfo' / pri_tcp,
                         # 'un_sockinfo' / pri_un,
                         # 'ndrv_info' / pri_ndrv,
                         # 'kern_event_info' / pri_kern_event,

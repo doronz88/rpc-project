@@ -1,3 +1,4 @@
+from _socket import htons
 from collections import namedtuple
 from typing import Optional, List
 
@@ -5,11 +6,15 @@ from construct import Array
 
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.processes import Processes
+from rpcclient.structs.consts import AF_INET, AF_INET6
 from rpcclient.structs.darwin import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
-    vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO
+    vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
+    PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t
 
 Process = namedtuple('Process', 'pid path')
-Fd = namedtuple('Fd', 'fd path')
+FileFd = namedtuple('FileFd', 'fd path')
+Ipv4SocketFd = namedtuple('Ipv4SocketFd', 'fd local_port remote_port')  # when remote 0, the socket is for listening
+Ipv6SocketFd = namedtuple('Ipv6SocketFd', 'fd local_port remote_port')  # when remote 0, the socket is for listening
 
 
 class DarwinProcesses(Processes):
@@ -26,7 +31,7 @@ class DarwinProcesses(Processes):
         result = []
         size = self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, 0, 0)
 
-        vi_size = vnode_fdinfowithpath.sizeof()
+        vi_size = 8196  # should be enough for all structs
         with self._client.safe_malloc(vi_size) as vi_buf:
             with self._client.safe_malloc(size) as fdinfo_buf:
                 size = int(self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
@@ -34,15 +39,34 @@ class DarwinProcesses(Processes):
                     raise BadReturnValueError('proc_pidinfo(PROC_PIDLISTFDS) failed')
 
                 for fd in Array(size // proc_fdinfo.sizeof(), proc_fdinfo).parse(fdinfo_buf.peek(size)):
+
                     if fd.proc_fdtype == PROX_FDTYPE_VNODE:
+                        # file
                         vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, vi_buf,
                                                                  vi_size)
                         if not vs:
                             raise BadReturnValueError('proc_pidinfo(PROC_PIDFDVNODEPATHINFO) failed')
 
-                        vi = vnode_fdinfowithpath.parse(vi_buf.peek(vi_size))
-                        result.append(Fd(fd=fd.proc_fd, path=vi.pvip.vip_path))
+                        vi = vnode_fdinfowithpath.parse(vi_buf.peek(vnode_fdinfowithpath.sizeof()))
+                        result.append(FileFd(fd=fd.proc_fd, path=vi.pvip.vip_path))
 
+                    elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
+                        # socket
+                        vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, vi_buf,
+                                                                 vi_size)
+                        if not vs:
+                            raise BadReturnValueError('proc_pidinfo(PROC_PIDFDSOCKETINFO) failed')
+
+                        vi = socket_fdinfo.parse(vi_buf.peek(vi_size))
+                        if vi.psi.soi_family == AF_INET and vi.psi.soi_kind == so_kind_t.SOCKINFO_TCP:
+                            local_port = htons(vi.psi.soi_proto.pri_in.insi_lport)
+                            remote_port = htons(vi.psi.soi_proto.pri_in.insi_fport)
+                            result.append(Ipv4SocketFd(fd=fd.proc_fd, local_port=local_port, remote_port=remote_port))
+
+                        elif vi.psi.soi_family == AF_INET6 and vi.psi.soi_kind == so_kind_t.SOCKINFO_TCP:
+                            local_port = htons(vi.psi.soi_proto.pri_in.insi_lport)
+                            remote_port = htons(vi.psi.soi_proto.pri_in.insi_fport)
+                            result.append(Ipv6SocketFd(fd=fd.proc_fd, local_port=local_port, remote_port=remote_port))
             return result
 
     def get_task_all_info(self, pid: int):
