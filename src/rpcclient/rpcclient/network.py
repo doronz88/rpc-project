@@ -5,9 +5,11 @@ from collections import namedtuple
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
+from src.rpcclient.rpcclient.structs.generic import addrinfo
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
 Hostentry = namedtuple('Hostentry', 'name aliases addresses')
+Addrinfo = namedtuple('Addrinfo', 'ai_flags ai_family ai_socktype ai_protocol ai_addrlen ai_addr  ai_canonname ai_next')
 
 
 class Socket:
@@ -101,7 +103,11 @@ class Network:
             raise BadReturnValueError(f'failed connecting to: {filename} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
-    # def getaddrinfo(self, address: str) -> :
+    def getaddrinfo(self, address: str) -> Addrinfo:
+        
+
+
+
 
         # struct addrinfo * res = NULL;
         # getaddrinfo("google.com", "443", 0, & res);

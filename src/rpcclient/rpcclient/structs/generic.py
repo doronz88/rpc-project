@@ -44,9 +44,11 @@ def addrinfo(client):
         'ai_socktype' / Int64ul,  # SOCK_STREAM, SOCK_DGRAM
         'ai_protocol' / Int64ul,  # use 0 for "any"
         'ai_addrlen' / Int64ul,  # size of ai_addr in bytes
-        'ai_addr' / SymbolFormatField(client),  # struct sockaddr *: sockaddr_in or _in6
+        '_ai_addr' / SymbolFormatField(client),
+        'ai_addr' / Pointer(this._ai_addr, '_ai_addr'),  # struct sockaddr *: sockaddr_in or _in6
         'ai_canonname' / PaddedString(CANON_NAME_MAX),  # full canonical hostname
-        'ai_next' / SymbolFormatField(client)  # struct addrinfo *: linked list, next node
+        '_ai_next' / SymbolFormatField(client),
+        'ai_next' / Pointer(this._ai_next, '_ai_next')  # struct addrinfo *: linked list, next node
     )
 
 
