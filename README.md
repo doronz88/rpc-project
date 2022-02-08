@@ -21,7 +21,7 @@ https://github.com/doronz88/rpc-project/tree/master/src/rpcclient
 macOS & Linux:
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
-cd src/remote_server
+cd src/rpcserver
 make
 ```
 
