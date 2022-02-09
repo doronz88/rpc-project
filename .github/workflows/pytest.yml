@@ -40,4 +40,4 @@ jobs:
       - name: pytest
         working-directory: ./src/rpcclient
         run: |
-          python -m pytest
+          python -m pytest --ci

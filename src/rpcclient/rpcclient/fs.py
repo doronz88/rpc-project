@@ -1,6 +1,7 @@
 import posixpath
 from typing import Iterator, List
 
+from rpcclient.common import path_to_str
 from rpcclient.exceptions import InvalidArgumentError, BadReturnValueError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
@@ -76,10 +77,10 @@ class DirEntry:
 
 
 class ScandirIterator:
-    def __init__(self, path, dp, client):
+    def __init__(self, path, dirp, client):
         self.path = path
         self._client = client
-        self._dirp = dp
+        self._dirp = dirp
 
     def __enter__(self):
         return self
@@ -87,10 +88,26 @@ class ScandirIterator:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:  # noqa: E722
+            # Best effort.
+            pass
+
     def __iter__(self) -> Iterator[DirEntry]:
         raise NotImplementedError()
 
+    def is_closed(self):
+        return not self._dirp
+
     def close(self):
+        if self.is_closed():
+            return
+        self.closedir()
+        self._dirp = 0
+
+    def closedir(self):
         raise NotImplementedError()
 
 
@@ -167,36 +184,42 @@ class Fs:
     def __init__(self, client):
         self._client = client
 
-    def chown(self, filename: str, owner: int, group: int):
-        """ chmod(filename, mode) at remote. read man for more details. """
-        if self._client.symbols.chown(filename, owner, group).c_int32 < 0:
-            raise BadReturnValueError(f'failed to chown: {filename} ({self._client.last_error})')
+    @path_to_str('path')
+    def chown(self, path: str, uid: int, gid: int):
+        """ chmod(path, mode) at remote. read man for more details. """
+        if self._client.symbols.chown(path, uid, gid).c_int32 < 0:
+            raise BadReturnValueError(f'failed to chown: {path} ({self._client.last_error})')
 
-    def chmod(self, filename: str, mode: int):
-        """ chmod(filename, mode) at remote. read man for more details. """
-        if self._client.symbols.chmod(filename, mode).c_int32 < 0:
-            raise BadReturnValueError(f'failed to chmod: {filename} ({self._client.last_error})')
+    @path_to_str('path')
+    def chmod(self, path: str, mode: int):
+        """ chmod(path, mode) at remote. read man for more details. """
+        if self._client.symbols.chmod(path, mode).c_int32 < 0:
+            raise BadReturnValueError(f'failed to chmod: {path} ({self._client.last_error})')
 
-    def remove(self, filename: str):
-        """ remove(filename) at remote. read man for more details. """
-        if self._client.symbols.remove(filename).c_int32 < 0:
-            raise BadReturnValueError(f'failed to remove: {filename} ({self._client.last_error})')
+    @path_to_str('path')
+    def remove(self, path: str):
+        """ remove(path) at remote. read man for more details. """
+        if self._client.symbols.remove(path).c_int32 < 0:
+            raise BadReturnValueError(f'failed to remove: {path} ({self._client.last_error})')
 
-    def mkdir(self, filename: str, mode: int):
-        """ mkdir(filename, mode) at remote. read man for more details. """
-        if self._client.symbols.mkdir(filename, mode).c_int64 < 0:
-            raise BadReturnValueError(f'failed to mkdir: {filename} ({self._client.last_error})')
+    @path_to_str('path')
+    def mkdir(self, path: str, mode: int):
+        """ mkdir(path, mode) at remote. read man for more details. """
+        if self._client.symbols.mkdir(path, mode).c_int64 < 0:
+            raise BadReturnValueError(f'failed to mkdir: {path} ({self._client.last_error})')
 
+    @path_to_str('path')
     def chdir(self, path: str):
-        """ chdir(filename) at remote. read man for more details. """
+        """ chdir(path) at remote. read man for more details. """
         if self._client.symbols.chdir(path).c_int64 < 0:
             raise BadReturnValueError(f'failed to chdir: {path} ({self._client.last_error})')
 
-    def open(self, filename: str, mode: str, access: int = 0o777) -> File:
+    @path_to_str('file')
+    def open(self, file: str, mode: str, access: int = 0o777) -> File:
         """
-        call open(filename, mode, access) at remote and get a context manager
+        call open(file, mode, access) at remote and get a context manager
         file object
-        :param filename: filename to be opened
+        :param file: filename to be opened
         :param mode: one of:
             'r' - read only
             'r+' - read and write. exception if file doesn't exist
@@ -217,24 +240,26 @@ class Fs:
         if mode is None:
             raise InvalidArgumentError(f'mode can be only one of: {available_modes.keys()}')
 
-        fd = self._client.symbols.open(filename, mode, access).c_int32
+        fd = self._client.symbols.open(file, mode, access).c_int32
         if fd < 0:
-            raise BadReturnValueError(f'failed to open: {filename} ({self._client.last_error})')
+            raise BadReturnValueError(f'failed to open: {file} ({self._client.last_error})')
         return File(self._client, fd)
 
-    def symlink(self, target: str, linkpath: str) -> int:
-        """ symlink(target, linkpath) at remote. read man for more details. """
-        err = self._client.symbols.symlink(target, linkpath).c_int64
+    @path_to_str('src', 'dst')
+    def symlink(self, src: str, dst: str) -> int:
+        """ symlink(src, dst) at remote. read man for more details. """
+        err = self._client.symbols.symlink(src, dst).c_int64
         if err < 0:
             raise BadReturnValueError(
-                f'symlink failed to create link: {linkpath}->{target} ({self._client.last_error})')
+                f'symlink failed to create link: {dst}->{src} ({self._client.last_error})')
         return err
 
-    def link(self, target: str, linkpath: str) -> int:
-        """ link(target, linkpath) - hardlink at remote. read man for more details. """
-        err = self._client.symbols.link(target, linkpath).c_int64
+    @path_to_str('src', 'dst')
+    def link(self, src: str, dst: str) -> int:
+        """ link(src, dst) - hardlink at remote. read man for more details. """
+        err = self._client.symbols.link(src, dst).c_int64
         if err < 0:
-            raise BadReturnValueError(f'link failed to create link: {linkpath}->{target} ({self._client.last_error})')
+            raise BadReturnValueError(f'link failed to create link: {dst}->{src} ({self._client.last_error})')
         return err
 
     def pwd(self) -> str:
@@ -247,36 +272,40 @@ class Fs:
         self._client.symbols.free(chunk)
         return buf
 
+    @path_to_str('path')
     def listdir(self, path: str = '.') -> List[str]:
         """ get directory listing for a given dirname """
         with self.scandir(path) as it:
             return [e.name for e in it]
 
+    @path_to_str('path')
     def scandir(self, path: str = '.') -> ScandirIterator:
         """ get directory listing for a given dirname """
         raise NotImplementedError()
 
+    @path_to_str('path')
     def stat(self, path: str):
         """ stat(filename) at remote. read man for more details. """
         raise NotImplementedError()
 
-    def walk(self, dirname: str):
-        """ provides the same results as os.walk(dirname) """
+    @path_to_str('top')
+    def walk(self, top: str):
+        """ provides the same results as os.walk(top) """
         dirs = []
         files = []
-        for file in self.listdir(dirname):
+        for file in self.listdir(top):
             filename = file.d_name
             if filename in ('.', '..'):
                 continue
-            infos = self.stat(posixpath.join(dirname, filename))
+            infos = self.stat(posixpath.join(top, filename))
             if infos.st_mode & S_IFMT == infos.st_mode & S_IFDIR:
                 dirs.append(filename)
             else:
                 files.append(filename)
 
-        yield dirname, dirs, files
+        yield top, dirs, files
 
         if dirs:
             for d in dirs:
-                for walk_result in self.walk(posixpath.join(dirname, d)):
+                for walk_result in self.walk(posixpath.join(top, d)):
                     yield walk_result

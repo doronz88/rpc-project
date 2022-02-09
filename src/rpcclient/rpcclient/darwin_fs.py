@@ -1,12 +1,10 @@
-from pathlib import Path
-from typing import Union
-
+from rpcclient.common import path_to_str
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.fs import Fs, DirEntry, ScandirIterator
 from rpcclient.structs.darwin import dirent32, dirent64, stat64, statfs64
 
 
-def do_stat(client, stat_name, filename):
+def do_stat(client, stat_name, filename: str):
     """ stat(filename) at remote. read man for more details. """
     with client.safe_malloc(stat64.sizeof()) as buf:
         err = client.symbols[stat_name](filename, buf)
@@ -22,9 +20,6 @@ class DarwinDirEntry(DirEntry):
 
 
 class DarwinScandirIterator(ScandirIterator):
-    def __enter__(self):
-        return self
-
     def __iter__(self):
         dirent = dirent32
         if self._client.inode64:
@@ -42,27 +37,26 @@ class DarwinScandirIterator(ScandirIterator):
                 continue
             yield DarwinDirEntry(self.path, entry, self._client)
 
-    def close(self):
+    def closedir(self):
         self._client.symbols.closedir(self._dirp)
 
 
 class DarwinFs(Fs):
     CHUNK_SIZE = 1024
 
-    def stat(self, path: Union[str, Path]):
+    @path_to_str('path')
+    def stat(self, path: str):
         """ stat(filename) at remote. read man for more details. """
-        # In case path is instance of pathlib.Path
-        path = str(path)
         return do_stat(self._client, 'stat64', path)
 
-    def scandir(self, path: Union[str, Path] = '.'):
-        # In case path is instance of pathlib.Path
-        path = str(path)
+    @path_to_str('path')
+    def scandir(self, path: str = '.'):
         dp = self._client.symbols.opendir(path)
         if not dp:
             raise BadReturnValueError(f'failed to opendir(): {path} ({self._client.last_error})')
         return DarwinScandirIterator(path, dp, self._client)
 
+    @path_to_str('path')
     def statfs(self, path: str):
         with self._client.safe_malloc(statfs64.sizeof()) as buf:
             if 0 != self._client.symbols.statfs64(path, buf):
