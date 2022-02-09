@@ -22,9 +22,6 @@ class DarwinDirEntry(DirEntry):
 
 
 class DarwinScandirIterator(ScandirIterator):
-    def __enter__(self):
-        return self
-
     def __iter__(self):
         dirent = dirent32
         if self._client.inode64:
@@ -42,7 +39,7 @@ class DarwinScandirIterator(ScandirIterator):
                 continue
             yield DarwinDirEntry(self.path, entry, self._client)
 
-    def close(self):
+    def closedir(self):
         self._client.symbols.closedir(self._dirp)
 
 

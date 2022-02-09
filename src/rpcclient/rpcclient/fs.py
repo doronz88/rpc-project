@@ -76,10 +76,10 @@ class DirEntry:
 
 
 class ScandirIterator:
-    def __init__(self, path, dp, client):
+    def __init__(self, path, dirp, client):
         self.path = path
         self._client = client
-        self._dirp = dp
+        self._dirp = dirp
 
     def __enter__(self):
         return self
@@ -87,10 +87,22 @@ class ScandirIterator:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def __del__(self):
+        self.close()
+
     def __iter__(self) -> Iterator[DirEntry]:
         raise NotImplementedError()
 
+    def is_closed(self):
+        return not self._dirp
+
     def close(self):
+        if self.is_closed():
+            return
+        self.closedir()
+        self._dirp = 0
+
+    def closedir(self):
         raise NotImplementedError()
 
 
