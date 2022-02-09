@@ -1,8 +1,9 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum
+    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default
 
+from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
-    in_addr, uint8_t
+    in_addr, uint8_t, u_char, UNIX_PATH_MAX
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
@@ -403,22 +404,57 @@ TSI_T_KEEP = 2  # keep alive
 TSI_T_2MSL = 3  # 2*msl quiet time timer
 TSI_T_NTIMERS = 4
 
+
+class IpAddressAdapter(Adapter):
+    def _decode(self, obj, context, path):
+        return ".".join(map(str, obj))
+
+    def _encode(self, obj, context, path):
+        return list(map(int, obj.split(".")))
+
+
 in4in6_addr = Struct(
     'i46a_pad32' / u_int32_t[3],
-    'i46a_addr4' / in_addr,
+    'i46a_addr4' / IpAddressAdapter(in_addr),
+)
+
+in6_addr = Struct(
+    'i46a_pad32' / u_int32_t[3],
+    'i46a_addr4' / IpAddressAdapter(in_addr),
 )
 
 in_sockinfo = Struct(
-    'insi_fport' / Int32sl,
-    'insi_lport' / Int32sl,
+    'insi_fport' / Int16ub,
+    Padding(2),
+    'insi_lport' / Int16ub,
+    Padding(2),
     'insi_gencnt' / uint64_t,
     'insi_flags' / uint32_t,
     'insi_flow' / uint32_t,
     'insi_vflag' / uint8_t,
     'insi_ip_ttl' / uint8_t,
+    Padding(2),
     'rfu_1' / uint32_t,
 
-    # TODO: complete
+    # protocol dependent part
+    'insi_faddr' / Union(None,
+                         'ina_46' / in4in6_addr,
+                         'ina_6' / in6_addr),
+
+    'insi_laddr' / Union(None,
+                         'ina_46' / in4in6_addr,
+                         'ina_6' / in6_addr),
+
+    'insi_v4' / Struct(
+        'in4_tos' / u_char,
+    ),
+
+    'insi_v6' / Struct(
+        'in6_hlim' / uint8_t,
+        'in6_cksum' / Int32sl,
+        'in6_ifindex' / u_short,
+        'in6_hops' / short,
+    ),
 )
 
 tcp_sockinfo = Struct(
@@ -431,6 +467,60 @@ tcp_sockinfo = Struct(
     'tcpsi_tp' / uint64_t,  # opaque handle of TCP protocol control block
 )
 
+SOCK_MAXADDRLEN = 255
+
+# Unix Domain Sockets
+
+# we can't use sockaddr_un since the sun_path may contain utf8 invalid characters
+sockaddr_un_raw = Struct(
+    'sun_family' / Default(Int16sl, AF_UNIX),
+    '_sun_path' / Bytes(UNIX_PATH_MAX),
+    'sun_path' / Computed(lambda x: x._sun_path.split(b'\x00', 1)[0].decode())
+)
+
+un_sockinfo = Struct(
+    'unsi_conn_so' / uint64_t,
+    'unsi_conn_pcb' / uint64_t,
+    'unsi_addr' / Union(None,
+                        'ua_sun' / sockaddr_un_raw,
+                        'ua_dummy' / Bytes(SOCK_MAXADDRLEN)),
+    'unsi_caddr' / Union(None,
+                         'ua_sun' / sockaddr_un_raw,
+                         'ua_dummy' / Bytes(SOCK_MAXADDRLEN)),
+)
+
+IF_NAMESIZE = 16
+
+# PF_NDRV Sockets
+
+ndrv_info = Struct(
+    'ndrvsi_if_family' / uint32_t,
+    'ndrvsi_if_unit' / uint32_t,
+    'ndrvsi_if_name' / Bytes(IF_NAMESIZE),
+)
+
+# Kernel Event Sockets
+
+kern_event_info = Struct(
+    'kesi_vendor_code_filter' / uint32_t,
+    'kesi_class_filter' / uint32_t,
+    'kesi_subclass_filter' / uint32_t,
+)
+
+# Kernel Control Sockets
+
+MAX_KCTL_NAME = 96
+
+kern_ctl_info = Struct(
+    'kcsi_id' / uint32_t,
+    'kcsi_reg_unit' / uint32_t,
+    'kcsi_flags' / uint32_t,
+    'kcsi_recvbufsize' / uint32_t,
+    'kcsi_sendbufsize' / uint32_t,
+    'kcsi_unit' / uint32_t,
+    'kcsi_name' / Bytes(MAX_KCTL_NAME),
+)
+
 so_kind_t = Enum(Int32ul,
                  SOCKINFO_GENERIC=0,
                  SOCKINFO_IN=1,
@@ -441,13 +531,18 @@ so_kind_t = Enum(Int32ul,
                  SOCKINFO_KERN_CTL=6
                  )
 
+so_family_t = Enum(Int32ul,
+                   AF_INET=AF_INET,
+                   AF_INET6=AF_INET6,
+                   )
+
 socket_info = Struct(
     'soi_stat' / vinfo_stat,
     'soi_so' / uint64_t,  # opaque handle of socket
     'soi_pcb' / uint64_t,  # opaque handle of protocol control block
     'soi_type' / Int32sl,
     'soi_protocol' / Int32sl,
-    'soi_family' / Int32sl,
+    'soi_family' / so_family_t,
     'soi_options' / short,
     'soi_linger' / short,
     'soi_state' / short,
@@ -462,17 +557,30 @@ socket_info = Struct(
     'soi_kind' / so_kind_t,
     'rfu_1' / uint32_t,  # reserved
 
-    'soi_proto' / Union(None,
-                        'pri_in' / in_sockinfo,
-                        # 'tcp_sockinfo' / pri_tcp,
-                        # 'un_sockinfo' / pri_un,
-                        # 'ndrv_info' / pri_ndrv,
-                        # 'kern_event_info' / pri_kern_event,
-                        # 'kern_ctl_info' / pri_kern_ctl,
-                        )
+    'soi_proto' / Switch(this.soi_kind, {
+        so_kind_t.SOCKINFO_IN: Struct('pri_in' / in_sockinfo),
+        so_kind_t.SOCKINFO_TCP: Struct('pri_tcp' / tcp_sockinfo),
+        so_kind_t.SOCKINFO_UN: Struct('pri_un' / un_sockinfo),
+        so_kind_t.SOCKINFO_NDRV: Struct('pri_ndrv' / ndrv_info),
+        so_kind_t.SOCKINFO_KERN_EVENT: Struct('pri_kern_event' / kern_event_info),
+        so_kind_t.SOCKINFO_KERN_CTL: Struct('pri_kern_ctl' / kern_ctl_info),
+    }),
 )
 
 socket_fdinfo = Struct(
     'pfi' / proc_fileinfo,
     'psi' / socket_info,
+)
+
+pipe_info = Struct(
+    'pipe_stat' / vinfo_stat,
+    'pipe_handle' / uint64_t,
+    'pipe_peerhandle' / uint64_t,
+    'pipe_status' / Int32sl,
+    'rfu_1' / Int32sl  # reserved
+)
+
+pipe_fdinfo = Struct(
+    'pfi' / proc_fileinfo,
+    'pipeinfo' / pipe_info,
 )
