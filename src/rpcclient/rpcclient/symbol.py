@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from construct import FormatField
 
 from rpcclient.exceptions import CfSerializationError
+from rpcclient.structs.darwin_consts import kCFNumberSInt64Type, kCFNumberDoubleType
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 RETVAL_BIT_COUNT = 64
@@ -112,17 +113,17 @@ class Symbol(int):
         return self + self._offset
 
     @property
-    def c_int64(self):
+    def c_int64(self) -> int:
         """ cast to c_int64 """
         return ctypes.c_int64(self).value
 
     @property
-    def c_int32(self):
+    def c_int32(self) -> int:
         """ cast to c_int32 """
         return ctypes.c_int32(self).value
 
     @property
-    def c_int16(self):
+    def c_int16(self) -> int:
         """ cast to c_int16 """
         return ctypes.c_int16(self).value
 
@@ -195,26 +196,6 @@ class Symbol(int):
         return self._client.call(self, args)
 
 
-# Types from MacTypes.h
-kCFNumberSInt8Type = 1
-kCFNumberSInt16Type = 2
-kCFNumberSInt32Type = 3
-kCFNumberSInt64Type = 4
-kCFNumberFloat32Type = 5
-kCFNumberFloat64Type = 6  # 64-bit IEEE 754
-# Basic C types
-kCFNumberCharType = 7
-kCFNumberShortType = 8
-kCFNumberIntType = 9
-kCFNumberLongType = 10
-kCFNumberLongLongType = 11
-kCFNumberFloatType = 12
-kCFNumberDoubleType = 13
-# Other
-kCFNumberCFIndexType = 14
-kCFNumberMaxType = 14
-
-
 class DarwinSymbol(Symbol):
     def objc_call(self, selector, *params):
         """ call an objc method on a given object """
@@ -239,7 +220,7 @@ class DarwinSymbol(Symbol):
         if t == 'str':
             return self._client.symbols.CFStringGetCStringPtr(self, 0).peek_str()
         if t == 'bool':
-            return bool(self._client.symbols.CFCFBooleanGetValueGetValue(self, 0))
+            return bool(self._client.symbols.CFBooleanGetValue(self, 0))
         if t == 'number':
             with self._client.safe_malloc(200) as buf:
                 if self._client.symbols.CFNumberIsFloatType(self):

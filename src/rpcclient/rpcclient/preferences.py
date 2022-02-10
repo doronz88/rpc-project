@@ -15,17 +15,17 @@ class Preferences:
 
     def copy_key_list(self, application_id: str, username: str = kCFPreferencesCurrentUser,
                       hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:
-        application_id = self._client.cfstr(application_id)
-        username = self._client.cfstr(username)
-        hostname = self._client.cfstr(hostname)
+        application_id = self._client.cf(application_id)
+        username = self._client.cf(username)
+        hostname = self._client.cf(hostname)
         return self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py
 
     def copy_value(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
                    hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[str]:
-        key = self._client.cfstr(key)
-        application_id = self._client.cfstr(application_id)
-        username = self._client.cfstr(username)
-        hostname = self._client.cfstr(hostname)
+        key = self._client.cf(key)
+        application_id = self._client.cf(application_id)
+        username = self._client.cf(username)
+        hostname = self._client.cf(hostname)
         return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py
 
     def copy_all_values(self, application_id: str, username: str = kCFPreferencesCurrentUser,
@@ -37,9 +37,9 @@ class Preferences:
 
     def set_value(self, key: str, value: str, application_id: str, username: str = kCFPreferencesCurrentUser,
                   hostname: str = kCFPreferencesCurrentHost):
-        key = self._client.cfstr(key)
-        value = self._client.cfstr(value)
-        application_id = self._client.cfstr(application_id)
-        username = self._client.cfstr(username)
-        hostname = self._client.cfstr(hostname)
+        key = self._client.cf(key)
+        value = self._client.cf(value)
+        application_id = self._client.cf(application_id)
+        username = self._client.cf(username)
+        hostname = self._client.cf(hostname)
         self._client.symbols.CFPreferencesSetValue(key, value, application_id, username, hostname)
