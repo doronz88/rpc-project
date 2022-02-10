@@ -6,6 +6,7 @@ from cached_property import cached_property
 from rpcclient.client.client import Client
 from rpcclient.darwin_fs import DarwinFs
 from rpcclient.darwin_media import DarwinMedia
+from rpcclient.darwin_network import DarwinNetwork
 from rpcclient.darwin_processes import DarwinProcesses
 from rpcclient.exceptions import RpcClientException
 from rpcclient.preferences import Preferences
@@ -40,6 +41,7 @@ class DarwinClient(Client):
         self.prefs = Preferences(self)
         self.processes = DarwinProcesses(self)
         self.media = DarwinMedia(self)
+        self.network = DarwinNetwork(self)
 
     @property
     def modules(self) -> typing.List[str]:
