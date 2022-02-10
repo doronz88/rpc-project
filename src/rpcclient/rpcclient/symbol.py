@@ -209,7 +209,7 @@ class DarwinSymbol(Symbol):
         """
         if self == 0:
             return None
-        return self._client.symbols.CFCopyDescription(self).cfstr.peek_str()
+        return self._client.symbols.CFCopyDescription(self).py
 
     @property
     def py(self):
