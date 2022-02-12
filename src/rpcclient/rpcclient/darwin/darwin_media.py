@@ -84,9 +84,15 @@ class DarwinMedia:
         :param rpcclient.client.darwin_client.DarwinClient client:
         """
         self._client = client
+        self._load_av_foundation()
 
-        if 0 == client.dlopen('/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio', 2):
-            raise RpcClientException('failed to load AVFAudio')
+    def _load_av_foundation(self):
+        options = ['/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation',
+                   '/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio']
+        for option in options:
+            if self._client.dlopen(option, 2):
+                return
+        raise RpcClientException('failed to load AVFAudio')
 
     def set_audio_session(self):
         AVAudioSession = self._client.symbols.objc_getClass('AVAudioSession')
