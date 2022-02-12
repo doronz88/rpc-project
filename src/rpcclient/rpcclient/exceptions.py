@@ -32,3 +32,7 @@ class InvalidArgumentError(RpcClientException):
 
 class FailedToConnectError(RpcClientException):
     pass
+
+
+class UnrecognizedSelector(RpcClientException):
+    pass

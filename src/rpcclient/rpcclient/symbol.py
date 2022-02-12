@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 from construct import FormatField
 
-from rpcclient.exceptions import CfSerializationError
+from rpcclient.exceptions import CfSerializationError, UnrecognizedSelector
 from rpcclient.structs.darwin_consts import kCFNumberSInt64Type, kCFNumberDoubleType
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
@@ -199,7 +199,11 @@ class Symbol(int):
 class DarwinSymbol(Symbol):
     def objc_call(self, selector, *params):
         """ call an objc method on a given object """
-        return self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid(selector), *params)
+        sel = self._client.symbols.sel_getUid(selector)
+        if not self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid("respondsToSelector:"), sel):
+            raise UnrecognizedSelector(f"unrecognized selector '{selector}' sent to class")
+
+        return self._client.symbols.objc_msgSend(self, sel, *params)
 
     @property
     def cfdesc(self):
