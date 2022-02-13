@@ -36,19 +36,23 @@ sockaddr_in6 = Struct(
     'sin6_scope_id' / Int32ul,
 )
 
+socklen_t = Int32ul
+
 
 def addrinfo(client):
     return Struct(
-        'ai_flags' / Int64ul,  # AI_PASSIVE, AI_CANONNAME, etc.
-        'ai_family' / Int64ul,  # AF_INET, AF_INET6, AF_UNSPEC
-        'ai_socktype' / Int64ul,  # SOCK_STREAM, SOCK_DGRAM
-        'ai_protocol' / Int64ul,  # use 0 for "any"
-        'ai_addrlen' / Int64ul,  # size of ai_addr in bytes
+        'ai_flags' / Int32ul,  # AI_PASSIVE, AI_CANONNAME, etc.
+        'ai_family' / Int32ul,  # AF_INET, AF_INET6, AF_UNSPEC
+        'ai_socktype' / Int32ul,  # SOCK_STREAM, SOCK_DGRAM
+        'ai_protocol' / Int32ul,  # use 0 for "any"
+        'ai_addrlen' / socklen_t,  # size of ai_addr in bytes
         '_ai_addr' / SymbolFormatField(client),
-        'ai_addr' / Pointer(this._ai_addr, '_ai_addr'),  # struct sockaddr *: sockaddr_in or _in6
-        'ai_canonname' / PaddedString(CANON_NAME_MAX),  # full canonical hostname
+        'ai_addr' / Pointer(this._ai_addr, sockaddr),  # struct sockaddr *: sockaddr_in or _in6
+        'ai_canonname' / CString('utf8 '),  # full canonical hostname
+
+        # struct addrinfo *: linked list, next node
         '_ai_next' / SymbolFormatField(client),
-        'ai_next' / Pointer(this._ai_next, '_ai_next')  # struct addrinfo *: linked list, next node
+        'ai_next' / If(this._ai_next != 0, LazyBound(lambda: Pointer(this._ai_next, addrinfo(client)))),
     )
 
 
