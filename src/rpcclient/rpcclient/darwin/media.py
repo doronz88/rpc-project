@@ -87,8 +87,13 @@ class DarwinMedia:
         self._load_av_foundation()
 
     def _load_av_foundation(self):
-        options = ['/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation',
-                   '/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio']
+        options = [
+            # macOS
+            '/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation',
+            '/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio',
+            # iOS
+            '/System/Library/Frameworks/AVFoundation.framework/AVFoundation'
+        ]
         for option in options:
             if self._client.dlopen(option, 2):
                 return
