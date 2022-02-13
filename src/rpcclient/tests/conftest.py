@@ -1,6 +1,6 @@
 import pytest
 
-from rpcclient.client.client_factory import create_client
+from rpcclient.client_factory import create_client
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@ import struct
 
 from rpcclient.common import path_to_str
 from rpcclient.exceptions import RpcClientException, BadReturnValueError
-from rpcclient.symbol import DarwinSymbol
+from rpcclient.darwin.symbol import DarwinSymbol
 
 
 class Recorder:

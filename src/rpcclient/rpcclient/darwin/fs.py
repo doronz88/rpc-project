@@ -1,7 +1,7 @@
 from rpcclient.common import path_to_str
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.fs import Fs, DirEntry, ScandirIterator
-from rpcclient.structs.darwin import dirent32, dirent64, stat64, statfs64
+from rpcclient.darwin.structs import dirent32, dirent64, stat64, statfs64
 
 
 def do_stat(client, stat_name, filename: str):

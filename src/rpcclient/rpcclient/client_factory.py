@@ -1,9 +1,9 @@
 import logging
 from socket import socket
 
-from rpcclient.client.client import Client
-from rpcclient.client.darwin_client import DarwinClient
-from rpcclient.client.linux_client import LinuxClient
+from rpcclient.client import Client
+from rpcclient.darwin.client import DarwinClient
+from rpcclient.linux.client import LinuxClient
 from rpcclient.exceptions import FailedToConnectError
 from rpcclient.protocol import UNAME_VERSION_LEN, DEFAULT_PORT
 
