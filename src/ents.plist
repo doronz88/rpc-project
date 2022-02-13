@@ -5,5 +5,7 @@
 	<true/>
     <key>com.apple.private.security.no-container</key>
     <true/>
+    <key>com.apple.wlan.authentication</key>
+	<true/>
 </dict>
 </plist>
