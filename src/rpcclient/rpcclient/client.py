@@ -18,7 +18,7 @@ from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN
-from rpcclient.structs.darwin import pid_t, exitcode_t
+from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 

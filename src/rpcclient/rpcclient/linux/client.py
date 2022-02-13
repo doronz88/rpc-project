@@ -1,8 +1,8 @@
 from cached_property import cached_property
 
-from rpcclient.client.client import Client
-from rpcclient.linux_fs import LinuxFs
-from rpcclient.structs.linux import utsname
+from rpcclient.client import Client
+from rpcclient.linux.fs import LinuxFs
+from rpcclient.linux.structs import utsname
 
 
 class LinuxClient(Client):

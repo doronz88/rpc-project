@@ -3,7 +3,7 @@ from typing import List
 
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.fs import Fs
-from rpcclient.structs.linux import dirent
+from rpcclient.linux.structs import dirent
 
 
 class LinuxFs(Fs):

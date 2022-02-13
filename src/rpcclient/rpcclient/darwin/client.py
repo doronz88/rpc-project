@@ -3,16 +3,16 @@ import typing
 
 from cached_property import cached_property
 
-from rpcclient.client.client import Client
-from rpcclient.darwin.darwin_fs import DarwinFs
-from rpcclient.darwin.darwin_media import DarwinMedia
-from rpcclient.darwin.darwin_network import DarwinNetwork
-from rpcclient.darwin.darwin_processes import DarwinProcesses
+from rpcclient.client import Client
+from rpcclient.darwin.fs import DarwinFs
+from rpcclient.darwin.media import DarwinMedia
+from rpcclient.darwin.network import DarwinNetwork
+from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.preferences import Preferences
 from rpcclient.exceptions import RpcClientException
-from rpcclient.structs.darwin import utsname
-from rpcclient.structs.darwin_consts import kCFNumberSInt64Type, kCFNumberDoubleType
-from rpcclient.symbol import DarwinSymbol
+from rpcclient.darwin.structs import utsname
+from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
+from rpcclient.darwin.symbol import DarwinSymbol
 
 
 class DarwinClient(Client):

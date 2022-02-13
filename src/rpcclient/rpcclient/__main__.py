@@ -3,7 +3,7 @@ import logging
 import click
 import coloredlogs
 
-from rpcclient.client.client_factory import create_client
+from rpcclient.client_factory import create_client
 from rpcclient.protocol import DEFAULT_PORT
 
 coloredlogs.install(level=logging.DEBUG)
