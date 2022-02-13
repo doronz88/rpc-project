@@ -293,15 +293,11 @@ class Fs:
         """ provides the same results as os.walk(top) """
         dirs = []
         files = []
-        for file in self.listdir(top):
-            filename = file.d_name
-            if filename in ('.', '..'):
-                continue
-            infos = self.stat(posixpath.join(top, filename))
-            if infos.st_mode & S_IFMT == infos.st_mode & S_IFDIR:
-                dirs.append(filename)
+        for entry in self.scandir(top):
+            if entry.is_dir():
+                dirs.append(entry.name)
             else:
-                files.append(filename)
+                files.append(entry.name)
 
         yield top, dirs, files
 
