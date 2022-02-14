@@ -3,8 +3,10 @@ from socket import socket
 
 from rpcclient.client import Client
 from rpcclient.darwin.client import DarwinClient
+from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
 from rpcclient.exceptions import FailedToConnectError
+from rpcclient.macos.client import MacosClient
 from rpcclient.protocol import UNAME_VERSION_LEN, DEFAULT_PORT
 
 
@@ -31,7 +33,12 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
     logging.info(f'connection uname.sysname: {sysname}')
 
     if sysname == 'darwin':
-        return DarwinClient(sock, sysname, hostname, port)
+        client = DarwinClient(sock, sysname, hostname, port)
+
+        if client.uname.machine.startswith('iPhone'):
+            return IosClient(sock, sysname, hostname, port)
+        else:
+            return MacosClient(sock, sysname, hostname, port)
     elif sysname == 'linux':
         return LinuxClient(sock, sysname, hostname, port)
 
