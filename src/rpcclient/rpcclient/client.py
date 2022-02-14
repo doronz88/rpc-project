@@ -377,7 +377,7 @@ class Client:
                         return exitcode_t.parse(data)
 
     def __repr__(self):
-        buf = '<'
+        buf = f'<{self.__class__.__name__} '
         buf += f'PID:{self.symbols.getpid():d} UID:{self.symbols.getuid():d} GID:{self.symbols.getgid():d} ' \
                f'SYSNAME:{self._sysname}'
         buf += '>'
