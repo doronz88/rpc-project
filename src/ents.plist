@@ -7,5 +7,9 @@
     <true/>
     <key>com.apple.wlan.authentication</key>
 	<true/>
+    <key>com.apple.wifi.manager-access</key>
+	<true/>
+    <key>task_for_pid-allow</key>
+	<true/>
 </dict>
 </plist>
