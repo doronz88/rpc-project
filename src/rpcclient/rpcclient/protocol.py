@@ -11,6 +11,7 @@ cmd_type_t = Enum(Int32ul,
                   CMD_POKE=6,
                   CMD_REPLY_ERROR=7,
                   CMD_REPLY_PEEK=8,
+                  CMD_GET_DUMMY_BLOCK=9,
                   )
 DEFAULT_PORT = 5910
 MAGIC = 0x12345678
@@ -80,3 +81,5 @@ exec_chunk_t = Struct(
     'chunk_type' / exec_chunk_type_t,
     'size' / Int32ul,
 )
+
+dummy_block_t = Int64ul

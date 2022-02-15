@@ -1,26 +1,32 @@
 import struct
 
 from rpcclient.common import path_to_str
+from rpcclient.darwin.consts import AVAudioSessionCategoryOptionDefaultToSpeaker
 from rpcclient.exceptions import RpcClientException, BadReturnValueError
 from rpcclient.darwin.symbol import DarwinSymbol
 
 
 class Recorder:
-    def __init__(self, client, recorder: DarwinSymbol):
+    def __init__(self, client, session, recorder: DarwinSymbol):
         self._client = client
+        self._session = session
         self._recorder = recorder
 
     def release(self):
         self._recorder.objc_call('release')
 
     def record(self):
+        self._session.set_category_play_and_record()
+        self._session.set_active(True)
         self._recorder.objc_call('record')
 
     def pause(self):
         self._recorder.objc_call('pause')
+        self._session.set_active(False)
 
     def stop(self):
         self._recorder.objc_call('stop')
+        self._session.set_active(False)
 
     def delete_recording(self):
         if not self._recorder.objc_call('deleteRecording'):
@@ -30,23 +36,19 @@ class Recorder:
     def recording(self) -> bool:
         return bool(self._recorder.objc_call('isRecording'))
 
-    def __del__(self):
-        try:
-            self.release()
-        except Exception:  # noqa: E722
-            # Best effort.
-            pass
-
 
 class Player:
-    def __init__(self, client, player):
+    def __init__(self, client, session, player):
         self._client = client
+        self._session = session
         self._player = player
 
     def release(self):
         self._player.objc_call('release')
 
     def play(self):
+        self._session.set_category_play_and_record(AVAudioSessionCategoryOptionDefaultToSpeaker)
+        self._session.set_active(True)
         self._player.objc_call('play')
 
     def pause(self):
@@ -54,6 +56,7 @@ class Player:
 
     def stop(self):
         self._player.objc_call('stop')
+        self._session.set_active(False)
 
     def set_volume(self, value: float):
         self._player.objc_call('setVolume:', struct.pack('<f', value))
@@ -70,12 +73,32 @@ class Player:
     def loops(self, value: int):
         self._player.objc_call('setNumberOfLoops:', value)
 
-    def __del__(self):
-        try:
-            self.release()
-        except Exception:  # noqa: E722
-            # Best effort.
-            pass
+
+class AudioSession:
+    def __init__(self, client):
+        self._client = client
+
+        AVAudioSession = self._client.symbols.objc_getClass('AVAudioSession')
+        self._session = AVAudioSession.objc_call('sharedInstance')
+
+    def set_active(self, is_active: bool):
+        self._session.objc_call('setActive:error:', is_active, 0)
+
+    def set_category_play_and_record(self, options=0):
+        self._session.objc_call('setCategory:withOptions:error:',
+                                self._client.symbols.AVAudioSessionCategoryPlayAndRecord[0], options, 0)
+        self._session.objc_call('requestRecordPermission:', self._client.get_dummy_block())
+
+    def override_output_audio_port(self, port: int):
+        self._session.objc_call('overrideOutputAudioPort:error:', port, 0)
+
+    @property
+    def other_audio_playing(self) -> bool:
+        return bool(self._session.objc_call('isOtherAudioPlaying'))
+
+    @property
+    def record_permission(self):
+        return struct.pack('<I', self._session.objc_call('recordPermission'))[::-1].decode()
 
 
 class DarwinMedia:
@@ -85,6 +108,7 @@ class DarwinMedia:
         """
         self._client = client
         self._load_av_foundation()
+        self.session = AudioSession(self._client)
 
     def _load_av_foundation(self):
         options = [
@@ -99,11 +123,6 @@ class DarwinMedia:
                 return
         raise RpcClientException('failed to load AVFAudio')
 
-    def set_audio_session(self):
-        AVAudioSession = self._client.symbols.objc_getClass('AVAudioSession')
-        audio_session = AVAudioSession.objc_call('sharedInstance')
-        audio_session.objc_call('setCategory:error:', self._client.symbols.AVAudioSessionCategoryPlayAndRecord[0], 0)
-
     @path_to_str('filename')
     def get_recorder(self, filename: str) -> Recorder:
         NSURL = self._client.symbols.objc_getClass('NSURL')
@@ -115,21 +134,17 @@ class DarwinMedia:
             self._client.symbols.AVSampleRateKey: 8000.0,
         })
 
-        self.set_audio_session()
-
         AVAudioRecorder = self._client.symbols.objc_getClass('AVAudioRecorder')
         recorder = AVAudioRecorder.objc_call('alloc').objc_call('initWithURL:settings:error:', url, settings, 0)
 
-        return Recorder(self._client, recorder)
+        return Recorder(self._client, self.session, recorder)
 
     @path_to_str('filename')
     def get_player(self, filename: str) -> Player:
         NSURL = self._client.symbols.objc_getClass('NSURL')
         url = NSURL.objc_call('fileURLWithPath:', self._client.cf(filename))
 
-        self.set_audio_session()
-
         AVAudioPlayer = self._client.symbols.objc_getClass('AVAudioPlayer')
         player = AVAudioPlayer.objc_call('alloc').objc_call('initWithContentsOfURL:error:', url, 0)
 
-        return Player(self._client, player)
+        return Player(self._client, self.session, player)
