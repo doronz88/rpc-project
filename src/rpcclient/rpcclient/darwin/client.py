@@ -1,18 +1,32 @@
+from collections import namedtuple
+from functools import lru_cache
 import struct
 import typing
 
 from cached_property import cached_property
 
 from rpcclient.client import Client
+from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
+from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
 from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.preferences import Preferences
 from rpcclient.exceptions import RpcClientException
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.darwin.symbol import DarwinSymbol
+
+IsaMagic = namedtuple('IsaMagic', 'mask value')
+ISA_MAGICS = [
+    # ARM64
+    IsaMagic(mask=0x000003f000000001, value=0x000001a000000001),
+    # X86_64
+    IsaMagic(mask=0x001f800000000001, value=0x001d800000000001),
+]
+# Mask for tagged pointer, from objc-internal.h
+OBJC_TAG_MASK = (1 << 63)
 
 
 class DarwinClient(Client):
@@ -103,3 +117,48 @@ class DarwinClient(Client):
                     return self.symbols.CFDictionaryCreate(0, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
         else:
             raise NotImplementedError()
+
+    def objc_symbol(self, address) -> ObjectiveCSymbol:
+        """
+        Get objc symbol wrapper for given address
+        :param address:
+        :return: ObjectiveC symbol object
+        """
+        return ObjectiveCSymbol.create(int(address), self)
+
+    @lru_cache(maxsize=None)
+    def objc_get_class(self, name: str):
+        """
+        Get ObjC class object
+        :param name:
+        :return:
+        """
+        return objective_c_class.Class.from_class_name(self, name)
+
+    @staticmethod
+    def is_objc_type(symbol: DarwinSymbol) -> bool:
+        """
+        Test if a given symbol represents an objc object
+        :param symbol:
+        :return:
+        """
+        # Tagged pointers are ObjC objects
+        if symbol & OBJC_TAG_MASK == OBJC_TAG_MASK:
+            return True
+
+        # Class are not ObjC objects
+        for mask, value in ISA_MAGICS:
+            if symbol & mask == value:
+                return False
+
+        try:
+            with symbol.change_item_size(8):
+                isa = symbol[0]
+        except RpcClientException:
+            return False
+
+        for mask, value in ISA_MAGICS:
+            if isa & mask == value:
+                return True
+
+        return False

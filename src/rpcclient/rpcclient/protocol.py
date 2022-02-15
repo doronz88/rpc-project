@@ -9,6 +9,8 @@ cmd_type_t = Enum(Int32ul,
                   CMD_CALL=4,
                   CMD_PEEK=5,
                   CMD_POKE=6,
+                  CMD_REPLY_ERROR=7,
+                  CMD_REPLY_PEEK=8,
                   )
 DEFAULT_PORT = 5910
 MAGIC = 0x12345678
@@ -62,6 +64,11 @@ protocol_message_t = Struct(
         cmd_type_t.CMD_PEEK: cmd_peek_t,
         cmd_type_t.CMD_POKE: cmd_poke_t,
     })
+)
+
+reply_protocol_message_t = Struct(
+    'magic' / Const(MAGIC, Int32ul),
+    'cmd_type' / cmd_type_t,
 )
 
 exec_chunk_type_t = Enum(Int32ul,

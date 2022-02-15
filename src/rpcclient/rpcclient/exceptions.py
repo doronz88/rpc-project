@@ -36,3 +36,7 @@ class FailedToConnectError(RpcClientException):
 
 class UnrecognizedSelector(RpcClientException):
     pass
+
+
+class GettingObjectiveCClassError(RpcClientException):
+    pass

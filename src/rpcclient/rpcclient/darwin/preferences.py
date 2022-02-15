@@ -9,7 +9,7 @@ kCFPreferencesAnyHost = 'kCFPreferencesAnyHost'
 class Preferences:
     def __init__(self, client):
         """
-        :param rpcclient.client.darwin_client.DarwinClient client:
+        :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
 

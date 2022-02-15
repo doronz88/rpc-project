@@ -81,7 +81,7 @@ class Player:
 class DarwinMedia:
     def __init__(self, client):
         """
-        :param rpcclient.client.darwin_client.DarwinClient client:
+        :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
         self._load_av_foundation()
