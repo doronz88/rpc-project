@@ -1,5 +1,6 @@
 import ctypes
 import logging
+import time
 from typing import List
 
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
@@ -82,6 +83,10 @@ class WifiInterface:
 
         if self._client.symbols.WiFiDeviceClientSetPower(self._device, is_on):
             raise BadReturnValueError(f'WiFiDeviceClientSetPower failed ({self._client.last_error})')
+
+        # bugfix: this is an async operation, so we need to wait some time
+        while self.is_on() != is_on:
+            time.sleep(.1)
 
         if is_on:
             if self._client.symbols.WiFiManagerClientEnable(self._wifi_manager_client):
