@@ -17,7 +17,8 @@ from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError
 from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
-from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN
+from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
+    reply_protocol_message_t
 from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
@@ -164,6 +165,9 @@ class Client:
             'data': {'address': address, 'size': size},
         })
         self._sock.sendall(message)
+        reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
+        if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
+            raise ArgumentError()
         return self._recvall(size)
 
     def poke(self, address: int, data: bytes):
@@ -258,11 +262,16 @@ class Client:
 
     @contextlib.contextmanager
     def safe_malloc(self, size: int):
-        x = self.symbols.malloc(size)
-        try:
+        with self.freeing(self.symbols.malloc(size)) as x:
             yield x
+
+    @contextlib.contextmanager
+    def freeing(self, symbol):
+        try:
+            yield symbol
         finally:
-            self.symbols.free(x)
+            if symbol:
+                self.symbols.free(symbol)
 
     def interactive(self):
         """ Start an interactive shell """

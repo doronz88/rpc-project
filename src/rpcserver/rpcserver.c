@@ -1,5 +1,5 @@
 #ifndef __APPLE__
-#define _XOPEN_SOURCE (600) 
+#define _XOPEN_SOURCE (600)
 #define _GNU_SOURCE (1)
 #endif  // __APPLE__
 #include <stdlib.h>
@@ -24,6 +24,10 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
+
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif // __APPLE__
 
 #include "common.h"
 
@@ -50,6 +54,8 @@ typedef enum
     CMD_CALL = 4,
     CMD_PEEK = 5,
     CMD_POKE = 6,
+    CMD_REPLY_ERROR = 7,
+    CMD_REPLY_PEEK = 8,
 } cmd_type_t;
 
 typedef enum
@@ -157,7 +163,7 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
     CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
     CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
-    
+
     CHECK(0 == posix_spawnp(pid, argv[0], &actions, &attr, argv, envp));
 
     posix_spawnattr_destroy(&attr);
@@ -181,6 +187,15 @@ error:
     return -1;
 }
 
+bool send_reply(int sockfd, cmd_type_t type)
+{
+    protocol_message_t protocol_message = {.magic = MAGIC, .cmd_type = type};
+    CHECK(sendall(sockfd, (char *)&protocol_message, sizeof(protocol_message)));
+    return true;
+error:
+    return false;
+}
+
 bool handle_exec(int sockfd)
 {
     pid_t pid = INVALID_PID;
@@ -190,7 +205,7 @@ bool handle_exec(int sockfd)
     char **envp = NULL;
     u32 argc;
     u32 envc;
-    
+
     CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
     CHECK(argc > 0);
 
@@ -467,8 +482,30 @@ bool handle_peek(int sockfd)
     int result = false;
     u64 *argv = NULL;
     cmd_peek_t cmd;
+
+#ifdef __APPLE__
+    kern_return_t rc;
+    mach_port_t task;
+    vm_offset_t data;
+    mach_msg_type_number_t size;
+
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
+    if (vm_read(task, cmd.address, cmd.size, &data, &size) == KERN_SUCCESS)
+    {
+        CHECK(send_reply(sockfd, CMD_REPLY_PEEK));
+        CHECK(sendall(sockfd, (char *)cmd.address, cmd.size));
+    }
+    else
+    {
+        CHECK(send_reply(sockfd, CMD_REPLY_ERROR));
+    }
+#else  // __APPLE__
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(send_reply(sockfd, CMD_REPLY_PEEK));
     CHECK(sendall(sockfd, (char *)cmd.address, cmd.size));
+#endif // __APPLE__
 
     result = true;
 

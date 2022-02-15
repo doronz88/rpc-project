@@ -65,3 +65,11 @@ class DarwinSymbol(Symbol):
                         result[keys[i].py] = values[i].py
                     return result
         raise NotImplementedError(f'type: {t}')
+
+    @property
+    def objc_symbol(self):
+        """
+        Get an ObjectiveC symbol of the same address
+        :return: Object representing the ObjectiveC symbol
+        """
+        return self._client.objc_symbol(self)
