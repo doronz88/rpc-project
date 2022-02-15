@@ -7,5 +7,7 @@
     <true/>
     <key>com.apple.wlan.authentication</key>
 	<true/>
+    <key>com.apple.wifi.manager-access</key>
+	<true/>
 </dict>
 </plist>

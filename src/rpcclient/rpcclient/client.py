@@ -126,7 +126,10 @@ class Client:
         for arg in argv:
             tmp = arg
 
-            if isinstance(arg, str):
+            if isinstance(arg, bool):
+                tmp = int(arg)
+
+            elif isinstance(arg, str):
                 tmp = self.symbols.malloc(len(arg) + 1)
                 tmp.poke(arg.encode() + b'\0')
                 free_list.append(tmp)
