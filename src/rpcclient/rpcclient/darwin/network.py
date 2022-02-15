@@ -1,6 +1,5 @@
 import ctypes
 import logging
-import time
 from typing import List
 
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
@@ -84,10 +83,6 @@ class WifiInterface:
         if self._client.symbols.WiFiDeviceClientSetPower(self._device, is_on):
             raise BadReturnValueError(f'WiFiDeviceClientSetPower failed ({self._client.last_error})')
 
-        # bugfix: this is an async operation, so we need to wait some time
-        while self.is_on() != is_on:
-            time.sleep(.1)
-
         if is_on:
             if self._client.symbols.WiFiManagerClientEnable(self._wifi_manager_client):
                 raise BadReturnValueError(f'WiFiManagerClientEnable failed ({self._client.last_error})')
@@ -138,28 +133,29 @@ class DarwinNetwork(Network):
 
     def get_wifi_interface(self, interface_name: str = None) -> WifiInterface:
         """ get a specific wifi interface object for remote controlling """
-        with self._client.safe_malloc(8) as p_interface:
-            if self._client.symbols.Apple80211Open(p_interface):
+        with self._client.safe_malloc(8) as p_handle:
+            if self._client.symbols.Apple80211Open(p_handle):
                 raise BadReturnValueError(f'Apple80211Open failed ({self._client.last_error})')
+            handle = p_handle[0]
 
-            if interface_name is None:
-                wifi_interfaces = self.wifi_interfaces
+        if interface_name is None:
+            wifi_interfaces = self.wifi_interfaces
 
-                if not wifi_interfaces:
-                    raise RpcClientException('no available wifi interfaces were found')
+            if not wifi_interfaces:
+                raise RpcClientException('no available wifi interfaces were found')
 
-                interface_name = wifi_interfaces[0]
+            interface_name = wifi_interfaces[0]
 
-            if self._client.symbols.Apple80211BindToInterface(p_interface[0], self._client.cf(interface_name)):
-                raise BadReturnValueError(f'Apple80211BindToInterface failed ({self._client.last_error})')
+        if self._client.symbols.Apple80211BindToInterface(handle, self._client.cf(interface_name)):
+            raise BadReturnValueError(f'Apple80211BindToInterface failed ({self._client.last_error})')
 
-            wifi_manager_client = self._client.symbols.WiFiManagerClientCreate(0, 0)
-            if not wifi_manager_client:
-                raise BadReturnValueError('WiFiManagerClientCreate failed')
+        wifi_manager_client = self._client.symbols.WiFiManagerClientCreate(0, 0)
+        if not wifi_manager_client:
+            raise BadReturnValueError('WiFiManagerClientCreate failed')
 
-            device = self._client.symbols.WiFiManagerClientGetDevice(wifi_manager_client,
-                                                                     self._client.cf(interface_name))
-            if not device:
-                raise BadReturnValueError('WiFiManagerClientGetDevice failed')
+        device = self._client.symbols.WiFiManagerClientGetDevice(wifi_manager_client,
+                                                                 self._client.cf(interface_name))
+        if not device:
+            raise BadReturnValueError('WiFiManagerClientGetDevice failed')
 
-            return WifiInterface(self._client, p_interface[0], wifi_manager_client, device)
+        return WifiInterface(self._client, handle, wifi_manager_client, device)
