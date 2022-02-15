@@ -18,3 +18,5 @@ kCFNumberFloatType = 12
 kCFNumberDoubleType = 13
 kCFNumberCFIndexType = 14
 kCFNumberMaxType = 14
+
+AVAudioSessionCategoryOptionDefaultToSpeaker = 0x8

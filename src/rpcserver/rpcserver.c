@@ -56,6 +56,7 @@ typedef enum
     CMD_POKE = 6,
     CMD_REPLY_ERROR = 7,
     CMD_REPLY_PEEK = 8,
+    CMD_GET_DUMMY_BLOCK = 9,
 } cmd_type_t;
 
 typedef enum
@@ -537,6 +538,29 @@ error:
     return result;
 }
 
+#if  __APPLE__
+
+void (^dummy_block)(void) = ^{
+};
+
+bool handle_get_dummy_block(int sockfd)
+{
+    TRACE("enter");
+    CHECK(sendall(sockfd, (const char *)&dummy_block, sizeof(&dummy_block)));
+    return true;
+error:
+    return false;
+}
+
+#else // !__APPLE__
+
+bool handle_get_dummy_block(int sockfd)
+{
+    return true;
+}
+
+#endif // __APPLE__
+
 void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
@@ -585,6 +609,11 @@ void handle_client(int sockfd)
         case CMD_POKE:
         {
             handle_poke(sockfd);
+            break;
+        }
+        case CMD_GET_DUMMY_BLOCK:
+        {
+            handle_get_dummy_block(sockfd);
             break;
         }
         default:

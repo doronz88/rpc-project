@@ -18,7 +18,7 @@ from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
-    reply_protocol_message_t
+    reply_protocol_message_t, dummy_block_t
 from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
@@ -180,6 +180,15 @@ class Client:
             'data': {'address': address, 'size': len(data), 'data': data},
         })
         self._sock.sendall(message)
+
+    def get_dummy_block(self) -> Symbol:
+        """ poke data at given address """
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_GET_DUMMY_BLOCK,
+            'data': None,
+        })
+        self._sock.sendall(message)
+        return self.symbol(dummy_block_t.parse(self._recvall(8)))
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
               tty=False, background=False):
