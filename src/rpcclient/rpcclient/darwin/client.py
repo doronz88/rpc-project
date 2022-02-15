@@ -74,6 +74,11 @@ class DarwinClient(Client):
     def is_idevice(self):
         return self.uname.machine.startswith('i')
 
+    def set_airplane_mode(self, mode: bool):
+        preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
+        preferences.objc_call('setAirplaneMode:', mode)
+        preferences.objc_call('synchronize')
+
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
         return DarwinSymbol.create(symbol, self)
