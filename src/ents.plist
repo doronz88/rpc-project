@@ -3,36 +3,44 @@
 <dict>
     <key>application-identifier</key>
     <string>com.cyber.rpcserver</string>
-	<key>platform-application</key>
-	<true/>
+    <key>platform-application</key>
+    <true/>
     <key>com.apple.private.security.no-container</key>
     <true/>
     <key>com.apple.wlan.authentication</key>
-	<true/>
+    <true/>
     <key>com.apple.wifi.manager-access</key>
-	<true/>
+    <true/>
     <key>task_for_pid-allow</key>
-	<true/>
+    <true/>
     <key>com.apple.private.tcc.allow</key>
     <array>
-      <string>kTCCServiceMicrophone</string>
-      <string>kTCCServiceCamera</string>
+        <string>kTCCServiceMicrophone</string>
+        <string>kTCCServiceCamera</string>
     </array>
     <key>com.apple.security.device.audio-input</key>
-	<true/>
+    <true/>
     <key>com.apple.security.device.microphone</key>
-	<true/>
+    <true/>
     <key>com.apple.security.device.camera</key>
-	<true/>
+    <true/>
     <key>com.apple.security.personal-information.location</key>
-	<true/>
+    <true/>
     <key>com.apple.security.personal-information.addressbook</key>
-	<true/>
+    <true/>
     <key>com.apple.security.personal-information.calendars</key>
-	<true/>
+    <true/>
     <key>com.apple.security.personal-information.photos-library</key>
-	<true/>
+    <true/>
     <key>com.apple.security.automation.apple-events</key>
-	<true/>
+    <true/>
+    <key>com.apple.SystemConfiguration.SCDynamicStore-write-access</key>
+    <true/>
+    <key>com.apple.SystemConfiguration.SCPreferences-write-access</key>
+    <array>
+        <string>com.apple.AutoWake.xml</string>
+        <string>preferences.plist</string>
+        <string>com.apple.radios.plist</string>
+    </array>
 </dict>
 </plist>
