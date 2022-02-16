@@ -5,20 +5,27 @@
 
 ## Description
 
+Simple RPC service providing an API for controlling every aspect of the target machine for automation purposes.
+
 This project includes two components:
-* Server binary written in C exposing a protocol to call native C functions for controlling every aspect of 
+
+* Server binary written in C exposing a protocol to call native C functions.
 * Client written in Python3 to communicate with the server
 
-Simple remote control process requiring a single executable to be uploaded and run on the remote host.
-This executable then provides a protocol to call native C functions which makes it possible to control
-every aspect of the connected machine.
+The python client utilizes the ability to call native functions in order to provide APIs for different aspects:
 
-For more information about the client which utilizes these abilities, please view its README here:
-https://github.com/doronz88/rpc-project/tree/master/src/rpcclient
+* Remote shell commands
+* Filesystem management (APIs for `open()`, `read()`, etc...)
+* Network management (WiFi scan, TCP connect, etc...)
+* Darwin only:
+  * Multimedia automation (recording and playing)
+  * Preferences managemnent (remote manage CFPreference and SCPreferences)
+  * Process management (kill, list, query open FDs, etc...)
 
 ## Building C Server
 
 macOS & Linux:
+
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
 cd src/rpcserver
@@ -26,6 +33,7 @@ make
 ```
 
 On iOS:
+
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
 cd src
