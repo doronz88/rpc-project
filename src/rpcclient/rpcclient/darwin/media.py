@@ -102,6 +102,8 @@ class AudioSession:
 
 
 class DarwinMedia:
+    """ Media utils """
+
     def __init__(self, client):
         """
         :param rpcclient.darwin.client.DarwinClient client:
