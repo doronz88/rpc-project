@@ -1,22 +1,22 @@
-from collections import namedtuple
-from functools import lru_cache
 import struct
 import typing
+from collections import namedtuple
+from functools import lru_cache
 
 from cached_property import cached_property
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
+from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
-from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.preferences import Preferences
-from rpcclient.exceptions import RpcClientException
+from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
-from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.exceptions import RpcClientException
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -52,7 +52,7 @@ class DarwinClient(Client):
         if self.uname.machine != 'x86_64':
             self.inode64 = True
         self.fs = DarwinFs(self)
-        self.prefs = Preferences(self)
+        self.preferences = Preferences(self)
         self.processes = DarwinProcesses(self)
         self.media = DarwinMedia(self)
         self.network = DarwinNetwork(self)
@@ -75,6 +75,7 @@ class DarwinClient(Client):
         return self.uname.machine.startswith('i')
 
     def set_airplane_mode(self, mode: bool):
+        """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
         preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
         preferences.objc_call('setAirplaneMode:', mode)
         preferences.objc_call('synchronize')

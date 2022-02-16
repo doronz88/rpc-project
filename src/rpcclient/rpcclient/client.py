@@ -13,13 +13,13 @@ import IPython
 from construct import Int64sl
 from traitlets.config import Config
 
+from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError
 from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
     reply_protocol_message_t, dummy_block_t
-from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 
@@ -83,7 +83,7 @@ class Client:
         print(f'progname: {self.symbols.getprogname().peek_str()}')
 
     def uname(self):
-        """ get the utsname struct from remote"""
+        """ get the utsname struct from remote """
         raise NotImplementedError()
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
