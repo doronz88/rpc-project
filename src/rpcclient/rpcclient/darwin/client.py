@@ -9,6 +9,7 @@ from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.darwin.fs import DarwinFs
+from rpcclient.darwin.iokit import IOKit
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
@@ -56,6 +57,7 @@ class DarwinClient(Client):
         self.processes = DarwinProcesses(self)
         self.media = DarwinMedia(self)
         self.network = DarwinNetwork(self)
+        self.iokit = IOKit(self)
 
     @property
     def modules(self) -> typing.List[str]:
@@ -85,7 +87,9 @@ class DarwinClient(Client):
         return DarwinSymbol.create(symbol, self)
 
     def cf(self, o: object):
-        if isinstance(o, DarwinSymbol):
+        if o is None:
+            return self.symbols.kCFNull[0]
+        elif isinstance(o, DarwinSymbol):
             # assuming it's already a cfobject
             return o
         elif isinstance(o, str):

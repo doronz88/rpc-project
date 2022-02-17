@@ -30,7 +30,7 @@ jobs:
         working-directory: ./src/rpcserver
         run: |
           make all
-          nohup ./rpcserver &
+          sudo nohup ./rpcserver &
       - name: Install python package + pytest
         working-directory: ./src/rpcclient
         run: |

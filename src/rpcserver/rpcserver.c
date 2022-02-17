@@ -34,6 +34,7 @@
 #define DEFAULT_PORT ("5910")
 #define DEFAULT_SHELL ("/bin/sh")
 #define USAGE ("Usage: %s [-p port] [-s shell]")
+#define SERVER_MAGIC_VERSION (0x88888800)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
@@ -564,6 +565,10 @@ bool handle_get_dummy_block(int sockfd)
 void handle_client(int sockfd)
 {
     TRACE("enter. fd: %d", sockfd);
+
+    // send MAGIC
+    u32 magic = SERVER_MAGIC_VERSION;
+    CHECK(sendall(sockfd, (const char *)&magic, sizeof(magic)));
 
     // notify client of the connected target os version
     struct utsname uname_buf;

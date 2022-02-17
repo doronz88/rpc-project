@@ -3,6 +3,7 @@ import typing
 from collections import namedtuple
 
 from rpcclient.exceptions import BadReturnValueError
+from rpcclient.allocated import Allocated
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
@@ -10,7 +11,7 @@ Interface = namedtuple('Interface', 'name address netmask broadcast')
 Hostentry = namedtuple('Hostentry', 'name aliases addresses')
 
 
-class Socket:
+class Socket(Allocated):
     CHUNK_SIZE = 1024
 
     def __init__(self, client, fd: int):
@@ -18,16 +19,11 @@ class Socket:
         :param rpcclient.client.client.Client client:
         :param fd:
         """
+        super().__init__()
         self._client = client
         self.fd = fd
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def close(self):
+    def _deallocate(self):
         """ close(fd) at remote. read man for more details. """
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:

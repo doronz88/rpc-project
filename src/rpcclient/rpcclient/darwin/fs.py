@@ -29,6 +29,7 @@ class DarwinScandirIterator(ScandirIterator):
             self._client.errno = 0
             direntp = self._client.symbols.readdir(self._dirp)
             if not direntp:
+                self.deallocate()
                 if self._client.errno:
                     raise BadReturnValueError(f'Failed scanning dir: {self._client.last_error}')
                 break
@@ -37,7 +38,7 @@ class DarwinScandirIterator(ScandirIterator):
                 continue
             yield DarwinDirEntry(self.path, entry, self._client)
 
-    def closedir(self):
+    def _deallocate(self):
         self._client.symbols.closedir(self._dirp)
 
 

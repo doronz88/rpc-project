@@ -4,6 +4,7 @@ from typing import List
 
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
 from rpcclient.network import Network
+from rpcclient.allocated import Allocated
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +47,13 @@ class WifiNetwork:
         return result
 
 
-class WifiInterface:
+class WifiInterface(Allocated):
     def __init__(self, client, interface, wifi_manager_client, device):
+        super().__init__()
         self._client = client
         self._interface = interface
         self._wifi_manager_client = wifi_manager_client
         self._device = device
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
 
     def scan(self) -> List[WifiNetwork]:
         """ perform wifi scan """
@@ -96,7 +92,7 @@ class WifiInterface:
     def is_on(self) -> bool:
         return self._client.symbols.WiFiDeviceClientGetPower(self._device) == 1
 
-    def close(self):
+    def _deallocate(self):
         self._client.symbols.Apple80211Close(self._interface)
 
 

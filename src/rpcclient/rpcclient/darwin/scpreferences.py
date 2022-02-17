@@ -1,21 +1,14 @@
 import typing
 
 from rpcclient.exceptions import RpcClientException
+from rpcclient.allocated import Allocated
 
 
-class SCPreferencesObject:
+class SCPreferencesObject(Allocated):
     def __init__(self, client, ref):
+        super().__init__()
         self._client = client
         self._ref = ref
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            yield
-        finally:
-            self.release()
 
     @property
     def keys(self) -> typing.List[str]:
@@ -40,7 +33,7 @@ class SCPreferencesObject:
             result[k] = self.get(k)
         return result
 
-    def release(self):
+    def _deallocate(self):
         self._client.CFRelase(self._ref)
 
     def _commit(self):

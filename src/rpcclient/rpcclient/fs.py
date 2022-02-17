@@ -3,6 +3,7 @@ from typing import Iterator, List
 
 from rpcclient.common import path_to_str
 from rpcclient.exceptions import InvalidArgumentError, BadReturnValueError
+from rpcclient.allocated import Allocated
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
 
@@ -76,42 +77,18 @@ class DirEntry:
         raise NotImplementedError()
 
 
-class ScandirIterator:
+class ScandirIterator(Allocated):
     def __init__(self, path, dirp, client):
+        super().__init__()
         self.path = path
         self._client = client
         self._dirp = dirp
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def __del__(self):
-        try:
-            self.close()
-        except Exception:  # noqa: E722
-            # Best effort.
-            pass
-
     def __iter__(self) -> Iterator[DirEntry]:
         raise NotImplementedError()
 
-    def is_closed(self):
-        return not self._dirp
 
-    def close(self):
-        if self.is_closed():
-            return
-        self.closedir()
-        self._dirp = 0
-
-    def closedir(self):
-        raise NotImplementedError()
-
-
-class File:
+class File(Allocated):
     CHUNK_SIZE = 1024
 
     def __init__(self, client, fd: int):
@@ -119,16 +96,11 @@ class File:
         :param rpcclient.client.client.Client client:
         :param fd:
         """
+        super().__init__()
         self._client = client
         self.fd = fd
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def close(self):
+    def _deallocate(self):
         """ close(fd) at remote. read man for more details. """
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
