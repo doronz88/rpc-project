@@ -2,6 +2,14 @@ class RpcClientException(Exception):
     pass
 
 
+class InvalidServerVersionMagic(RpcClientException):
+    pass
+
+
+class ServerDiedError(RpcClientException):
+    pass
+
+
 class SymbolAbsentError(RpcClientException):
     pass
 

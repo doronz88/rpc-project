@@ -5,9 +5,9 @@ from rpcclient.client import Client
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
-from rpcclient.exceptions import FailedToConnectError
+from rpcclient.exceptions import FailedToConnectError, InvalidServerVersionMagic
 from rpcclient.macos.client import MacosClient
-from rpcclient.protocol import UNAME_VERSION_LEN, DEFAULT_PORT
+from rpcclient.protocol import UNAME_VERSION_LEN, DEFAULT_PORT, SERVER_MAGIC_VERSION
 
 
 def recvall(sock, size: int) -> bytes:
@@ -28,6 +28,10 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
     except ConnectionRefusedError as e:
         # wrap in our own exception
         raise FailedToConnectError() from e
+
+    magic = recvall(sock, len(SERVER_MAGIC_VERSION))
+    if magic != SERVER_MAGIC_VERSION:
+        raise InvalidServerVersionMagic(f'got an invalid server magic: {magic.hex()}')
 
     sysname = recvall(sock, UNAME_VERSION_LEN).split(b'\x00', 1)[0].decode().lower()
     logging.info(f'connection uname.sysname: {sysname}')

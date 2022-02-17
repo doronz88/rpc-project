@@ -14,7 +14,7 @@ from construct import Int64sl
 from traitlets.config import Config
 
 from rpcclient.darwin.structs import pid_t, exitcode_t
-from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError
+from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError
 from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
@@ -366,6 +366,9 @@ class Client:
                 chunk = self._sock.recv(size)
             except BlockingIOError:
                 continue
+            if self._sock.gettimeout() == 0 and not chunk:
+                # TODO: replace self._sock.gettimeout() == 0 on -> self._sock.getblocking() on python37+
+                raise ServerDiedError()
             size -= len(chunk)
             buf += chunk
         return buf
