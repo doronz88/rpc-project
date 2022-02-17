@@ -18,7 +18,7 @@ from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import RpcClientException
+from rpcclient.exceptions import RpcClientException, MissingLibraryError
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -38,7 +38,7 @@ class DarwinClient(Client):
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
 
         if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", 2):
-            raise RpcClientException('failed to load CoreFoundation')
+            raise MissingLibraryError('failed to load CoreFoundation')
 
         self._cf_types = {
             self.symbols.CFDateGetTypeID(): 'date',

@@ -2,7 +2,7 @@ class RpcClientException(Exception):
     pass
 
 
-class InvalidServerVersionMagic(RpcClientException):
+class InvalidServerVersionMagicError(RpcClientException):
     pass
 
 
@@ -22,7 +22,7 @@ class BadReturnValueError(RpcClientException):
     pass
 
 
-class NoSuchPreference(RpcClientException):
+class NoSuchPreferenceError(RpcClientException):
     pass
 
 
@@ -42,7 +42,7 @@ class FailedToConnectError(RpcClientException):
     pass
 
 
-class UnrecognizedSelector(RpcClientException):
+class UnrecognizedSelectorError(RpcClientException):
     pass
 
 
