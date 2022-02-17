@@ -32,7 +32,13 @@ class DarwinSymbol(Symbol):
 
         t = self._client._cf_types[self._client.symbols.CFGetTypeID(self)]
         if t == 'str':
-            return self._client.symbols.CFStringGetCStringPtr(self, 0).peek_str()
+            ptr = self._client.symbols.CFStringGetCStringPtr(self, 0)
+            if not ptr:
+                with self._client.safe_malloc(4096) as buf:
+                    if not self._client.symbols.CFStringGetCString(self, buf, 4096, 0):
+                        raise CfSerializationError('CFStringGetCString failed')
+                    return buf.peek_str()
+            return ptr.peek_str()
         if t == 'bool':
             return bool(self._client.symbols.CFBooleanGetValue(self, 0))
         if t == 'number':
