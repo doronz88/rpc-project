@@ -26,6 +26,9 @@ blkcnt_t = Int64ul
 blksize_t = Int32ul
 ino64_t = Int64ul
 fsid_t = Array(2, Int32sl)
+mach_port_t = Int64ul
+io_name_t = PaddedString(1024, 'utf8')
+io_object_t = Int64ul
 
 timespec = Struct(
     'tv_sec' / long,

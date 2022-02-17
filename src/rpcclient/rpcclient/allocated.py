@@ -14,7 +14,10 @@ class Allocated:
         self.deallocate()
 
     def __del__(self):
-        self.deallocate()
+        try:
+            self.deallocate()
+        except Exception:
+            pass
 
     @abstractmethod
     def _deallocate(self):

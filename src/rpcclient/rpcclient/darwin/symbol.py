@@ -1,5 +1,6 @@
 import struct
 import time
+from typing import List, Mapping
 
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.exceptions import CfSerializationError, UnrecognizedSelector
@@ -25,46 +26,72 @@ class DarwinSymbol(Symbol):
             return None
         return self._client.symbols.CFCopyDescription(self).py
 
+    def _decode_cfstr(self) -> str:
+        ptr = self._client.symbols.CFStringGetCStringPtr(self, 0)
+        if ptr:
+            return ptr.peek_str()
+
+        with self._client.safe_malloc(4096) as buf:
+            if not self._client.symbols.CFStringGetCString(self, buf, 4096, 0):
+                raise CfSerializationError('CFStringGetCString failed')
+            return buf.peek_str()
+
+    def _decode_cfbool(self) -> bool:
+        return bool(self._client.symbols.CFBooleanGetValue(self, 0))
+
+    def _decode_cfnumber(self) -> int:
+        with self._client.safe_malloc(200) as buf:
+            if self._client.symbols.CFNumberIsFloatType(self):
+                if not self._client.symbols.CFNumberGetValue(self, kCFNumberDoubleType, buf):
+                    raise CfSerializationError(f'failed to deserialize float: {self}')
+                return struct.unpack('<d', buf.peek(8))[0]
+            if not self._client.symbols.CFNumberGetValue(self, kCFNumberSInt64Type, buf):
+                raise CfSerializationError(f'failed to deserialize int: {self}')
+            return int(buf[0])
+
+    def _decode_cfdate(self) -> time.struct_time:
+        return time.strptime(self.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
+
+    def _decode_cfdata(self) -> bytes:
+        count = self._client.symbols.CFDataGetLength(self)
+        return self._client.symbols.CFDataGetBytePtr(self).peek(count)
+
+    def _decode_cfarray(self) -> List:
+        result = []
+        count = self._client.symbols.CFArrayGetCount(self)
+        for i in range(count):
+            result.append(self._client.symbols.CFArrayGetValueAtIndex(self, i).py)
+        return result
+
+    def _decode_cfdict(self) -> Mapping:
+        result = {}
+        count = self._client.symbols.CFArrayGetCount(self)
+        with self._client.safe_malloc(8 * count) as keys:
+            with self._client.safe_malloc(8 * count) as values:
+                self._client.symbols.CFDictionaryGetKeysAndValues(self, keys, values)
+                for i in range(count):
+                    result[keys[i].py] = values[i].py
+                return result
+
     @property
     def py(self):
         if self == 0:
             return None
 
         t = self._client._cf_types[self._client.symbols.CFGetTypeID(self)]
-        if t == 'str':
-            return self._client.symbols.CFStringGetCStringPtr(self, 0).peek_str()
-        if t == 'bool':
-            return bool(self._client.symbols.CFBooleanGetValue(self, 0))
-        if t == 'number':
-            with self._client.safe_malloc(200) as buf:
-                if self._client.symbols.CFNumberIsFloatType(self):
-                    if not self._client.symbols.CFNumberGetValue(self, kCFNumberDoubleType, buf):
-                        raise CfSerializationError(f'failed to deserialize float: {self}')
-                    return struct.unpack('<d', buf.peek(8))[0]
-                if not self._client.symbols.CFNumberGetValue(self, kCFNumberSInt64Type, buf):
-                    raise CfSerializationError(f'failed to deserialize int: {self}')
-                return int(buf[0])
-        if t == 'date':
-            return time.strptime(self.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
-        if t == 'data':
-            count = self._client.symbols.CFDataGetLength(self)
-            return self._client.symbols.CFDataGetBytePtr(self).peek(count)
-        if t == 'array':
-            result = []
-            count = self._client.symbols.CFArrayGetCount(self)
-            for i in range(count):
-                result.append(self._client.symbols.CFArrayGetValueAtIndex(self, i).py)
-            return result
-        if t == 'dict':
-            result = {}
-            count = self._client.symbols.CFArrayGetCount(self)
-            with self._client.safe_malloc(8 * count) as keys:
-                with self._client.safe_malloc(8 * count) as values:
-                    self._client.symbols.CFDictionaryGetKeysAndValues(self, keys, values)
-                    for i in range(count):
-                        result[keys[i].py] = values[i].py
-                    return result
-        raise NotImplementedError(f'type: {t}')
+        type_decoders = {
+            'str': self._decode_cfstr,
+            'bool': self._decode_cfbool,
+            'number': self._decode_cfnumber,
+            'date': self._decode_cfdate,
+            'data': self._decode_cfdata,
+            'array': self._decode_cfarray,
+            'dict': self._decode_cfdict,
+        }
+        if t not in type_decoders:
+            raise NotImplementedError(f'type: {t}')
+
+        return type_decoders[t]()
 
     @property
     def objc_symbol(self):
