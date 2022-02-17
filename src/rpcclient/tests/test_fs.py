@@ -1,10 +1,7 @@
-from stat import S_IMODE
 import os
+from stat import S_IMODE
 
-import pytest
 
-
-@pytest.mark.local_only
 def test_chown(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     file.touch()
