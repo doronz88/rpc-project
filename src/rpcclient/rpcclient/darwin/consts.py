@@ -1,3 +1,7 @@
+kCFAllocatorDefault = 0
+MACH_PORT_NULL = 0
+AVAudioSessionCategoryOptionDefaultToSpeaker = 0x8
+
 # Types from MacTypes.h
 
 # Basic C types
@@ -19,4 +23,12 @@ kCFNumberDoubleType = 13
 kCFNumberCFIndexType = 14
 kCFNumberMaxType = 14
 
-AVAudioSessionCategoryOptionDefaultToSpeaker = 0x8
+# Types from IOKitKeys.h
+
+# registry plane names
+kIOServicePlane = 'IOService'
+kIOPowerPlane = 'IOPower'
+kIODeviceTreePlane = 'IODeviceTree'
+kIOAudioPlane = 'IOAudio'
+kIOFireWirePlane = 'IOFireWire'
+kIOUSBPlane = 'IOUSB'

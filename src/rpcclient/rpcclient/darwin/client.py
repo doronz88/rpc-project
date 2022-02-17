@@ -9,7 +9,7 @@ from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
 from rpcclient.darwin.fs import DarwinFs
-from rpcclient.darwin.iokit import IOKit
+from rpcclient.darwin.ioregistry import IORegistry
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
@@ -57,7 +57,7 @@ class DarwinClient(Client):
         self.processes = DarwinProcesses(self)
         self.media = DarwinMedia(self)
         self.network = DarwinNetwork(self)
-        self.iokit = IOKit(self)
+        self.ioregistry = IORegistry(self)
 
     @property
     def modules(self) -> typing.List[str]:
