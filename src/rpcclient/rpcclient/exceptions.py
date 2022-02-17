@@ -48,3 +48,11 @@ class UnrecognizedSelector(RpcClientException):
 
 class GettingObjectiveCClassError(RpcClientException):
     pass
+
+
+class MissingLibraryError(RpcClientException):
+    pass
+
+
+class PermissionDeniedError(RpcClientException):
+    pass
