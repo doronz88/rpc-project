@@ -19,6 +19,10 @@ class SCPreferencesObject(Allocated):
             raise RpcClientException(f'SCPreferencesSetValue failed to set: {key}')
         self._commit()
 
+    def set_dict(self, d: typing.Mapping):
+        for k, v in d.items():
+            self.set(k, v)
+
     def remove(self, key: str):
         if not self._client.symbols.SCPreferencesRemoveValue(self._ref, self._client.cf(key)):
             raise RpcClientException(f'SCPreferencesRemoveValue failed to remove: {key}')
@@ -33,8 +37,12 @@ class SCPreferencesObject(Allocated):
             result[k] = self.get(k)
         return result
 
+    def clear(self):
+        for k in self.keys:
+            self.remove(k)
+
     def _deallocate(self):
-        self._client.CFRelase(self._ref)
+        self._client.symbols.CFRelease(self._ref)
 
     def _commit(self):
         if not self._client.symbols.SCPreferencesCommitChanges(self._ref):
