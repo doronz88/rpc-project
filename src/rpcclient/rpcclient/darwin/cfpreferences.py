@@ -20,36 +20,50 @@ class CFPreferences:
         """
         self._client = client
 
-    def copy_key_list(self, application_id: str, username: str = kCFPreferencesCurrentUser,
-                      hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:
+    def get_keys(self, application_id: str, username: str = kCFPreferencesCurrentUser,
+                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
         return self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py
 
-    def copy_value(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
-                   hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[str]:
+    def get_value(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
+                  hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[str]:
         key = self._client.cf(key)
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
         return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py
 
-    def copy_all_values(self, application_id: str, username: str = kCFPreferencesCurrentUser,
-                        hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
+    def get_values(self, application_id: str, username: str = kCFPreferencesCurrentUser,
+                   hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
         result = {}
-        key_list = self.copy_key_list(application_id, username, hostname)
+        key_list = self.get_keys(application_id, username, hostname)
         if not key_list:
             raise RpcClientException(f'failed to get key list for: {application_id}/{username}/{hostname}')
         for k in key_list:
-            result[k] = self.copy_value(k, application_id, username, hostname)
+            result[k] = self.get_value(k, application_id, username, hostname)
         return result
 
-    def set_value(self, key: str, value: str, application_id: str, username: str = kCFPreferencesCurrentUser,
-                  hostname: str = kCFPreferencesCurrentHost):
-        key = self._client.cf(key)
-        value = self._client.cf(value)
-        application_id = self._client.cf(application_id)
-        username = self._client.cf(username)
-        hostname = self._client.cf(hostname)
-        self._client.symbols.CFPreferencesSetValue(key, value, application_id, username, hostname)
+    def set(self, key: str, value: str, application_id: str, username: str = kCFPreferencesCurrentUser,
+            hostname: str = kCFPreferencesCurrentHost):
+        self._client.symbols.CFPreferencesSetValue(self._client.cf(key), self._client.cf(value),
+                                                   self._client.cf(application_id), self._client.cf(username),
+                                                   self._client.cf(hostname))
+
+    def remove(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
+               hostname: str = kCFPreferencesCurrentHost):
+        self._client.symbols.CFPreferencesSetValue(self._client.cf(key), 0,
+                                                   self._client.cf(application_id), self._client.cf(username),
+                                                   self._client.cf(hostname))
+
+    def set_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
+                 hostname: str = kCFPreferencesCurrentHost):
+        for k, v in d.items():
+            self.set(k, v, application_id, username, hostname)
+
+    def clear(self, application_id: str, username: str = kCFPreferencesCurrentUser,
+              hostname: str = kCFPreferencesCurrentHost):
+        """ remove all values from given preference """
+        for k in self.get_keys(application_id, username, hostname):
+            self.remove(k, application_id, username, hostname)
