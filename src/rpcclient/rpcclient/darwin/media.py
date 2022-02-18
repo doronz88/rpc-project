@@ -2,8 +2,8 @@ import struct
 
 from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import AVAudioSessionCategoryOptionDefaultToSpeaker
-from rpcclient.exceptions import RpcClientException, BadReturnValueError
 from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.exceptions import BadReturnValueError, MissingLibraryError
 
 
 class Recorder:
@@ -123,7 +123,7 @@ class DarwinMedia:
         for option in options:
             if self._client.dlopen(option, 2):
                 return
-        raise RpcClientException('failed to load AVFAudio')
+        raise MissingLibraryError('failed to load AVFAudio')
 
     @path_to_str('filename')
     def get_recorder(self, filename: str) -> Recorder:

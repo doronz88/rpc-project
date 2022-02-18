@@ -3,7 +3,7 @@ import time
 from typing import List, Mapping
 
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
-from rpcclient.exceptions import CfSerializationError, UnrecognizedSelector
+from rpcclient.exceptions import CfSerializationError, UnrecognizedSelectorError
 from rpcclient.symbol import Symbol
 
 
@@ -12,7 +12,7 @@ class DarwinSymbol(Symbol):
         """ call an objc method on a given object """
         sel = self._client.symbols.sel_getUid(selector)
         if not self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid("respondsToSelector:"), sel):
-            raise UnrecognizedSelector(f"unrecognized selector '{selector}' sent to class")
+            raise UnrecognizedSelectorError(f"unrecognized selector '{selector}' sent to class")
 
         return self._client.symbols.objc_msgSend(self, sel, *params)
 
