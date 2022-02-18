@@ -263,6 +263,10 @@ class Client:
             i += 1
         return result
 
+    @property
+    def pid(self):
+        return int(self.symbols.getpid())
+
     @contextlib.contextmanager
     def safe_calloc(self, size: int):
         with self.safe_malloc(size) as x:
