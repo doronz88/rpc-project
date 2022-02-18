@@ -26,6 +26,9 @@ class DarwinSymbol(Symbol):
             return None
         return self._client.symbols.CFCopyDescription(self).py
 
+    def _decode_cfnull(self) -> None:
+        return None
+
     def _decode_cfstr(self) -> str:
         ptr = self._client.symbols.CFStringGetCStringPtr(self, 0)
         if ptr:
@@ -80,6 +83,7 @@ class DarwinSymbol(Symbol):
 
         t = self._client._cf_types[self._client.symbols.CFGetTypeID(self)]
         type_decoders = {
+            'null': self._decode_cfnull,
             'str': self._decode_cfstr,
             'bool': self._decode_cfbool,
             'number': self._decode_cfnumber,

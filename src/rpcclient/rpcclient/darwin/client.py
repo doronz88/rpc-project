@@ -41,6 +41,7 @@ class DarwinClient(Client):
             raise MissingLibraryError('failed to load CoreFoundation')
 
         self._cf_types = {
+            self.symbols.CFNullGetTypeID(): 'null',
             self.symbols.CFDateGetTypeID(): 'date',
             self.symbols.CFDataGetTypeID(): 'data',
             self.symbols.CFStringGetTypeID(): 'str',
