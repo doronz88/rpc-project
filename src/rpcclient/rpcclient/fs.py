@@ -260,6 +260,15 @@ class Fs:
         """ stat(filename) at remote. read man for more details. """
         raise NotImplementedError()
 
+    @path_to_str('path')
+    def accessible(self, path: str):
+        """ check if a given path can be accessed. """
+        try:
+            self.stat(path)
+            return True
+        except BadReturnValueError:
+            return False
+
     @path_to_str('top')
     def walk(self, top: str):
         """ provides the same results as os.walk(top) """

@@ -2,7 +2,7 @@ from rpcclient.darwin.client import DarwinClient
 from rpcclient.macos.bluetooth import Bluetooth
 from rpcclient.darwin.reports import Reports
 
-CRASH_REPORTS_DIR = '/Library/Logs/DiagnosticReports'
+CRASH_REPORTS_DIR = 'Library/Logs/DiagnosticReports'
 
 
 class MacosClient(DarwinClient):
