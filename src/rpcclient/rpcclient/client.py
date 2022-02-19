@@ -170,7 +170,7 @@ class Client:
         self._sock.sendall(message)
         reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
         if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
-            raise ArgumentError()
+            raise ArgumentError(f'failed to read {size} bytes from {address}')
         return self._recvall(size)
 
     def poke(self, address: int, data: bytes):
