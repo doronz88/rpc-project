@@ -79,6 +79,16 @@ class DarwinClient(Client):
     def is_idevice(self):
         return self.uname.machine.startswith('i')
 
+    @property
+    def roots(self) -> typing.List[str]:
+        """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
+        result = ['/']
+        for username in self.fs.scandir('/Users'):
+            if not username.is_dir() or not self.fs.accessible(username.path):
+                continue
+            result.append(username.path)
+        return result
+
     def set_airplane_mode(self, mode: bool):
         """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
         preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
