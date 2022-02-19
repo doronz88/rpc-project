@@ -10,4 +10,4 @@ class MacosClient(DarwinClient):
     def __init__(self, sock, sysname: str, hostname: str, port: int = None):
         super().__init__(sock, sysname, hostname, port)
         self.bluetooth = Bluetooth(self)
-        self.crash_reports = Reports(self, CRASH_REPORTS_DIR)
+        self.reports = Reports(self, CRASH_REPORTS_DIR)
