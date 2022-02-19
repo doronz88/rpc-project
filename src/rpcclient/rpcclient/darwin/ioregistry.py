@@ -61,7 +61,8 @@ class IOService(Allocated):
         self._client.symbols.IORegistryEntrySetCFProperties(self._service, self._client.cf(properties))
 
     def get(self, key: str):
-        return self._client.symbols.IORegistryEntryCreateCFProperty(self._service, self._client.cf(key), 0, 0).py
+        return self._client.symbols.IORegistryEntryCreateCFProperty(self._service, self._client.cf(key),
+                                                                    kCFAllocatorDefault, 0).py
 
     def _deallocate(self):
         self._client.symbols.IOObjectRelease(self._service)

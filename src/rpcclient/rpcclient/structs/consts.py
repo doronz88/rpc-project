@@ -37,3 +37,5 @@ DT_REG = 8
 DT_LNK = 10
 DT_SOCK = 12
 DT_WHT = 14
+
+RTLD_NOW = 2
