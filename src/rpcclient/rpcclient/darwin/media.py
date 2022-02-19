@@ -4,6 +4,7 @@ from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import AVAudioSessionCategoryOptionDefaultToSpeaker
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, MissingLibraryError
+from rpcclient.structs.consts import RTLD_NOW
 
 
 class Recorder:
@@ -121,7 +122,7 @@ class DarwinMedia:
             '/System/Library/Frameworks/AVFoundation.framework/AVFoundation'
         ]
         for option in options:
-            if self._client.dlopen(option, 2):
+            if self._client.dlopen(option, RTLD_NOW):
                 return
         raise MissingLibraryError('failed to load AVFAudio')
 

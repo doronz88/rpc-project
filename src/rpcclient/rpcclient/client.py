@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import typing
+from enum import Enum
 from select import select
 from socket import socket
 
@@ -124,6 +125,10 @@ class Client:
         free_list = []
 
         for arg in argv:
+            if isinstance(arg, Enum):
+                # if it's a python enum, then first get its real value and only then attempt to convert
+                arg = arg.value
+
             tmp = arg
 
             if isinstance(arg, bool):

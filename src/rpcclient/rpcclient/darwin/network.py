@@ -5,6 +5,7 @@ from typing import List
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
 from rpcclient.network import Network
 from rpcclient.allocated import Allocated
+from rpcclient.structs.consts import RTLD_NOW
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class DarwinNetwork(Network):
             '/System/Library/PrivateFrameworks/WiFiKit.framework/WiFiKit'
         ]
         for option in options:
-            if self._client.dlopen(option, 2):
+            if self._client.dlopen(option, RTLD_NOW):
                 return
         logger.warning('WiFi library isn\'t available')
 

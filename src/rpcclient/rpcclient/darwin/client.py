@@ -7,7 +7,7 @@ from cached_property import cached_property
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
-from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType
+from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.ioregistry import IORegistry
 from rpcclient.darwin.location import Location
@@ -19,6 +19,7 @@ from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
+from rpcclient.structs.consts import RTLD_NOW
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -37,7 +38,7 @@ class DarwinClient(Client):
         super().__init__(sock, sysname, hostname, port)
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
 
-        if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", 2):
+        if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
 
         self._cf_types = {
@@ -106,7 +107,8 @@ class DarwinClient(Client):
             # assuming it's already a cfobject
             return o
         elif isinstance(o, str):
-            return self.symbols.CFStringCreateWithCString(0, o, 0)
+            return self.symbols.CFStringCreateWithCString(kCFAllocatorDefault, o,
+                                                          CFStringEncoding.kCFStringEncodingMacRoman)
         elif isinstance(o, bytes):
             return self.symbols.CFDataCreate(0, o, len(o))
         elif isinstance(o, bool):
@@ -117,17 +119,17 @@ class DarwinClient(Client):
         elif isinstance(o, int):
             with self.safe_malloc(8) as buf:
                 buf[0] = o
-                return self.symbols.CFNumberCreate(0, kCFNumberSInt64Type, buf)
+                return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, buf)
         elif isinstance(o, float):
             with self.safe_malloc(8) as buf:
                 buf.poke(struct.pack('<d', o))
-                return self.symbols.CFNumberCreate(0, kCFNumberDoubleType, buf)
+                return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, buf)
         elif isinstance(o, list) or isinstance(o, tuple):
             cfvalues = [self.cf(i) for i in o]
             with self.safe_malloc(8 * len(cfvalues)) as buf:
                 for i in range(len(cfvalues)):
                     buf[i] = cfvalues[i]
-                return self.symbols.CFArrayCreate(0, buf, len(cfvalues), 0)
+                return self.symbols.CFArrayCreate(kCFAllocatorDefault, buf, len(cfvalues), 0)
         elif isinstance(o, dict):
             cfkeys = [self.cf(i) for i in o.keys()]
             cfvalues = [self.cf(i) for i in o.values()]
@@ -137,7 +139,8 @@ class DarwinClient(Client):
                         keys_buf[i] = cfkeys[i]
                     for i in range(len(cfvalues)):
                         values_buf[i] = cfvalues[i]
-                    return self.symbols.CFDictionaryCreate(0, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
+                    return self.symbols.CFDictionaryCreate(
+                        kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
         else:
             raise NotImplementedError()
 
