@@ -11,7 +11,7 @@ class CrashReports:
 
     def list(self, prefixed='') -> List[CrashReport]:
         result = []
-        for root in ['/'] + self._client.fs.listdir('/Users'):
+        for root in self._client.roots:
             root = Path(root) / self._crash_reports_dir
 
             if not self._client.fs.accessible(root):

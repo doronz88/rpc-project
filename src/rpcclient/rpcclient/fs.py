@@ -270,15 +270,25 @@ class Fs:
             return False
 
     @path_to_str('top')
-    def walk(self, top: str):
+    def walk(self, top: str, onerror=None):
         """ provides the same results as os.walk(top) """
         dirs = []
         files = []
-        for entry in self.scandir(top):
-            if entry.is_dir():
-                dirs.append(entry.name)
-            else:
-                files.append(entry.name)
+        try:
+            for entry in self.scandir(top):
+                try:
+                    if entry.is_dir():
+                        dirs.append(entry.name)
+                    else:
+                        files.append(entry.name)
+                except Exception as e:
+                    if not onerror:
+                        raise e
+                    onerror(e)
+        except Exception as e:
+            if not onerror:
+                raise e
+            onerror(e)
 
         yield top, dirs, files
 
