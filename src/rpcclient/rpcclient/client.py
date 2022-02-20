@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import typing
+from collections import namedtuple
 from enum import Enum
 from select import select
 from socket import socket
@@ -33,6 +34,8 @@ try:
     tty_support = True
 except ImportError:
     logging.warning('termios not available on your system. some functionality may not work as expected')
+
+SpawnResult = namedtuple('SpawnResult', 'error pid stdout')
 
 INVALID_PID = 0xffffffff
 CHUNK_SIZE = 1024
@@ -199,7 +202,7 @@ class Client:
         return self.symbol(dummy_block_t.parse(self._recvall(8)))
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
-              tty=False, background=False):
+              tty=False, background=False) -> SpawnResult:
         """
         spawn a new process and forward its stdin, stdout & stderr
 
@@ -209,7 +212,7 @@ class Client:
         :param stdout: a file object to write both stdout and stderr to
         :param tty: should enable raw tty mode
         :param background: should execute process in background
-        :return: error code
+        :return: a SpawnResult. error is None if background is requested
         """
         if argv is None:
             argv = self.DEFAULT_ARGV
@@ -229,15 +232,15 @@ class Client:
         if background:
             # if in background was requested, we can just detach this connection
             self.reconnect()
-            return
+            return SpawnResult(error=None, pid=pid, stdout=stdout)
 
         self._sock.setblocking(False)
 
         if tty:
             self._prepare_terminal()
         try:
-            result = self._execution_loop(stdin, stdout)
-        except:  # noqa: E722
+            error = self._execution_loop(stdin, stdout)
+        except Exception:  # noqa: E722
             # this is important to really catch every exception here, even exceptions not inheriting from Exception
             # so the controlling terminal will remain working with its previous settings
             if tty:
@@ -249,7 +252,7 @@ class Client:
             self._restore_terminal()
         self.reconnect()
 
-        return result
+        return SpawnResult(error=error, pid=pid, stdout=stdout)
 
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
