@@ -115,16 +115,6 @@ typedef struct
     u32 cmd_type;
 } protocol_message_t;
 
-void sigchld_handler(int s)
-{
-    (void)s;
-
-    // TODO: close socket associated with this pid
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ;
-    TRACE("child died.");
-}
-
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
     return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
@@ -198,6 +188,42 @@ error:
     return false;
 }
 
+typedef struct {
+    int sockfd;
+    pid_t pid;
+    int pipe[2];
+} wait_process_exit_thread_t;
+
+void wait_process_exit_thread(wait_process_exit_thread_t *params)
+{
+    TRACE("enter");
+    u8 byte;
+    CHECK(sizeof(byte) == write(params->pipe[1], &byte, sizeof(byte)));
+    TRACE("waitpid");
+
+    s32 err;
+    CHECK(-1 != waitpid(params->pid, &err, 0));
+
+    TRACE("waitpid done with err: %d", err);
+
+    CHECK(sizeof(byte) == read(params->pipe[0], &byte, sizeof(byte)));
+    
+    cmd_exec_chunk_t chunk;
+    chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
+    chunk.size = sizeof(err);
+
+    CHECK(sendall(params->sockfd, (char *)&chunk, sizeof(chunk)));
+    CHECK(sendall(params->sockfd, (char *)&err, chunk.size));
+
+    TRACE("sent exit code to client fd: %d", params->sockfd);
+
+error:
+    close(params->pipe[0]);
+    close(params->pipe[1]);
+    free(params);
+    return;
+}
+
 bool handle_exec(int sockfd)
 {
     pid_t pid = INVALID_PID;
@@ -255,6 +281,23 @@ bool handle_exec(int sockfd)
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
     CHECK(master >= 0);
 
+    // create a new thread to wait for the exit of the new process, but lock it until after 
+    // all stdin/stdout/stderr has been forwarded
+    wait_process_exit_thread_t *thread_params = (wait_process_exit_thread_t *)malloc(sizeof(wait_process_exit_thread_t));
+    thread_params->sockfd = sockfd;
+    thread_params->pid = pid;
+    CHECK(0 == pipe(thread_params->pipe));
+
+    pthread_t thread;
+    CHECK(0 == pthread_create(&thread, NULL, wait_process_exit_thread, thread_params));
+
+    TRACE("wait for thread to reach waitpid");
+
+    u8 byte;
+    CHECK(sizeof(byte) == read(thread_params->pipe[0], &byte, sizeof(byte)));
+
+    TRACE("thread reached waitpid. forwarding fds");
+
     fd_set readfds;
     char buf[BUFFERSIZE];
     int maxfd = master > sockfd ? master : sockfd;
@@ -297,18 +340,13 @@ bool handle_exec(int sockfd)
         }
     }
 
-    s32 err = 0;
+    TRACE("notify thread its now okay to send the exit status");
+    CHECK(sizeof(byte) == write(thread_params->pipe[1], &byte, sizeof(byte)));
 
-    // dont exit on error here so client is notified right away when the process dies
-    waitpid(pid, &err, 0);
-    cmd_exec_chunk_t chunk;
-    chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
-    chunk.size = sizeof(err);
-
-    CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
-    CHECK(sendall(sockfd, (char *)&err, chunk.size));
-
-    TRACE("sent exit code to client fd: %d", sockfd);
+    TRACE("wait for thread to finish");
+    CHECK(0 != pthread_join(&thread, NULL));
+    
+    TRACE("thread exit");
 
     result = true;
 
@@ -685,12 +723,6 @@ int main(int argc, const char *argv[])
     freeaddrinfo(servinfo); // all done with this structure
 
     CHECK(0 == listen(server_fd, MAX_CONNECTIONS));
-
-    struct sigaction sa;
-    sa.sa_handler = sigchld_handler; // reap all dead processes
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    CHECK(0 == sigaction(SIGCHLD, &sa, NULL));
 
     while (1)
     {

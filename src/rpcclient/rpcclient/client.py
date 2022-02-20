@@ -200,7 +200,17 @@ class Client:
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
               tty=False, background=False):
-        """ spawn a new process and forward its stdin, stdout & stderr """
+        """
+        spawn a new process and forward its stdin, stdout & stderr
+
+        :param argv: argv of the process to be executed
+        :param envp: envp of the process to be executed
+        :param stdin: either a file object to read from or a string
+        :param stdout: a file object to write both stdout and stderr to
+        :param tty: should enable raw tty mode
+        :param background: should execute process in background
+        :return: error code
+        """
         if argv is None:
             argv = self.DEFAULT_ARGV
 
@@ -392,8 +402,20 @@ class Client:
         return buf
 
     def _execution_loop(self, stdin=sys.stdin, stdout=sys.stdout):
+        """
+        if stdin is a file object, we need to select between the fds and give higher priority to stdin.
+        otherwise, we can simply write all stdin contents directly to the process
+        """
+        fds = []
+        if hasattr(stdin, 'fileno'):
+            fds.append(stdin)
+        else:
+            # assume it's just raw bytes
+            self._sock.sendall(stdin)
+        fds.append(self._sock)
+
         while True:
-            rlist, _, _ = select([stdin, self._sock], [], [])
+            rlist, _, _ = select(fds, [], [])
 
             for fd in rlist:
                 if fd == sys.stdin:
