@@ -3,12 +3,21 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <syslog.h>
 #include <sys/socket.h>
 
 #include "common.h"
 
+bool g_stdout = false;
+bool g_syslog = false;
+
 void trace(const char *prefix, const char *fmt, ...)
 {
+    if (!g_stdout && !g_syslog)
+    {
+        return;
+    }
+
     char line[1022];
     char prefixed_line[1024];
 
@@ -18,7 +27,15 @@ void trace(const char *prefix, const char *fmt, ...)
     va_end(args);
 
     sprintf(prefixed_line, "%s: %s", prefix, line);
-    puts(prefixed_line);
+
+    if (g_stdout)
+    {
+        puts(prefixed_line);
+    }
+    if (g_syslog)
+    {
+        syslog(LOG_DEBUG, "%s", prefixed_line);
+    }
 }
 
 bool recvall(int sockfd, char *buf, size_t len)
