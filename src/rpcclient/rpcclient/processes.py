@@ -1,4 +1,5 @@
 from rpcclient.exceptions import BadReturnValueError
+from rpcclient.structs.consts import SIGTERM
 
 
 class Processes:
@@ -9,9 +10,10 @@ class Processes:
         """
         self._client = client
 
-    def kill(self, pid: int, sig: int):
+    def kill(self, pid: int, sig: int = SIGTERM):
         """ kill(pid, sig) at remote. read man for more details. """
-        return self._client.kill(pid, sig)
+        if 0 != self._client.symbols.kill(pid, sig):
+            raise BadReturnValueError(f'kill() failed ({self._client.last_error})')
 
     def waitpid(self, pid: int):
         """ waitpid(pid, sig) at remote. read man for more details. """
