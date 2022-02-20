@@ -5,11 +5,14 @@ from pycrashreport.crash_report import CrashReport
 
 
 class CrashReports:
+    """" manage crash reports """
+
     def __init__(self, client, crash_reports_dir):
         self._client = client
         self._crash_reports_dir = crash_reports_dir
 
     def list(self, prefixed='') -> List[CrashReport]:
+        """ get a list of all crash reports as CrashReport parsed objects """
         result = []
         for root in self._client.roots:
             root = Path(root) / self._crash_reports_dir
@@ -24,5 +27,6 @@ class CrashReports:
         return result
 
     def clear(self, prefixed=''):
+        """ remove all existing crash reports """
         for entry in self.list(prefixed=prefixed):
             self._client.fs.remove(entry.filename)

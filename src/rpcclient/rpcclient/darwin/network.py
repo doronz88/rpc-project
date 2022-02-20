@@ -98,6 +98,8 @@ class WifiInterface(Allocated):
 
 
 class DarwinNetwork(Network):
+    """ network utils """
+
     def __init__(self, client):
         super().__init__(client)
         self._load_wifi_library()
@@ -114,6 +116,12 @@ class DarwinNetwork(Network):
             if self._client.dlopen(option, RTLD_NOW):
                 return
         logger.warning('WiFi library isn\'t available')
+
+    def set_airplane_mode(self, mode: bool):
+        """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
+        preferences = self._client.symbols.objc_getClass('RadiosPreferences').objc_call('new')
+        preferences.objc_call('setAirplaneMode:', mode)
+        preferences.objc_call('synchronize')
 
     @property
     def wifi_interfaces(self) -> List[str]:

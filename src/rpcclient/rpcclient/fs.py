@@ -1,9 +1,9 @@
 import posixpath
 from typing import Iterator, List
 
-from rpcclient.common import path_to_str
-from rpcclient.exceptions import InvalidArgumentError, BadReturnValueError
 from rpcclient.allocated import Allocated
+from rpcclient.common import path_to_str
+from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
 
@@ -153,6 +153,8 @@ class File(Allocated):
 
 
 class Fs:
+    """ filesystem utils """
+
     def __init__(self, client):
         self._client = client
 
@@ -210,7 +212,7 @@ class Fs:
         }
         mode = available_modes.get(mode)
         if mode is None:
-            raise InvalidArgumentError(f'mode can be only one of: {available_modes.keys()}')
+            raise ArgumentError(f'mode can be only one of: {available_modes.keys()}')
 
         fd = self._client.symbols.open(file, mode, access).c_int32
         if fd < 0:

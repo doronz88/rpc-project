@@ -15,12 +15,13 @@ from construct import Int64sl
 from traitlets.config import Config
 
 from rpcclient.darwin.structs import pid_t, exitcode_t
-from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError
+from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
+    InvalidServerVersionMagicError
 from rpcclient.fs import Fs
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
-    reply_protocol_message_t, dummy_block_t
+    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 
@@ -49,6 +50,8 @@ Starting an IPython shell... 🐍
 
 
 class Client:
+    """ Main client interface to access remote rpcserver """
+
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
@@ -187,7 +190,7 @@ class Client:
         self._sock.sendall(message)
 
     def get_dummy_block(self) -> Symbol:
-        """ poke data at given address """
+        """ get an address for a stub block containing nothing """
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_GET_DUMMY_BLOCK,
             'data': None,
@@ -340,8 +343,14 @@ class Client:
                     )
 
     def reconnect(self):
+        """ close current socket and attempt to reconnect """
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
+        magic = self._recvall(len(SERVER_MAGIC_VERSION))
+
+        if magic != SERVER_MAGIC_VERSION:
+            raise InvalidServerVersionMagicError(f'got an invalid server magic: {magic.hex()}')
+
         self._recvall(UNAME_VERSION_LEN)
 
     def _execute(self, argv: typing.List[str], envp: typing.List[str]) -> int:

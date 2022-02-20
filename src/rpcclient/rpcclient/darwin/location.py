@@ -22,8 +22,7 @@ class CLAuthorizationStatus(Enum):
 class Location:
     """
     Wrapper to CLLocationManager
-
-    For details: https://developer.apple.com/documentation/corelocation/cllocationmanager?language=objc
+    https://developer.apple.com/documentation/corelocation/cllocationmanager?language=objc
     """
 
     def __init__(self, client):

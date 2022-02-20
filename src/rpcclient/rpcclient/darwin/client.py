@@ -85,12 +85,6 @@ class DarwinClient(Client):
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
         return ['/', '/var/root']
 
-    def set_airplane_mode(self, mode: bool):
-        """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
-        preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
-        preferences.objc_call('setAirplaneMode:', mode)
-        preferences.objc_call('synchronize')
-
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
         return DarwinSymbol.create(symbol, self)
