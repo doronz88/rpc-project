@@ -226,6 +226,7 @@ error:
 
 bool handle_exec(int sockfd)
 {
+    pthread_t thread = 0;
     pid_t pid = INVALID_PID;
     int master = -1;
     int result = false;
@@ -288,8 +289,7 @@ bool handle_exec(int sockfd)
     thread_params->pid = pid;
     CHECK(0 == pipe(thread_params->pipe));
 
-    pthread_t thread;
-    CHECK(0 == pthread_create(&thread, NULL, wait_process_exit_thread, thread_params));
+    CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))wait_process_exit_thread, thread_params));
 
     TRACE("wait for thread to reach waitpid");
 
@@ -318,8 +318,11 @@ bool handle_exec(int sockfd)
             nbytes = read(master, buf, BUFFERSIZE);
             if (nbytes < 1)
             {
+                TRACE("read master failed. break");
                 break;
             }
+
+            TRACE("master->sock");
 
             cmd_exec_chunk_t chunk;
             chunk.type = CMD_EXEC_CHUNK_TYPE_STDOUT;
@@ -336,6 +339,9 @@ bool handle_exec(int sockfd)
             {
                 break;
             }
+
+            TRACE("sock->master");
+
             CHECK(writeall(master, buf, nbytes));
         }
     }
@@ -344,13 +350,18 @@ bool handle_exec(int sockfd)
     CHECK(sizeof(byte) == write(thread_params->pipe[1], &byte, sizeof(byte)));
 
     TRACE("wait for thread to finish");
-    CHECK(0 != pthread_join(&thread, NULL));
+    CHECK(0 != pthread_join(thread, NULL));
     
     TRACE("thread exit");
 
     result = true;
 
 error:
+    if (thread)
+    {
+        pthread_kill(thread, SIGKILL);
+    }
+
     if (INVALID_PID == pid)
     {
         // failed to create process somewhere in the prolog, at least notify
