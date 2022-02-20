@@ -23,6 +23,11 @@ class Fd:
 
 
 @dataclasses.dataclass()
+class PipeFd(Fd):
+    pass
+
+
+@dataclasses.dataclass()
 class FileFd(Fd):
     path: str
 
@@ -105,6 +110,9 @@ class DarwinProcesses(Processes):
 
             if fd.proc_fdtype == PROX_FDTYPE_VNODE:
                 result.append(FileFd(fd=fd.proc_fd, path=parsed.pvip.vip_path))
+
+            elif fd.proc_fdtype == PROX_FDTYPE_PIPE:
+                result.append(PipeFd(fd=fd.proc_fd))
 
             elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
                 if parsed.psi.soi_kind in (so_kind_t.SOCKINFO_TCP, so_kind_t.SOCKINFO_IN):
