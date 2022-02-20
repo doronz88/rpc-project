@@ -33,7 +33,10 @@
 
 #define DEFAULT_PORT ("5910")
 #define DEFAULT_SHELL ("/bin/sh")
-#define USAGE ("Usage: %s [-p port] [-s shell]")
+#define USAGE ("Usage: %s [-p port] [-s] [-S] \n\
+-h  show this help message \n\
+-s  log to stdout \n\
+-S  log to syslog \n")
 #define SERVER_MAGIC_VERSION (0x88888800)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
@@ -690,7 +693,7 @@ int main(int argc, const char *argv[])
     int opt;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *)argv, "p:")) != -1)
+    while ((opt = getopt(argc, (char *const *)argv, "p:sSh")) != -1)
     {
         switch (opt)
         {
@@ -699,9 +702,20 @@ int main(int argc, const char *argv[])
             strncpy(port, optarg, sizeof(port) - 1);
             break;
         }
+        case 's':
+        {
+            g_stdout = true;
+            break;
+        }
+        case 'S':
+        {
+            g_syslog = true;
+            break;
+        }
+        case 'h':
         default: /* '?' */
         {
-            TRACE(USAGE, argv[0]);
+            printf(USAGE, argv[0]);
             exit(EXIT_FAILURE);
         }
         }
