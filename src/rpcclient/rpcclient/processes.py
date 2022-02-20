@@ -18,7 +18,7 @@ class Processes:
     def waitpid(self, pid: int):
         """ waitpid(pid, sig) at remote. read man for more details. """
         with self._client.safe_malloc(8) as stat_loc:
-            err = self._client.symbols.waitpid(pid, stat_loc, 0)
-            if err:
-                raise BadReturnValueError(f'waitpid(): returned {err}')
+            err = self._client.symbols.waitpid(pid, stat_loc, 0).c_int64
+            if err == -1:
+                raise BadReturnValueError(f'waitpid(): returned {err} ({self._client.last_error})')
             return stat_loc[0]
