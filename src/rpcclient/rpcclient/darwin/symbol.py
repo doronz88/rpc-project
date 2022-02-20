@@ -78,6 +78,7 @@ class DarwinSymbol(Symbol):
 
     @property
     def py(self):
+        """ get a python object from a core foundation one """
         if self == 0:
             return None
 

@@ -7,7 +7,7 @@ from rpcclient.linux.structs import dirent
 
 
 class LinuxFs(Fs):
-    CHUNK_SIZE = 1024
+    """ Filesystem utils """
 
     def listdir(self, dirname='.') -> List[Struct]:
         """ list directory contents(at remote).

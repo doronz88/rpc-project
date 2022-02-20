@@ -23,6 +23,8 @@ class SymbolFormatField(FormatField):
 
 
 class Symbol(int):
+    """ wrapper for a remote symbol object """
+
     PROXY_METHODS = ['peek', 'poke']
 
     @classmethod

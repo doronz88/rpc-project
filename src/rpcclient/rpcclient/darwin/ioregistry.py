@@ -139,8 +139,6 @@ class PowerSourceService(IOService):
 class IORegistry:
     """
     IORegistry utils
-
-    For more information please read:
     https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/IOKitFundamentals/TheRegistry/TheRegistry.html
     """
 

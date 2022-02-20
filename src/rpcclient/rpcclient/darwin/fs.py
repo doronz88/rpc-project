@@ -43,8 +43,6 @@ class DarwinScandirIterator(ScandirIterator):
 
 
 class DarwinFs(Fs):
-    CHUNK_SIZE = 1024
-
     @path_to_str('path')
     def stat(self, path: str):
         """ stat(filename) at remote. read man for more details. """

@@ -8,6 +8,11 @@ from rpcclient.structs.consts import RTLD_NOW
 
 
 class Recorder:
+    """
+    Wrapper for AVAudioRecorder
+    https://developer.apple.com/documentation/avfaudio/avaudiorecorder?language=objc
+    """
+
     def __init__(self, client, session, recorder: DarwinSymbol):
         self._client = client
         self._session = session
@@ -39,6 +44,11 @@ class Recorder:
 
 
 class Player:
+    """
+    Wrapper for AVAudioPlayer
+    https://developer.apple.com/documentation/avfaudio/avaudioplayer?language=objc
+    """
+
     def __init__(self, client, session, player):
         self._client = client
         self._session = session
@@ -76,6 +86,11 @@ class Player:
 
 
 class AudioSession:
+    """
+    wrapper for AVAudioSession
+    https://developer.apple.com/documentation/avfaudio/avaudiosession?language=objc
+    """
+
     def __init__(self, client):
         self._client = client
 

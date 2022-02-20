@@ -86,6 +86,8 @@ SOCKET_TYPE_DATACLASS = {
 
 
 class DarwinProcesses(Processes):
+    """ manage processes """
+
     def get_proc_path(self, pid: int) -> Optional[str]:
         """ call proc_pidpath(filename, ...) at remote. review xnu header for more details. """
         with self._client.safe_malloc(MAXPATHLEN) as path:
