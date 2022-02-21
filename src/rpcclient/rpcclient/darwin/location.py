@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import Mapping
+from typing import Mapping, Optional
 
 from rpcclient.exceptions import MissingLibraryError, PermissionDeniedError
+from rpcclient.structs.consts import RTLD_NOW
 
 
 class CLAuthorizationStatus(Enum):
@@ -28,17 +29,36 @@ class Location:
     def __init__(self, client):
         self._client = client
 
-        if not self._client.dlopen('/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation', 2):
-            raise MissingLibraryError('failed to load CoreLocation')
+        self._load_location_library()
+        self._CLLocationManager = self._client.symbols.objc_getClass('CLLocationManager')
+        self._location_manager = self._CLLocationManager.objc_call('sharedManager')
 
-        self._location_manager = self._client.symbols.objc_getClass('CLLocationManager').objc_call('sharedManager')
+    def _load_location_library(self):
+        options = [
+            # macOS
+            '/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation',
+            # iOS
+            '/System/Library/Frameworks/CoreLocation.framework/CoreLocation'
+        ]
+        for option in options:
+            if self._client.dlopen(option, RTLD_NOW):
+                return
+        raise MissingLibraryError('CoreLocation library isn\'t available')
+
+    @property
+    def location_services_enabled(self) -> bool:
+        return bool(self._location_manager.objc_call('locationServicesEnabled'))
+
+    @location_services_enabled.setter
+    def location_services_enabled(self, value: bool):
+        self._CLLocationManager.objc_call('setLocationServicesEnabled:', value)
 
     @property
     def authorization_status(self) -> CLAuthorizationStatus:
         return CLAuthorizationStatus.from_value(self._location_manager.objc_call('authorizationStatus'))
 
     @property
-    def last_sample(self) -> Mapping:
+    def last_sample(self) -> Optional[Mapping]:
         return self._location_manager.objc_call('location').objc_call('jsonObject').py
 
     def start_updating_location(self):
