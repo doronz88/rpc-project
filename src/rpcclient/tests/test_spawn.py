@@ -16,7 +16,7 @@ def test_spawn_sanity(client, argv, expected_stdout, errorcode):
 
 
 def test_spawn_bad_value_stress(client):
-    for i in range(1000):
+    for i in range(100):
         stdout = StringIO()
         assert 256 == client.spawn(['/bin/ls', 'INVALID_PATH'], stdout=stdout, stdin=b'').error
 
