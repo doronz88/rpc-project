@@ -34,6 +34,8 @@ try:
 except ImportError:
     logging.warning('termios not available on your system. some functionality may not work as expected')
 
+io_or_str = typing.TypeVar('io_or_str', typing.IO, str)
+
 SpawnResult = namedtuple('SpawnResult', 'error pid stdout')
 
 INVALID_PID = 0xffffffff
@@ -200,16 +202,16 @@ class Client:
         self._sock.sendall(message)
         return self.symbol(dummy_block_t.parse(self._recvall(8)))
 
-    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin=sys.stdin, stdout=sys.stdout,
-              tty=False, background=False) -> SpawnResult:
+    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
+              stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:
         """
         spawn a new process and forward its stdin, stdout & stderr
 
         :param argv: argv of the process to be executed
         :param envp: envp of the process to be executed
-        :param stdin: either a file object to read from or a string
+        :param stdin: either a file object to read from OR a string
         :param stdout: a file object to write both stdout and stderr to
-        :param tty: should enable raw tty mode
+        :param raw_tty: should enable raw tty mode
         :param background: should execute process in background
         :return: a SpawnResult. error is None if background is requested
         """
@@ -235,19 +237,19 @@ class Client:
 
         self._sock.setblocking(False)
 
-        if tty:
+        if raw_tty:
             self._prepare_terminal()
         try:
             error = self._execution_loop(stdin, stdout)
         except Exception:  # noqa: E722
             # this is important to really catch every exception here, even exceptions not inheriting from Exception
             # so the controlling terminal will remain working with its previous settings
-            if tty:
+            if raw_tty:
                 self._restore_terminal()
             self.reconnect()
             raise
 
-        if tty:
+        if raw_tty:
             self._restore_terminal()
         self.reconnect()
 
@@ -402,7 +404,7 @@ class Client:
             buf += chunk
         return buf
 
-    def _execution_loop(self, stdin=sys.stdin, stdout=sys.stdout):
+    def _execution_loop(self, stdin: io_or_str = sys.stdin, stdout=sys.stdout):
         """
         if stdin is a file object, we need to select between the fds and give higher priority to stdin.
         otherwise, we can simply write all stdin contents directly to the process
@@ -412,7 +414,7 @@ class Client:
             fds.append(stdin)
         else:
             # assume it's just raw bytes
-            self._sock.sendall(stdin)
+            self._sock.sendall(stdin.encode())
         fds.append(self._sock)
 
         while True:
