@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.mark.parametrize('argv,expected_stdout,errorcode', [
-    [['/bin/echo', 'blat'], 'blat', 0],
+    [['/bin/sleep', '0'], '', 0],
     [['/bin/ls', 'INVALID_PATH'], 'ls: INVALID_PATH: No such file or directory', 256],
 ])
 def test_spawn_sanity(client, argv, expected_stdout, errorcode):
