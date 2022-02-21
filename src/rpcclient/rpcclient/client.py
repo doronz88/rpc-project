@@ -1,5 +1,4 @@
 import ast
-import atexit
 import builtins
 import contextlib
 import logging
@@ -387,7 +386,6 @@ class Client:
             return
         fd = sys.stdin
         self._old_settings = termios.tcgetattr(fd)
-        atexit.register(self._restore_terminal)
         tty.setraw(fd)
 
     def _recvall(self, size: int) -> bytes:
