@@ -12,36 +12,23 @@
     <true/>
     <key>com.apple.wifi.manager-access</key>
     <true/>
+    <key>com.apple.locationd.preauthorized</key>
+    <true/>
+    <key>com.apple.locationd.authorizeapplications</key>
+    <true/>
+    <key>com.apple.locationd.defaults_access</key>
+    <true/>
+    <key>com.apple.locationd.effective_bundle</key>
+    <true/>
+    <key>com.apple.locationd.status</key>
+    <true/>
     <key>task_for_pid-allow</key>
     <true/>
     <key>com.apple.private.tcc.allow</key>
     <array>
         <string>kTCCServiceMicrophone</string>
         <string>kTCCServiceCamera</string>
-    </array>
-    <key>com.apple.security.device.audio-input</key>
-    <true/>
-    <key>com.apple.security.device.microphone</key>
-    <true/>
-    <key>com.apple.security.device.camera</key>
-    <true/>
-    <key>com.apple.security.personal-information.location</key>
-    <true/>
-    <key>com.apple.security.personal-information.addressbook</key>
-    <true/>
-    <key>com.apple.security.personal-information.calendars</key>
-    <true/>
-    <key>com.apple.security.personal-information.photos-library</key>
-    <true/>
-    <key>com.apple.security.automation.apple-events</key>
-    <true/>
-    <key>com.apple.SystemConfiguration.SCDynamicStore-write-access</key>
-    <true/>
-    <key>com.apple.SystemConfiguration.SCPreferences-write-access</key>
-    <array>
-        <string>com.apple.AutoWake.xml</string>
-        <string>preferences.plist</string>
-        <string>com.apple.radios.plist</string>
+        <string>kTCCServiceLocation</string>
     </array>
 </dict>
 </plist>
