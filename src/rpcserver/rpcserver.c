@@ -33,10 +33,12 @@
 
 #define DEFAULT_PORT ("5910")
 #define DEFAULT_SHELL ("/bin/sh")
-#define USAGE ("Usage: %s [-p port] [-s] [-S] \n\
+#define USAGE ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] \n\
 -h  show this help message \n\
--s  log to stdout \n\
--S  log to syslog \n")
+-o  output. can be all of the following: stdout, syslog and file:filename. can be passed multiple times \n\
+\n\
+Example usage: \n\
+%s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
 #define SERVER_MAGIC_VERSION (0x88888800)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
@@ -695,7 +697,7 @@ int main(int argc, const char *argv[])
     int opt;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *)argv, "p:sSh")) != -1)
+    while ((opt = getopt(argc, (char *const *)argv, "hp:o:")) != -1)
     {
         switch (opt)
         {
@@ -704,20 +706,32 @@ int main(int argc, const char *argv[])
             strncpy(port, optarg, sizeof(port) - 1);
             break;
         }
-        case 's':
+        case 'o':
         {
-            g_stdout = true;
-            break;
-        }
-        case 'S':
-        {
-            g_syslog = true;
+            if (0 == strcmp(optarg, "stdout"))
+            {
+                g_stdout = true;
+            }
+            if (0 == strcmp(optarg, "syslog"))
+            {
+                g_syslog = true;
+            }
+            char *file = strstr(optarg, "file:");
+            if (file)
+            {
+                g_file = fopen(file + 5, "wb");
+                if (!g_file)
+                {
+                    printf("failed to open %s for writing\n", optarg);
+                }
+            }
             break;
         }
         case 'h':
+        case '?':
         default: /* '?' */
         {
-            printf(USAGE, argv[0]);
+            printf(USAGE, argv[0], argv[0]);
             exit(EXIT_FAILURE);
         }
         }
