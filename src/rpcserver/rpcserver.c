@@ -63,6 +63,8 @@ typedef enum
     CMD_REPLY_ERROR = 7,
     CMD_REPLY_PEEK = 8,
     CMD_GET_DUMMY_BLOCK = 9,
+    CMD_CLOSE = 10,
+    CMD_REPLY_POKE = 11,
 } cmd_type_t;
 
 typedef enum
@@ -125,27 +127,12 @@ void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
     return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
+bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t *pid, int *master_fd)
 {
-    int master_fd = -1;
+    bool success = false;
     int slave_fd = -1;
-    int res = 0;
-
-    // We need a new pseudoterminal to avoid bufferring problems. The 'atos' tool
-    // in particular detects when it's talking to a pipe and forgets to flush the
-    // output stream after sending a response.
-    master_fd = posix_openpt(O_RDWR);
-    CHECK(-1 != master_fd);
-    CHECK(0 == grantpt(master_fd));
-    CHECK(0 == unlockpt(master_fd));
-
-    char slave_pty_name[128];
-    CHECK(0 == ptsname_r(master_fd, slave_pty_name, sizeof(slave_pty_name)));
-
-    TRACE("slave_pty_name: %s", slave_pty_name);
-
-    slave_fd = open(slave_pty_name, O_RDWR);
-    CHECK(-1 != slave_fd);
+    *master_fd = -1;
+    *pid = INVALID_PID;
 
     // call setsid() on child so Ctrl-C and all other control characters are set in a different terminal
     // and process group
@@ -155,33 +142,60 @@ int internal_spawn(char *const *argv, char *const *envp, pid_t *pid)
 
     posix_spawn_file_actions_t actions;
     CHECK(0 == posix_spawn_file_actions_init(&actions));
-    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDIN_FILENO));
-    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDOUT_FILENO));
-    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
-    CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
-    CHECK(0 == posix_spawn_file_actions_addclose(&actions, master_fd));
+
+    if (!background)
+    {
+        // We need a new pseudoterminal to avoid bufferring problems. The 'atos' tool
+        // in particular detects when it's talking to a pipe and forgets to flush the
+        // output stream after sending a response.
+        *master_fd = posix_openpt(O_RDWR);
+        CHECK(-1 != *master_fd);
+        CHECK(0 == grantpt(*master_fd));
+        CHECK(0 == unlockpt(*master_fd));
+
+        char slave_pty_name[128];
+        CHECK(0 == ptsname_r(*master_fd, slave_pty_name, sizeof(slave_pty_name)));
+
+        TRACE("slave_pty_name: %s", slave_pty_name);
+
+        slave_fd = open(slave_pty_name, O_RDWR);
+        CHECK(-1 != slave_fd);
+
+        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDIN_FILENO));
+        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDOUT_FILENO));
+        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
+        CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
+        CHECK(0 == posix_spawn_file_actions_addclose(&actions, *master_fd));
+    }
+    else
+    {
+        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0));
+        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0));
+        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0));
+    }
 
     CHECK(0 == posix_spawnp(pid, argv[0], &actions, &attr, argv, envp));
+    CHECK(*pid != INVALID_PID);
 
     posix_spawnattr_destroy(&attr);
     posix_spawn_file_actions_destroy(&actions);
 
-    close(slave_fd);
-    slave_fd = -1;
-
-    return master_fd;
+    success = true;
 
 error:
-    if (master_fd != -1)
-    {
-        close(master_fd);
-    }
     if (slave_fd != -1)
     {
         close(slave_fd);
     }
-    *pid = INVALID_PID;
-    return -1;
+    if (!success)
+    {
+        if (*master_fd != -1)
+        {
+            close(*master_fd);
+        }
+        *pid = INVALID_PID;
+    }
+    return success;
 }
 
 bool send_reply(int sockfd, cmd_type_t type)
@@ -196,47 +210,30 @@ error:
 typedef struct {
     int sockfd;
     pid_t pid;
-    int pipe[2];
-} wait_process_exit_thread_t;
+} thread_notify_client_spawn_error_t;
 
-void wait_process_exit_thread(wait_process_exit_thread_t *params)
+void thread_waitpid(pid_t pid)
 {
     TRACE("enter");
-    u8 byte;
-    CHECK(sizeof(byte) == write(params->pipe[1], &byte, sizeof(byte)));
-    TRACE("waitpid");
-
     s32 err;
-    CHECK(-1 != waitpid(params->pid, &err, 0));
-
-    TRACE("waitpid done with err: %d", err);
-
-    CHECK(sizeof(byte) == read(params->pipe[0], &byte, sizeof(byte)));
-    
-    cmd_exec_chunk_t chunk;
-    chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
-    chunk.size = sizeof(err);
-
-    CHECK(sendall(params->sockfd, (char *)&chunk, sizeof(chunk)));
-    CHECK(sendall(params->sockfd, (char *)&err, chunk.size));
-
-    TRACE("sent exit code to client fd: %d", params->sockfd);
-
-error:
-    return;
+    waitpid(pid, &err, 0);
 }
 
 bool handle_exec(int sockfd)
 {
+    u8 byte;
     pthread_t thread = 0;
-    wait_process_exit_thread_t *thread_params = NULL;
+    thread_notify_client_spawn_error_t *thread_params = NULL;
     pid_t pid = INVALID_PID;
     int master = -1;
-    int result = false;
+    int success = false;
     char **argv = NULL;
     char **envp = NULL;
     u32 argc;
     u32 envc;
+    u8 background;
+
+    CHECK(recvall(sockfd, (char *)&background, sizeof(background)));
 
     CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
     CHECK(argc > 0);
@@ -281,96 +278,90 @@ bool handle_exec(int sockfd)
         envp[i][len] = '\0';
     }
 
-    master = internal_spawn((char *const *)argv, envc ? (char *const *)envp : environ, &pid);
+    CHECK(internal_spawn(background, (char *const *)argv, envc ? (char *const *)envp : environ, &pid, &master));
     CHECK(sendall(sockfd, (char *)&pid, sizeof(u32)));
-    CHECK(master >= 0);
 
-    // create a new thread to wait for the exit of the new process, but lock it until after 
-    // all stdin/stdout/stderr has been forwarded
-    thread_params = (wait_process_exit_thread_t *)malloc(sizeof(wait_process_exit_thread_t));
-    thread_params->sockfd = sockfd;
-    thread_params->pid = pid;
-    CHECK(0 == pipe(thread_params->pipe));
-
-    CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))wait_process_exit_thread, thread_params));
-
-    TRACE("wait for thread to reach waitpid");
-
-    u8 byte;
-    CHECK(sizeof(byte) == read(thread_params->pipe[0], &byte, sizeof(byte)));
-
-    TRACE("thread reached waitpid. forwarding fds");
-
-    fd_set readfds;
-    char buf[BUFFERSIZE];
-    int maxfd = master > sockfd ? master : sockfd;
-    int nbytes = 0;
-
-    fd_set errfds;
-
-    while (true)
+    if (background)
     {
-        FD_ZERO(&readfds);
-        FD_SET(master, &readfds);
-        FD_SET(sockfd, &readfds);
+        CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))thread_waitpid, (void *)(intptr_t)pid));
+    }
+    else
+    {
+        // make sure we have the process fd for its stdout and stderr
+        CHECK(master >= 0);
 
-        CHECK(select(maxfd + 1, &readfds, NULL, &errfds, NULL) != -1);
+        fd_set readfds;
+        char buf[BUFFERSIZE];
+        int maxfd = master > sockfd ? master : sockfd;
+        int nbytes = 0;
 
-        if (FD_ISSET(master, &readfds))
+        fd_set errfds;
+
+        while (true)
         {
-            nbytes = read(master, buf, BUFFERSIZE);
-            if (nbytes < 1)
+            FD_ZERO(&readfds);
+            FD_SET(master, &readfds);
+            FD_SET(sockfd, &readfds);
+
+            CHECK(select(maxfd + 1, &readfds, NULL, &errfds, NULL) != -1);
+
+            if (FD_ISSET(master, &readfds))
             {
-                TRACE("read master failed. break");
-                break;
+                nbytes = read(master, buf, BUFFERSIZE);
+                if (nbytes < 1)
+                {
+                    TRACE("read master failed. break");
+                    break;
+                }
+
+                TRACE("master->sock");
+
+                cmd_exec_chunk_t chunk;
+                chunk.type = CMD_EXEC_CHUNK_TYPE_STDOUT;
+                chunk.size = nbytes;
+
+                CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
+                CHECK(sendall(sockfd, buf, chunk.size));
             }
 
-            TRACE("master->sock");
-
-            cmd_exec_chunk_t chunk;
-            chunk.type = CMD_EXEC_CHUNK_TYPE_STDOUT;
-            chunk.size = nbytes;
-
-            CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
-            CHECK(sendall(sockfd, buf, chunk.size));
-        }
-
-        if (FD_ISSET(sockfd, &readfds))
-        {
-            nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
-            if (nbytes < 1)
+            if (FD_ISSET(sockfd, &readfds))
             {
-                break;
+                nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
+                if (nbytes < 1)
+                {
+                    break;
+                }
+
+                TRACE("sock->master");
+
+                CHECK(writeall(master, buf, nbytes));
             }
-
-            TRACE("sock->master");
-
-            CHECK(writeall(master, buf, nbytes));
         }
+
+        TRACE("wait for process to finish");
+        s32 error;
+        CHECK(pid == waitpid(pid, &error, 0));
+     
+        cmd_exec_chunk_t chunk;
+        chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
+        chunk.size = sizeof(error);
+     
+        CHECK(sendall(sockfd, (const char *)&chunk, sizeof(chunk)));
+        CHECK(sendall(sockfd, (const char *)&error, sizeof(error)));
     }
 
-    TRACE("notify thread its now okay to send the exit status");
-    CHECK(sizeof(byte) == write(thread_params->pipe[1], &byte, sizeof(byte)));
-
-    TRACE("wait for thread to finish");
-    CHECK(0 != pthread_join(thread, NULL));
-
-    thread = NULL;
-    
-    TRACE("thread exit");
-
-    result = true;
+    success = true;
 
 error:
     if (thread_params)
     {
-        close(thread_params->pipe[0]);
-        close(thread_params->pipe[1]);
         free(thread_params);
     }
 
     if (INVALID_PID == pid)
     {
+        TRACE("invalid pid");
+
         // failed to create process somewhere in the prolog, at least notify
         sendall(sockfd, (char *)&pid, sizeof(u32));
     }
@@ -408,7 +399,7 @@ error:
         }
     }
 
-    return result;
+    return success;
 }
 
 bool handle_dlopen(int sockfd)
@@ -447,8 +438,10 @@ bool handle_dlsym(int sockfd)
     cmd_dlsym_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    u64 err = (u64)dlsym((void *)cmd.lib, cmd.symbol_name);
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+    u64 ptr = (u64)dlsym((void *)cmd.lib, cmd.symbol_name);
+    CHECK(sendall(sockfd, (char *)&ptr, sizeof(ptr)));
+
+    TRACE("%s = %p", cmd.symbol_name, ptr);
 
     result = true;
 
@@ -480,6 +473,8 @@ bool handle_call(int sockfd)
 
     argv = (u64 *)malloc(sizeof(u64) * cmd.argc);
     CHECK(recvall(sockfd, (char *)argv, sizeof(u64) * cmd.argc));
+
+    TRACE("address: %p", cmd.address);
 
     switch (cmd.argc)
     {
@@ -542,7 +537,6 @@ bool handle_peek(int sockfd)
     cmd_peek_t cmd;
 
 #ifdef __APPLE__
-    kern_return_t rc;
     mach_port_t task;
     vm_offset_t data;
     mach_msg_type_number_t size;
@@ -579,20 +573,47 @@ bool handle_poke(int sockfd)
 {
     TRACE("enter");
     s64 err = 0;
-    int result = false;
+    int success = false;
     u64 *argv = NULL;
+    char *data = NULL;
     cmd_poke_t cmd;
+
+#ifdef __APPLE__
+    mach_port_t task;
+    CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    // TODO: consider splitting recieve chunks
+    data = malloc(cmd.size);
+    CHECK(data);
+    CHECK(recvall(sockfd, data, cmd.size));
+
+    if (vm_write(task, cmd.address, (vm_offset_t)data, cmd.size) == KERN_SUCCESS)
+    {
+        CHECK(send_reply(sockfd, CMD_REPLY_POKE));
+    }
+    else
+    {
+        CHECK(send_reply(sockfd, CMD_REPLY_ERROR));
+    }
+#else  // __APPLE__
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
     CHECK(recvall(sockfd, (char *)cmd.address, cmd.size));
+    CHECK(send_reply(sockfd, CMD_REPLY_POKE));
+#endif  // __APPLE__
 
-    result = true;
+    success = true;
 
 error:
     if (argv)
     {
         free(argv);
     }
-    return result;
+    if (data)
+    {
+        free(data);
+    }
+    return success;
 }
 
 #if  __APPLE__
@@ -620,6 +641,7 @@ bool handle_get_dummy_block(int sockfd)
 
 void handle_client(int sockfd)
 {
+    bool disconnected = false;
     TRACE("enter. fd: %d", sockfd);
 
     // send MAGIC
@@ -635,7 +657,10 @@ void handle_client(int sockfd)
     {
         protocol_message_t cmd;
         TRACE("recv");
-        CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+        if (!recvall_ext(sockfd, (char *)&cmd, sizeof(cmd), &disconnected))
+        {
+            goto error;
+        }
         CHECK(cmd.magic == MAGIC);
 
         TRACE("client fd: %d, cmd type: %d", sockfd, cmd.cmd_type);
@@ -677,6 +702,11 @@ void handle_client(int sockfd)
             handle_get_dummy_block(sockfd);
             break;
         }
+        case CMD_CLOSE:
+        {
+            // client requested to close connection
+            goto error;
+        }
         default:
         {
             TRACE("unknown cmd");
@@ -685,10 +715,14 @@ void handle_client(int sockfd)
     }
 
 error:
-    TRACE("close client fd: %d", sockfd);
-    if (0 != close(sockfd))
+    if (!disconnected)
     {
-        perror("close");
+        // if client was disconnected, then os has already closed this fd
+        TRACE("close client fd: %d", sockfd);
+        if (0 != close(sockfd))
+        {
+            perror("close");
+        }
     }
 }
 
@@ -756,6 +790,7 @@ int main(int argc, const char *argv[])
 
     server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype, servinfo2->ai_protocol);
     CHECK(server_fd >= 0);
+    CHECK(-1 != fcntl(server_fd, F_SETFD, FD_CLOEXEC));
 
     int yes_1 = 1;
     CHECK(0 == setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &yes_1, sizeof(yes_1)));
@@ -771,6 +806,7 @@ int main(int argc, const char *argv[])
         socklen_t addr_size = sizeof(their_addr);
         int client_fd = accept(server_fd, (struct sockaddr *)&their_addr, &addr_size);
         CHECK(client_fd >= 0);
+        CHECK(-1 != fcntl(client_fd, F_SETFD, FD_CLOEXEC));
 
         char ipstr[INET6_ADDRSTRLEN];
         CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));

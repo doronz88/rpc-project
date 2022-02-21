@@ -192,6 +192,9 @@ class Client:
             'data': {'address': address, 'size': len(data), 'data': data},
         })
         self._sock.sendall(message)
+        reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
+        if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
+            raise ArgumentError(f'failed to write {len(data)} bytes to {address}')
 
     def get_dummy_block(self) -> Symbol:
         """ get an address for a stub block containing nothing """
@@ -210,7 +213,7 @@ class Client:
         :param argv: argv of the process to be executed
         :param envp: envp of the process to be executed
         :param stdin: either a file object to read from OR a string
-        :param stdout: a file object to write both stdout and stderr to
+        :param stdout: a file object to write both stdout and stderr to. None if background is requested
         :param raw_tty: should enable raw tty mode
         :param background: should execute process in background
         :return: a SpawnResult. error is None if background is requested
@@ -222,35 +225,35 @@ class Client:
             envp = self.DEFAULT_ENVP
 
         try:
-            pid = self._execute(argv, envp)
+            pid = self._execute(argv, envp, background=background)
         except SpawnError:
             # depends on where the error occurred, the socket might be closed
-            self.reconnect()
             raise
 
         logging.info(f'shell process started as pid: {pid}')
 
         if background:
-            # if in background was requested, we can just detach this connection
-            self.reconnect()
-            return SpawnResult(error=None, pid=pid, stdout=stdout)
-
-        self._sock.setblocking(False)
+            return SpawnResult(error=None, pid=pid, stdout=None)
 
         if raw_tty:
             self._prepare_terminal()
         try:
+            # the socket must be non-blocking for using select()
+            self._sock.setblocking(False)
             error = self._execution_loop(stdin, stdout)
         except Exception:  # noqa: E722
+            self._sock.setblocking(True)
             # this is important to really catch every exception here, even exceptions not inheriting from Exception
             # so the controlling terminal will remain working with its previous settings
             if raw_tty:
                 self._restore_terminal()
-            self.reconnect()
             raise
 
         if raw_tty:
             self._restore_terminal()
+
+        # TODO: we should be able to return here without the need to reconnect but from some reason the
+        # socket goes out of sync when doing so
         self.reconnect()
 
         return SpawnResult(error=error, pid=pid, stdout=stdout)
@@ -356,8 +359,17 @@ class Client:
                         symbol
                     )
 
+    def close(self):
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_CLOSE,
+            'data': None,
+        })
+        self._sock.sendall(message)
+        self._sock.close()
+
     def reconnect(self):
         """ close current socket and attempt to reconnect """
+        self.close()
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
         magic = self._recvall(len(SERVER_MAGIC_VERSION))
@@ -367,10 +379,10 @@ class Client:
 
         self._recvall(UNAME_VERSION_LEN)
 
-    def _execute(self, argv: typing.List[str], envp: typing.List[str]) -> int:
+    def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_EXEC,
-            'data': {'argv': argv, 'envp': envp},
+            'data': {'background': background, 'argv': argv, 'envp': envp},
         })
         self._sock.sendall(message)
         pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))
