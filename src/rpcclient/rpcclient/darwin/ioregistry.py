@@ -6,31 +6,6 @@ from rpcclient.exceptions import RpcClientException, BadReturnValueError
 from rpcclient.allocated import Allocated
 
 
-class IOServiceIter(Allocated):
-    def __init__(self, client, service):
-        super().__init__()
-        self._client = client
-        self._service = service
-
-    def __iter__(self):
-        with self._client.safe_malloc(io_object_t.sizeof()) as p_child_iter:
-            if self._client.symbols.IORegistryEntryGetChildIterator(self._service, kIOServicePlane, p_child_iter):
-                raise BadReturnValueError('IORegistryEntryGetChildIterator failed')
-            child_iter = p_child_iter[0]
-
-        while True:
-            child = self._client.symbols.IOIteratorNext(child_iter)
-            if not child:
-                break
-            s = IOService(self._client, child)
-            yield s
-
-        self.deallocate()
-
-    def _deallocate(self):
-        self._client.symbols.IOObjectRelease(self._service)
-
-
 class IOService(Allocated):
     """ representation of a remote IOService """
 
@@ -54,8 +29,18 @@ class IOService(Allocated):
                 raise BadReturnValueError('IORegistryEntryCreateCFProperties failed')
             return p_properties[0].py
 
-    def iter(self) -> IOServiceIter:
-        return IOServiceIter(self._client, self._service)
+    def __iter__(self):
+        with self._client.safe_malloc(io_object_t.sizeof()) as p_child_iter:
+            if self._client.symbols.IORegistryEntryGetChildIterator(self._service, kIOServicePlane, p_child_iter):
+                raise BadReturnValueError('IORegistryEntryGetChildIterator failed')
+            child_iter = p_child_iter[0]
+
+        while True:
+            child = self._client.symbols.IOIteratorNext(child_iter)
+            if not child:
+                break
+            s = IOService(self._client, child)
+            yield s
 
     def set(self, properties: Mapping):
         self._client.symbols.IORegistryEntrySetCFProperties(self._service, self._client.cf(properties))
