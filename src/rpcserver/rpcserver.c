@@ -221,15 +221,13 @@ void wait_process_exit_thread(wait_process_exit_thread_t *params)
     TRACE("sent exit code to client fd: %d", params->sockfd);
 
 error:
-    close(params->pipe[0]);
-    close(params->pipe[1]);
-    free(params);
     return;
 }
 
 bool handle_exec(int sockfd)
 {
     pthread_t thread = 0;
+    wait_process_exit_thread_t *thread_params = NULL;
     pid_t pid = INVALID_PID;
     int master = -1;
     int result = false;
@@ -287,7 +285,7 @@ bool handle_exec(int sockfd)
 
     // create a new thread to wait for the exit of the new process, but lock it until after 
     // all stdin/stdout/stderr has been forwarded
-    wait_process_exit_thread_t *thread_params = (wait_process_exit_thread_t *)malloc(sizeof(wait_process_exit_thread_t));
+    thread_params = (wait_process_exit_thread_t *)malloc(sizeof(wait_process_exit_thread_t));
     thread_params->sockfd = sockfd;
     thread_params->pid = pid;
     CHECK(0 == pipe(thread_params->pipe));
@@ -354,15 +352,19 @@ bool handle_exec(int sockfd)
 
     TRACE("wait for thread to finish");
     CHECK(0 != pthread_join(thread, NULL));
+
+    thread = NULL;
     
     TRACE("thread exit");
 
     result = true;
 
 error:
-    if (thread)
+    if (thread_params)
     {
-        pthread_kill(thread, SIGKILL);
+        close(thread_params->pipe[0]);
+        close(thread_params->pipe[1]);
+        free(thread_params);
     }
 
     if (INVALID_PID == pid)
