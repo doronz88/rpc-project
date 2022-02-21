@@ -10,6 +10,7 @@
 
 bool g_stdout = false;
 bool g_syslog = false;
+FILE *g_file = NULL;
 
 void trace(const char *prefix, const char *fmt, ...)
 {
@@ -31,10 +32,16 @@ void trace(const char *prefix, const char *fmt, ...)
     if (g_stdout)
     {
         puts(prefixed_line);
+        fflush(stdout);
     }
     if (g_syslog)
     {
         syslog(LOG_DEBUG, "%s", prefixed_line);
+    }
+    if (g_file)
+    {
+        fprintf(g_file, "%s\n", prefixed_line);
+        fflush(g_file);
     }
 }
 
