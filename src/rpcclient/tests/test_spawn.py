@@ -3,11 +3,21 @@ from io import StringIO
 import pytest
 
 
+def test_spawn_fds(client):
+    pid = client.spawn(['/bin/sleep', '5'], stdout=StringIO(), stdin='', background=True).pid
+
+    # should only have: stdin, stdout and stderr
+    assert len(client.processes.get_fds(pid)) == 3
+
+    client.processes.kill(pid)
+
+
 @pytest.mark.parametrize('argv,expected_stdout,errorcode', [
     [['/bin/sleep', '0'], '', 0],
+    [['/bin/echo', 'blat'], 'blat', 0],
     [['/bin/ls', 'INVALID_PATH'], 'ls: INVALID_PATH: No such file or directory', 256],
 ])
-def test_spawn_sanity(client, argv, expected_stdout, errorcode):
+def test_spawn_foreground_sanity(client, argv, expected_stdout, errorcode):
     stdout = StringIO()
     assert errorcode == client.spawn(argv, stdout=stdout, stdin='').error
 
@@ -15,20 +25,27 @@ def test_spawn_sanity(client, argv, expected_stdout, errorcode):
     assert expected_stdout == stdout.read().strip()
 
 
-def test_spawn_bad_value_stress(client):
+@pytest.mark.parametrize('argv,expected_stdout,errorcode', [
+    [['/bin/sleep', '0'], '', 0],
+    [['/bin/echo', 'blat'], 'blat', 0],
+    [['/bin/ls', 'INVALID_PATH'], 'ls: INVALID_PATH: No such file or directory', 256],
+])
+def test_spawn_foreground_stress(client, argv, expected_stdout, errorcode):
     for i in range(1000):
-        stdout = StringIO()
-        assert 256 == client.spawn(['/bin/ls', 'INVALID_PATH'], stdout=stdout, stdin='').error
-
-        stdout.seek(0)
-        assert 'ls: INVALID_PATH: No such file or directory' == stdout.read().strip()
+        test_spawn_foreground_sanity(client, argv, expected_stdout, errorcode)
 
 
-def test_spawn_background(client):
+def test_spawn_background_sanity(client):
     spawn_result = client.spawn(['/bin/sleep', '5'], stdout=StringIO(), stdin='', background=True)
 
     # when running in background, no error is returned
     assert spawn_result.error is None
+    assert spawn_result.stdout is None
 
     # instead, we can just make sure it ran by sending it a kill and don't fail
     client.processes.kill(spawn_result.pid)
+
+
+def test_spawn_background_stress(client):
+    for i in range(1000):
+        test_spawn_background_sanity(client)

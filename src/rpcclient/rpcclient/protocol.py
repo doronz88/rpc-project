@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul
+    Int64ul, Int8ul
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -12,6 +12,8 @@ cmd_type_t = Enum(Int32ul,
                   CMD_REPLY_ERROR=7,
                   CMD_REPLY_PEEK=8,
                   CMD_GET_DUMMY_BLOCK=9,
+                  CMD_CLOSE=10,
+                  CMD_REPLY_POKE=11,
                   )
 DEFAULT_PORT = 5910
 SERVER_MAGIC_VERSION = Int32ul.build(0x88888800)
@@ -20,6 +22,7 @@ MAX_PATH_LEN = 1024
 UNAME_VERSION_LEN = 256
 
 cmd_exec_t = Struct(
+    'background' / Int8ul,
     'argv' / PrefixedArray(Int32ul, PascalString(Int32ul, 'utf8')),
     'envp' / PrefixedArray(Int32ul, PascalString(Int32ul, 'utf8')),
 )

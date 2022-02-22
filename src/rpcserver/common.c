@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <execinfo.h>
 #include <sys/socket.h>
 
 #include "common.h"
@@ -11,6 +12,35 @@
 bool g_stdout = false;
 bool g_syslog = false;
 FILE *g_file = NULL;
+
+#define BT_BUF_SIZE (100)
+
+void print_backtrace()
+{
+    int nptrs;
+    void *buffer[BT_BUF_SIZE];
+    char **strings;
+
+    nptrs = backtrace(buffer, BT_BUF_SIZE);
+    trace("BACKTRACE", "backtrace() returned %d addresses", nptrs);
+
+    /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO)
+        would produce similar output to the following: */
+
+    strings = backtrace_symbols(buffer, nptrs);
+    if (strings == NULL) 
+    {
+        perror("backtrace_symbols");
+        return;
+    }
+
+    for (int j = 0; j < nptrs; j++)
+    {
+        trace("BACKTRACE:\t", "%s", strings[j]);
+    }
+
+    free(strings);
+}
 
 void trace(const char *prefix, const char *fmt, ...)
 {
@@ -45,14 +75,21 @@ void trace(const char *prefix, const char *fmt, ...)
     }
 }
 
-bool recvall(int sockfd, char *buf, size_t len)
+bool recvall_ext(int sockfd, char *buf, size_t len, bool *disconnected)
 {
     size_t total_bytes = 0;
     size_t bytes = 0;
+    *disconnected = false;
 
     while (len > 0)
     {
         bytes = recv(sockfd, buf + total_bytes, len, 0);
+        if (0 == bytes)
+        {
+            TRACE("client fd: %d disconnected", sockfd);
+            *disconnected = true;
+            return false;
+        }
         CHECK(bytes > 0);
 
         total_bytes += bytes;
@@ -62,12 +99,13 @@ bool recvall(int sockfd, char *buf, size_t len)
     return true;
 
 error:
-    if (0 == bytes)
-    {
-        TRACE("client fd: %d disconnected", sockfd);
-    }
-
     return false;
+}
+
+bool recvall(int sockfd, char *buf, size_t len)
+{
+    bool disconnected;
+    return recvall_ext(sockfd, buf, len, &disconnected);
 }
 
 bool sendall(int sockfd, const char *buf, size_t len)

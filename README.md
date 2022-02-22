@@ -52,8 +52,13 @@ python3 -m pip install --user -U .
 
 To execute the server:
 
-```shell
-./server [-p port]
+```
+Usage: ./rpcserver [-p port] [-o (stdout|syslog|file:filename)]
+-h  show this help message
+-o  output. can be all of the following: stdout, syslog and file:filename. can be passed multiple times
+
+Example usage:
+./rpcserver -p 5910 -o syslog -o stdout -o file:/tmp/log.txt
 ```
 
 Connecting via:

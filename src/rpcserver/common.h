@@ -1,10 +1,12 @@
 #ifndef __COMMON_H_
 #define __COMMON_H_
 
+#include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <string.h>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -21,12 +23,17 @@ FILE *g_file;
 #define CHECK(expression)            \
     if (!(expression))               \
     {                                \
-        if (errno) perror(__PRETTY_FUNCTION__); \
+        if (errno)                   \
+        {                            \
+            trace(__PRETTY_FUNCTION__, "ERROR: errno: %d (%s)", errno, strerror(errno)); \
+        }                            \
+        print_backtrace();           \
         goto error;                  \
     }
 
+void print_backtrace();
 void trace(const char *prefix, const char *fmt, ...);
-
+bool recvall_ext(int sockfd, char *buf, size_t len, bool *disconnected);
 bool recvall(int sockfd, char *buf, size_t len);
 bool sendall(int sockfd, const char *buf, size_t len);
 bool writeall(int fd, const char *buf, size_t len);
