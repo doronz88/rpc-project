@@ -7,4 +7,4 @@ cached-property
 dataclasses; python_version<"3.7"
 pygments
 objc_types_decoder
-pycrashreport>=0.0.7
+pycrashreport>=0.0.8
