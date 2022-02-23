@@ -4,16 +4,16 @@ from collections import namedtuple
 from pathlib import Path
 from typing import Optional, List, Mapping
 
+from cached_property import cached_property
 from construct import Array
 
 from rpcclient.common import path_to_str
-from rpcclient.exceptions import BadReturnValueError
+from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.processes import Processes
 from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info
 
-Process = namedtuple('Process', 'pid path')
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
 
@@ -90,21 +90,25 @@ SOCKET_TYPE_DATACLASS = {
 }
 
 
-class DarwinProcesses(Processes):
-    """ manage processes """
+class Process:
+    def __init__(self, client, pid: int):
+        self._client = client
+        self.pid = pid
 
-    def get_proc_path(self, pid: int) -> Optional[str]:
+    @cached_property
+    def path(self) -> Optional[str]:
         """ call proc_pidpath(filename, ...) at remote. review xnu header for more details. """
         with self._client.safe_malloc(MAXPATHLEN) as path:
-            path_len = self._client.symbols.proc_pidpath(pid, path, MAXPATHLEN)
+            path_len = self._client.symbols.proc_pidpath(self.pid, path, MAXPATHLEN)
             if not path_len:
                 return None
             return path.peek(path_len).decode()
 
-    def get_fds(self, pid: int) -> List[Fd]:
+    @property
+    def fds(self) -> List[Fd]:
         """ get a list of process opened file descriptors """
         result = []
-        for fdstruct in self.get_fd_structs(pid):
+        for fdstruct in self.fd_structs:
             fd = fdstruct.fd
             parsed = fdstruct.struct
 
@@ -133,15 +137,16 @@ class DarwinProcesses(Processes):
 
         return result
 
-    def get_fd_structs(self, pid: int) -> List[FdStruct]:
+    @property
+    def fd_structs(self) -> List[FdStruct]:
         """ get a list of process opened file descriptors as raw structs """
         result = []
-        size = self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, 0, 0)
+        size = self._client.symbols.proc_pidinfo(self.pid, PROC_PIDLISTFDS, 0, 0, 0)
 
         vi_size = 8196  # should be enough for all structs
         with self._client.safe_malloc(vi_size) as vi_buf:
             with self._client.safe_malloc(size) as fdinfo_buf:
-                size = int(self._client.symbols.proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
+                size = int(self._client.symbols.proc_pidinfo(self.pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
                 if not size:
                     raise BadReturnValueError('proc_pidinfo(PROC_PIDLISTFDS) failed')
 
@@ -149,7 +154,7 @@ class DarwinProcesses(Processes):
 
                     if fd.proc_fdtype == PROX_FDTYPE_VNODE:
                         # file
-                        vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, vi_buf,
+                        vs = self._client.symbols.proc_pidfdinfo(self.pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, vi_buf,
                                                                  vi_size)
                         if not vs:
                             if self._client.errno == errno.EBADF:
@@ -165,7 +170,7 @@ class DarwinProcesses(Processes):
 
                     elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
                         # socket
-                        vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, vi_buf,
+                        vs = self._client.symbols.proc_pidfdinfo(self.pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, vi_buf,
                                                                  vi_size)
                         if not vs:
                             if self._client.errno == errno.EBADF:
@@ -178,7 +183,7 @@ class DarwinProcesses(Processes):
 
                     elif fd.proc_fdtype == PROX_FDTYPE_PIPE:
                         # pipe
-                        vs = self._client.symbols.proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDPIPEINFO, vi_buf,
+                        vs = self._client.symbols.proc_pidfdinfo(self.pid, fd.proc_fd, PROC_PIDFDPIPEINFO, vi_buf,
                                                                  vi_size)
                         if not vs:
                             if self._client.errno == errno.EBADF:
@@ -193,11 +198,72 @@ class DarwinProcesses(Processes):
 
             return result
 
+    @property
+    def task_all_info(self):
+        """ get a list of process opened file descriptors """
+        with self._client.safe_malloc(proc_taskallinfo.sizeof()) as pti:
+            if not self._client.symbols.proc_pidinfo(self.pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
+                raise BadReturnValueError('proc_pidinfo(PROC_PIDTASKALLINFO) failed')
+            return proc_taskallinfo.parse_stream(pti)
+
+    @cached_property
+    def name(self) -> str:
+        return self.task_all_info.pbsd.pbi_name
+
+    @cached_property
+    def ppid(self) -> int:
+        return self.task_all_info.pbsd.pbi_ppid
+
+    @cached_property
+    def uid(self) -> int:
+        return self.task_all_info.pbsd.pbi_uid
+
+    @cached_property
+    def gid(self) -> int:
+        return self.task_all_info.pbsd.pbi_gid
+
+    @cached_property
+    def ruid(self) -> int:
+        return self.task_all_info.pbsd.pbi_ruid
+
+    @cached_property
+    def rgid(self) -> int:
+        return self.task_all_info.pbsd.pbi_rgid
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
+
+
+class DarwinProcesses(Processes):
+    """ manage processes """
+
+    def get_by_pid(self, pid: int) -> Process:
+        """ get process object by pid """
+        for p in self.list():
+            if p.pid == pid:
+                return p
+        raise ArgumentError(f'failed to locate process with pid: {pid}')
+
+    def get_by_name(self, name: str):
+        """ get process object by name """
+        for p in self.list():
+            if p.name == name:
+                return p
+        raise ArgumentError(f'failed to locate process with name: {name}')
+
+    def grep(self, name: str) -> List[Process]:
+        """ get process list by a name filter """
+        result = []
+        for p in self.list():
+            if name in p.name:
+                result.append(p)
+        return result
+
     def get_process_by_listening_port(self, port: int) -> Optional[Process]:
         """ get a process object listening on the specified port """
         for process in self.list():
             try:
-                fds = self.get_fds(process.pid)
+                fds = process.fds
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -213,7 +279,7 @@ class DarwinProcesses(Processes):
         result = {}
         for process in self.list():
             try:
-                fds = self.get_fds(process.pid)
+                fds = process.fds
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -228,7 +294,7 @@ class DarwinProcesses(Processes):
         result = []
         for process in self.list():
             try:
-                fds = self.get_fds(process.pid)
+                fds = process.fds
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -241,13 +307,6 @@ class DarwinProcesses(Processes):
 
         return result
 
-    def get_task_all_info(self, pid: int):
-        """ get a list of process opened file descriptors """
-        with self._client.safe_malloc(proc_taskallinfo.sizeof()) as pti:
-            if not self._client.symbols.proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
-                raise BadReturnValueError('proc_pidinfo(PROC_PIDTASKALLINFO) failed')
-            return proc_taskallinfo.parse_stream(pti)
-
     def list(self) -> List[Process]:
         """ list all currently running processes """
         n = self._client.symbols.proc_listallpids(0, 0)
@@ -259,5 +318,5 @@ class DarwinProcesses(Processes):
             result = []
             for i in range(n):
                 pid = int(pid_buf[i])
-                result.append(Process(pid=pid, path=self.get_proc_path(pid)))
+                result.append(Process(self._client, pid))
             return result
