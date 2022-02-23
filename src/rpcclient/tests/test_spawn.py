@@ -7,7 +7,7 @@ def test_spawn_fds(client):
     pid = client.spawn(['/bin/sleep', '5'], stdout=StringIO(), stdin='', background=True).pid
 
     # should only have: stdin, stdout and stderr
-    assert len(client.processes.get_fds(pid)) == 3
+    assert len(client.processes.get_by_pid(pid).fds) == 3
 
     client.processes.kill(pid)
 
