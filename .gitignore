@@ -28,8 +28,7 @@
 *.i*86
 *.x86_64
 *.hex
-src/rpcserver/rpcserver
-src/rpcserver_*
+src/rpcserver/rpcserver_*
 
 # Caches
 __pycache__
