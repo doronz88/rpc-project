@@ -25,6 +25,7 @@ def test_spawn_foreground_sanity(client, argv, expected_stdout, errorcode):
     assert expected_stdout == stdout.read().strip()
 
 
+@pytest.mark.local_only
 @pytest.mark.parametrize('argv,expected_stdout,errorcode', [
     [['/bin/sleep', '0'], '', 0],
     [['/bin/echo', 'blat'], 'blat', 0],
@@ -46,6 +47,8 @@ def test_spawn_background_sanity(client):
     client.processes.kill(spawn_result.pid)
 
 
+@pytest.mark.local_only
+@pytest.mark.local_only
 def test_spawn_background_stress(client):
     for i in range(1000):
         test_spawn_background_sanity(client)
