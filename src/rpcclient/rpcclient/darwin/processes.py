@@ -5,14 +5,17 @@ from pathlib import Path
 from typing import Optional, List, Mapping
 
 from cached_property import cached_property
-from construct import Array
+from construct import Array, Int32ul
 
 from rpcclient.common import path_to_str
-from rpcclient.exceptions import BadReturnValueError, ArgumentError
-from rpcclient.processes import Processes
+from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors
 from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
-    PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info
+    PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
+    task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
+    arm_thread_state64_t
+from rpcclient.exceptions import BadReturnValueError, ArgumentError
+from rpcclient.processes import Processes
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
@@ -78,6 +81,8 @@ class Ipv6UdpFd(Ipv6SocketFd):
     pass
 
 
+Image = namedtuple('Image', 'address path')
+
 SOCKET_TYPE_DATACLASS = {
     so_family_t.AF_INET: {
         so_kind_t.SOCKINFO_TCP: Ipv4TcpFd,
@@ -90,19 +95,134 @@ SOCKET_TYPE_DATACLASS = {
 }
 
 
+class Thread:
+    def __init__(self, client, thread_id: int):
+        self._client = client
+        self._thread_id = thread_id
+
+    @property
+    def thread_id(self) -> int:
+        return self._thread_id
+
+    def get_state(self):
+        raise NotImplementedError()
+
+    def set_state(self, state: Mapping):
+        raise NotImplementedError()
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} TID:{self._thread_id}>'
+
+
+class IntelThread64(Thread):
+    def get_state(self):
+        with self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_state:
+            with self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_thread_state_count:
+                p_thread_state_count[0] = x86_thread_state64_t.sizeof() // Int32ul.sizeof()
+                if self._client.symbols.thread_get_state(self._thread_id, x86_THREAD_STATE64,
+                                                         p_state, p_thread_state_count):
+                    raise BadReturnValueError('thread_get_state() failed')
+                return x86_thread_state64_t.parse_stream(p_state)
+
+    def set_state(self, state: Mapping):
+        if self._client.symbols.thread_set_state(self._thread_id, x86_THREAD_STATE64,
+                                                 x86_thread_state64_t.build(state),
+                                                 x86_thread_state64_t.sizeof() // Int32ul.sizeof()):
+            raise BadReturnValueError('thread_set_state() failed')
+
+
+class ArmThread64(Thread):
+    def get_state(self):
+        with self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_state:
+            with self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_thread_state_count:
+                p_thread_state_count[0] = arm_thread_state64_t.sizeof() // Int32ul.sizeof()
+                if self._client.symbols.thread_get_state(self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64,
+                                                         p_state, p_thread_state_count):
+                    raise BadReturnValueError('thread_get_state() failed')
+                return arm_thread_state64_t.parse_stream(p_state)
+
+    def set_state(self, state: Mapping):
+        if self._client.symbols.thread_set_state(self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64,
+                                                 arm_thread_state64_t.build(state),
+                                                 arm_thread_state64_t.sizeof() // Int32ul.sizeof()):
+            raise BadReturnValueError('thread_set_state() failed')
+
+
 class Process:
+    PEEK_STR_CHUNK_SIZE = 0x100
+
     def __init__(self, client, pid: int):
         self._client = client
-        self.pid = pid
+        self._pid = pid
 
-    @cached_property
-    def path(self) -> Optional[str]:
-        """ call proc_pidpath(filename, ...) at remote. review xnu header for more details. """
-        with self._client.safe_malloc(MAXPATHLEN) as path:
-            path_len = self._client.symbols.proc_pidpath(self.pid, path, MAXPATHLEN)
-            if not path_len:
-                return None
-            return path.peek(path_len).decode()
+        self._thread_class = IntelThread64
+        if self._client.uname.machine != 'x86_64':
+            self._thread_class = ArmThread64
+
+    def peek(self, address: int, size: int) -> bytes:
+        """ peek at memory address """
+        with self._client.safe_malloc(8) as p_buf:
+            with self._client.safe_malloc(size) as p_size:
+                if self._client.symbols.vm_read(self.task, address, size, p_buf, p_size):
+                    raise BadReturnValueError('vm_read() failed')
+                return p_buf[0].peek(size)
+
+    def peek_str(self, address: int) -> str:
+        """ peek string at memory address """
+        size = self.PEEK_STR_CHUNK_SIZE
+        buf = b''
+
+        while size:
+            try:
+                buf += self.peek(address, size)
+                if b'\x00' in buf:
+                    return buf.split(b'\x00', 1)[0].decode()
+                address += size
+            except BadReturnValueError:
+                size = size // 2
+
+    def poke(self, address: int, buf: bytes):
+        """ poke at memory address """
+        if self._client.symbols.vm_write(self.task, address, buf, len(buf)):
+            raise BadReturnValueError('vm_write() failed')
+
+    @property
+    def images(self) -> List[Image]:
+        """ get loaded image list """
+        result = []
+
+        with self._client.safe_malloc(task_dyld_info_data_t.sizeof()) as dyld_info:
+            with self._client.safe_calloc(8) as count:
+                count[0] = TASK_DYLD_INFO_COUNT
+                if self._client.symbols.task_info(self.task, TASK_DYLD_INFO, dyld_info, count):
+                    raise BadReturnValueError('task_info(TASK_DYLD_INFO) failed')
+                dyld_info_data = task_dyld_info_data_t.parse_stream(dyld_info)
+        all_image_infos = all_image_infos_t.parse(
+            self.peek(dyld_info_data.all_image_info_addr, dyld_info_data.all_image_info_size))
+
+        buf = self.peek(all_image_infos.infoArray, all_image_infos.infoArrayCount * dyld_image_info_t.sizeof())
+        for image in Array(all_image_infos.infoArrayCount, dyld_image_info_t).parse(buf):
+            path = self.peek_str(image.imageFilePath)
+            result.append(Image(address=image.imageLoadAddress, path=path))
+        return result
+
+    @property
+    def threads(self) -> List[Thread]:
+        result = []
+        with self._client.safe_malloc(8) as threads:
+            with self._client.safe_malloc(4) as count:
+                count.item_size = 4
+                if self._client.symbols.task_threads(self.task, threads, count):
+                    raise BadReturnValueError('task_threads() failed')
+
+                for tid in Array(count[0].c_uint32, Int32ul).parse(threads[0].peek(count[0] * 4)):
+                    result.append(self._thread_class(self._client, tid))
+        return result
+
+    @property
+    def pid(self):
+        """ get pid """
+        return self._pid
 
     @property
     def fds(self) -> List[Fd]:
@@ -207,6 +327,29 @@ class Process:
             return proc_taskallinfo.parse_stream(pti)
 
     @cached_property
+    def task(self) -> int:
+        with self._client.safe_malloc(8) as p_task:
+            if self._client.symbols.task_for_pid(self._client.symbols.mach_task_self(), self.pid, p_task):
+                raise BadReturnValueError('task_for_pid() failed')
+            return p_task[0].c_int64
+
+    @cached_property
+    def path(self) -> Optional[str]:
+        """ call proc_pidpath(filename, ...) at remote. review xnu header for more details. """
+        with self._client.safe_malloc(MAXPATHLEN) as path:
+            path_len = self._client.symbols.proc_pidpath(self.pid, path, MAXPATHLEN)
+            if not path_len:
+                return None
+            return path.peek(path_len).decode()
+
+    @cached_property
+    def basename(self) -> Optional[str]:
+        path = self.path
+        if not path:
+            return None
+        return Path(path).parts[-1]
+
+    @cached_property
     def name(self) -> str:
         return self.task_all_info.pbsd.pbi_name
 
@@ -239,23 +382,34 @@ class DarwinProcesses(Processes):
 
     def get_by_pid(self, pid: int) -> Process:
         """ get process object by pid """
-        for p in self.list():
+        proc_list = self.list()
+        for p in proc_list:
             if p.pid == pid:
                 return p
         raise ArgumentError(f'failed to locate process with pid: {pid}')
 
-    def get_by_name(self, name: str):
+    def get_by_basename(self, name: str) -> Process:
         """ get process object by name """
-        for p in self.list():
+        proc_list = self.list()
+        for p in proc_list:
+            if p.name == name:
+                return p
+        raise ArgumentError(f'failed to locate process with name: {name}')
+
+    def get_by_name(self, name: str) -> Process:
+        """ get process object by name """
+        proc_list = self.list()
+        for p in proc_list:
             if p.name == name:
                 return p
         raise ArgumentError(f'failed to locate process with name: {name}')
 
     def grep(self, name: str) -> List[Process]:
-        """ get process list by a name filter """
+        """ get process list by basename filter """
         result = []
-        for p in self.list():
-            if name in p.name:
+        proc_list = self.list()
+        for p in proc_list:
+            if p.basename and name in p.basename:
                 result.append(p)
         return result
 
@@ -292,7 +446,8 @@ class DarwinProcesses(Processes):
     def fuser(self, path: str) -> List[Process]:
         """get a list of all processes have an open hande to the specified path """
         result = []
-        for process in self.list():
+        proc_list = self.list()
+        for process in proc_list:
             try:
                 fds = process.fds
             except BadReturnValueError:

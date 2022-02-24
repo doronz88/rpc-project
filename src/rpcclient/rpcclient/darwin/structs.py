@@ -29,6 +29,14 @@ fsid_t = Array(2, Int32sl)
 mach_port_t = Int64ul
 io_name_t = PaddedString(1024, 'utf8')
 io_object_t = Int64ul
+vm_prot_t = Int32ul
+vm_inherit_t = Int32ul
+boolean_t = Int32ul
+memory_object_offset_t = Int64ul
+vm_behavior_t = Int32ul
+mach_vm_address_t = Int64ul
+mach_vm_size_t = Int64ul
+integer_t = Int32sl
 
 timespec = Struct(
     'tv_sec' / long,
@@ -587,3 +595,120 @@ pipe_fdinfo = Struct(
     'pfi' / proc_fileinfo,
     'pipeinfo' / pipe_info,
 )
+
+vm_region_basic_info = Struct(
+    'protection' / vm_prot_t,
+    'max_protection' / vm_prot_t,
+    'inheritance' / vm_inherit_t,
+    'shared' / boolean_t,
+    'reserved' / boolean_t,
+    Padding(4),
+    'offset' / memory_object_offset_t,
+    'behavior' / vm_behavior_t,
+    'user_wired_count' / Int16ul,
+)
+
+vm_region_basic_info_64 = Struct(
+    'protection' / vm_prot_t,
+    'max_protection' / vm_prot_t,
+    'inheritance' / vm_inherit_t,
+    'shared' / boolean_t,
+    'reserved' / boolean_t,
+    Padding(4),
+    'offset' / memory_object_offset_t,
+    'behavior' / vm_behavior_t,
+    'user_wired_count' / Int16ul,
+)
+
+VM_REGION_BASIC_INFO_COUNT_64 = vm_region_basic_info_64.sizeof() // 4
+vm_region_basic_info_data_t = vm_region_basic_info
+natural_t = Int32ul
+
+task_dyld_info = Struct(
+    'all_image_info_addr' / mach_vm_address_t,
+    'all_image_info_size' / mach_vm_size_t,
+    'all_image_info_format' / integer_t,
+)
+
+uuid_t = Struct(
+    'time_low' / Int64ul,
+    'time_mid' / Int32ul,
+    'time_hi_and_version' / Int32ul,
+    'clock_seq_hi_and_reserved' / Int8ul,
+    'clock_seq_low' / Int8ul,
+    'node' / Array(6, Int8ul)
+)
+
+dyld_image_info_t = Struct(
+    'imageLoadAddress' / Int64ul,
+    'imageFilePath' / Int64ul,
+    'imageFileModDate' / Int64ul
+)
+
+all_image_infos_t = Struct(
+    'version' / Int32ul,
+    'infoArrayCount' / Int32ul,
+    'infoArray' / Int64ul,
+)
+
+task_dyld_info_data_t = task_dyld_info
+TASK_DYLD_INFO_COUNT = task_dyld_info_data_t.sizeof() / natural_t.sizeof()
+
+STRUCT_ARM_THREAD_STATE64 = Struct(
+    'x' / Array(29, uint64_t),
+    'fp' / uint64_t,
+    'lr' / uint64_t,
+    'sp' / uint64_t,
+    'pc' / uint64_t,
+    'cpsr' / uint32_t,
+    'pad' / uint32_t,
+)
+
+arm_thread_state64_t = STRUCT_ARM_THREAD_STATE64
+
+STRUCT_X86_THREAD_STATE32 = Struct(
+    'eax' / Int32sl,
+    'ebx' / Int32sl,
+    'ecx' / Int32sl,
+    'edx' / Int32sl,
+    'edi' / Int32sl,
+    'esi' / Int32sl,
+    'ebp' / Int32sl,
+    'esp' / Int32sl,
+    'ss' / Int32sl,
+    'eflags' / Int32sl,
+    'eip' / Int32sl,
+    'cs' / Int32sl,
+    'ds' / Int32sl,
+    'es' / Int32sl,
+    'fs' / Int32sl,
+    'gs' / Int32sl,
+)
+
+x86_thread_state32_t = STRUCT_X86_THREAD_STATE32
+
+STRUCT_X86_THREAD_STATE64 = Struct(
+    'rax' / uint64_t,
+    'rbx' / uint64_t,
+    'rcx' / uint64_t,
+    'rdx' / uint64_t,
+    'rdi' / uint64_t,
+    'rsi' / uint64_t,
+    'rbp' / uint64_t,
+    'rsp' / uint64_t,
+    'r8' / uint64_t,
+    'r9' / uint64_t,
+    'r10' / uint64_t,
+    'r11' / uint64_t,
+    'r12' / uint64_t,
+    'r13' / uint64_t,
+    'r14' / uint64_t,
+    'r15' / uint64_t,
+    'rip' / uint64_t,
+    'rflags' / uint64_t,
+    'cs' / uint64_t,
+    'fs' / uint64_t,
+    'gs' / uint64_t,
+)
+
+x86_thread_state64_t = STRUCT_X86_THREAD_STATE64

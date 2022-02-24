@@ -35,6 +35,58 @@ kIOAudioPlane = 'IOAudio'
 kIOFireWirePlane = 'IOFireWire'
 kIOUSBPlane = 'IOUSB'
 
+VM_REGION_INFO_MAX = 1024
+VM_REGION_BASIC_INFO_64 = 9
+VM_REGION_BASIC_INFO = 10
+
+TASK_DYLD_INFO = 17
+
+THREAD_BASIC_INFO = 3
+
+# the i386_xxxx form is kept for legacy purposes since these types
+# are externally known... eventually they should be deprecated.
+# our internal implementation has moved to the following naming convention
+#
+#   x86_xxxx32 names are used to deal with 32 bit states
+#   x86_xxxx64 names are used to deal with 64 bit states
+#   x86_xxxx   names are used to deal with either 32 or 64 bit states via a self-describing mechanism
+#
+
+# these are the legacy names which should be deprecated in the future
+# they are externally known which is the only reason we don't just get
+# rid of them
+#
+i386_THREAD_STATE = 1
+i386_FLOAT_STATE = 2
+i386_EXCEPTION_STATE = 3
+
+# THREAD_STATE_FLAVOR_LIST 0
+# 	these are the supported flavors
+#
+x86_THREAD_STATE32 = 1
+x86_FLOAT_STATE32 = 2
+x86_EXCEPTION_STATE32 = 3
+x86_THREAD_STATE64 = 4
+x86_FLOAT_STATE64 = 5
+x86_EXCEPTION_STATE64 = 6
+x86_THREAD_STATE = 7
+x86_FLOAT_STATE = 8
+x86_EXCEPTION_STATE = 9
+x86_DEBUG_STATE32 = 10
+x86_DEBUG_STATE64 = 11
+x86_DEBUG_STATE = 12
+THREAD_STATE_NONE = 13
+
+
+class ARMThreadFlavors(Enum):
+    ARM_THREAD_STATE = 1
+    ARM_VFP_STATE = 2
+    ARM_EXCEPTION_STATE = 3
+    ARM_DEBUG_STATE = 4
+    ARN_THREAD_STATE_NONE = 5
+    ARM_THREAD_STATE64 = 6
+    ARM_EXCEPTION_STATE64 = 7
+
 
 class CFStringEncoding(Enum):
     kCFStringEncodingMacRoman = 0
