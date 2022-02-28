@@ -5,6 +5,7 @@ from collections import namedtuple
 from functools import lru_cache
 
 from cached_property import cached_property
+
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
@@ -18,8 +19,8 @@ from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.darwin.xpc import Xpc
 from rpcclient.darwin.syslog import Syslog
+from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
 from rpcclient.structs.consts import RTLD_NOW
 
@@ -93,62 +94,92 @@ class DarwinClient(Client):
         """ at a symbol object from a given address """
         return DarwinSymbol.create(symbol, self)
 
-    def cf(self, o: object):
-        if o is None:
-            return self.symbols.kCFNull[0]
-        elif isinstance(o, DarwinSymbol):
-            # assuming it's already a cfobject
-            return o
-        elif isinstance(o, str):
-            return self.symbols.CFStringCreateWithCString(kCFAllocatorDefault, o,
-                                                          CFStringEncoding.kCFStringEncodingMacRoman)
-        elif isinstance(o, bytes):
-            return self.symbols.CFDataCreate(kCFAllocatorDefault, o, len(o))
-        elif isinstance(o, datetime.datetime):
-            comps = self.symbols.objc_getClass('NSDateComponents').objc_call('new')
-            comps.objc_call('setDay:', o.day)
-            comps.objc_call('setMonth:', o.month)
-            comps.objc_call('setYear:', o.year)
-            comps.objc_call('setHour:', o.hour)
-            comps.objc_call('setMinute:', o.minute)
-            comps.objc_call('setSecond:', o.second)
-            comps.objc_call('setTimeZone:',
-                            self.symbols.objc_getClass('NSTimeZone').objc_call('timeZoneWithAbbreviation:',
-                                                                               self.cf('UTC')))
-            return self.symbols.objc_getClass('NSCalendar').objc_call('currentCalendar') \
-                .objc_call('dateFromComponents:', comps)
-        elif isinstance(o, bool):
-            if o:
-                return self.symbols.kCFBooleanTrue[0]
-            else:
-                return self.symbols.kCFBooleanFalse[0]
-        elif isinstance(o, int):
-            with self.safe_malloc(8) as buf:
-                buf[0] = o
-                return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, buf)
-        elif isinstance(o, float):
-            with self.safe_malloc(8) as buf:
-                buf.poke(struct.pack('<d', o))
-                return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, buf)
-        elif isinstance(o, list) or isinstance(o, tuple):
-            cfvalues = [self.cf(i) for i in o]
-            with self.safe_malloc(8 * len(cfvalues)) as buf:
-                for i in range(len(cfvalues)):
-                    buf[i] = cfvalues[i]
-                return self.symbols.CFArrayCreate(kCFAllocatorDefault, buf, len(cfvalues), 0)
-        elif isinstance(o, dict):
-            cfkeys = [self.cf(i) for i in o.keys()]
-            cfvalues = [self.cf(i) for i in o.values()]
-            with self.safe_malloc(8 * len(cfkeys)) as keys_buf:
-                with self.safe_malloc(8 * len(cfvalues)) as values_buf:
-                    for i in range(len(cfkeys)):
-                        keys_buf[i] = cfkeys[i]
-                    for i in range(len(cfvalues)):
-                        values_buf[i] = cfvalues[i]
-                    return self.symbols.CFDictionaryCreate(
-                        kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
+    def _cf_encode_none(self, o: object) -> DarwinSymbol:
+        return self.symbols.kCFNull[0]
+
+    def _cf_encode_darwin_symbol(self, o: object) -> DarwinSymbol:
+        # assuming it's already a cfobject
+        return o
+
+    def _cf_encode_str(self, o: object) -> DarwinSymbol:
+        return self.symbols.CFStringCreateWithCString(kCFAllocatorDefault, o,
+                                                      CFStringEncoding.kCFStringEncodingMacRoman)
+
+    def _cf_encode_bytes(self, o: object) -> DarwinSymbol:
+        return self.symbols.CFDataCreate(kCFAllocatorDefault, o, len(o))
+
+    def _ns_encode_datetime(self, o: object) -> DarwinSymbol:
+        comps = self.symbols.objc_getClass('NSDateComponents').objc_call('new')
+        comps.objc_call('setDay:', o.day)
+        comps.objc_call('setMonth:', o.month)
+        comps.objc_call('setYear:', o.year)
+        comps.objc_call('setHour:', o.hour)
+        comps.objc_call('setMinute:', o.minute)
+        comps.objc_call('setSecond:', o.second)
+        comps.objc_call('setTimeZone:',
+                        self.symbols.objc_getClass('NSTimeZone').objc_call('timeZoneWithAbbreviation:',
+                                                                           self.cf('UTC')))
+        return self.symbols.objc_getClass('NSCalendar').objc_call('currentCalendar') \
+            .objc_call('dateFromComponents:', comps)
+
+    def _cf_encode_bool(self, o: object) -> DarwinSymbol:
+        if o:
+            return self.symbols.kCFBooleanTrue[0]
         else:
-            raise NotImplementedError()
+            return self.symbols.kCFBooleanFalse[0]
+
+    def _cf_encode_int(self, o: object) -> DarwinSymbol:
+        with self.safe_malloc(8) as buf:
+            buf[0] = o
+            return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, buf)
+
+    def _cf_encode_float(self, o: object) -> DarwinSymbol:
+        with self.safe_malloc(8) as buf:
+            buf.poke(struct.pack('<d', o))
+            return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, buf)
+
+    def _cf_encode_list(self, o: object) -> DarwinSymbol:
+        cfvalues = [self.cf(i) for i in o]
+        with self.safe_malloc(8 * len(cfvalues)) as buf:
+            for i in range(len(cfvalues)):
+                buf[i] = cfvalues[i]
+            return self.symbols.CFArrayCreate(kCFAllocatorDefault, buf, len(cfvalues), 0)
+
+    def _cf_encode_dict(self, o: object) -> DarwinSymbol:
+        cfkeys = [self.cf(i) for i in o.keys()]
+        cfvalues = [self.cf(i) for i in o.values()]
+        with self.safe_malloc(8 * len(cfkeys)) as keys_buf:
+            with self.safe_malloc(8 * len(cfvalues)) as values_buf:
+                for i in range(len(cfkeys)):
+                    keys_buf[i] = cfkeys[i]
+                for i in range(len(cfvalues)):
+                    values_buf[i] = cfvalues[i]
+                return self.symbols.CFDictionaryCreate(
+                    kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
+
+    def cf(self, o: object) -> DarwinSymbol:
+        """ construct a CFObject from a given python object """
+        if o is None:
+            return self._cf_encode_none(o)
+
+        encoders = {
+            DarwinSymbol: self._cf_encode_darwin_symbol,
+            str: self._cf_encode_str,
+            bytes: self._cf_encode_bytes,
+            datetime.datetime: self._ns_encode_datetime,
+            bool: self._cf_encode_bool,
+            int: self._cf_encode_int,
+            float: self._cf_encode_float,
+            list: self._cf_encode_list,
+            tuple: self._cf_encode_list,
+            dict: self._cf_encode_dict,
+        }
+
+        for type_, encoder in encoders.items():
+            if isinstance(o, type_):
+                return encoder(o)
+
+        raise NotImplementedError()
 
     def objc_symbol(self, address) -> ObjectiveCSymbol:
         """
