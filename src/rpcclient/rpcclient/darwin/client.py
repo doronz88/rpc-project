@@ -5,7 +5,6 @@ from collections import namedtuple
 from functools import lru_cache
 
 from cached_property import cached_property
-
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
@@ -20,6 +19,7 @@ from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.xpc import Xpc
+from rpcclient.darwin.syslog import Syslog
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
 from rpcclient.structs.consts import RTLD_NOW
 
@@ -65,6 +65,7 @@ class DarwinClient(Client):
         self.ioregistry = IORegistry(self)
         self.location = Location(self)
         self.xpc = Xpc(self)
+        self.syslog = Syslog(self)
 
     @property
     def modules(self) -> typing.List[str]:
