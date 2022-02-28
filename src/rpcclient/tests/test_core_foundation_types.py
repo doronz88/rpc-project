@@ -1,3 +1,4 @@
+import datetime
 import pytest
 
 
@@ -5,6 +6,7 @@ import pytest
     None,
     True,
     False,
+    datetime.datetime(1967, 5, 4, 3, 2, 1, tzinfo=datetime.timezone.utc),
     'string',
     b'bytes',
     123,

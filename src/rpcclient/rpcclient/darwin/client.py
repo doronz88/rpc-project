@@ -1,3 +1,4 @@
+import datetime
 import struct
 import typing
 from collections import namedtuple
@@ -101,7 +102,20 @@ class DarwinClient(Client):
             return self.symbols.CFStringCreateWithCString(kCFAllocatorDefault, o,
                                                           CFStringEncoding.kCFStringEncodingMacRoman)
         elif isinstance(o, bytes):
-            return self.symbols.CFDataCreate(0, o, len(o))
+            return self.symbols.CFDataCreate(kCFAllocatorDefault, o, len(o))
+        elif isinstance(o, datetime.datetime):
+            comps = self.symbols.objc_getClass('NSDateComponents').objc_call('new')
+            comps.objc_call('setDay:', o.day)
+            comps.objc_call('setMonth:', o.month)
+            comps.objc_call('setYear:', o.year)
+            comps.objc_call('setHour:', o.hour)
+            comps.objc_call('setMinute:', o.minute)
+            comps.objc_call('setSecond:', o.second)
+            comps.objc_call('setTimeZone:',
+                            self.symbols.objc_getClass('NSTimeZone').objc_call('timeZoneWithAbbreviation:',
+                                                                               self.cf('UTC')))
+            return self.symbols.objc_getClass('NSCalendar').objc_call('currentCalendar') \
+                .objc_call('dateFromComponents:', comps)
         elif isinstance(o, bool):
             if o:
                 return self.symbols.kCFBooleanTrue[0]

@@ -1,5 +1,5 @@
+import datetime
 import struct
-import time
 from typing import List, Mapping
 
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding
@@ -52,8 +52,8 @@ class DarwinSymbol(Symbol):
                 raise CfSerializationError(f'failed to deserialize int: {self}')
             return int(buf[0])
 
-    def _decode_cfdate(self) -> time.struct_time:
-        return time.strptime(self.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
+    def _decode_cfdate(self) -> datetime.datetime:
+        return datetime.datetime.strptime(self.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
 
     def _decode_cfdata(self) -> bytes:
         count = self._client.symbols.CFDataGetLength(self)
