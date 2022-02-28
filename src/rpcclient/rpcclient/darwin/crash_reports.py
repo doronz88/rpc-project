@@ -11,6 +11,15 @@ class CrashReports:
         self._client = client
         self._crash_reports_dir = crash_reports_dir
 
+    def set_symbolicated(self, enabled: bool = True):
+        """
+        enable/disable crash reports symbolication
+        https://github.com/dlevi309/Symbolicator
+        """
+        with self._client.sc.get_preferences_object(
+                '/var/root/Library/Preferences/com.apple.CrashReporter.plist') as pref:
+            pref.set_dict({'SymbolicateCrashes': enabled})
+
     def list(self, prefixed='') -> List[CrashReport]:
         """ get a list of all crash reports as CrashReport parsed objects """
         result = []
