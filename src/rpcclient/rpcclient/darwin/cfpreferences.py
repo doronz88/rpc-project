@@ -45,7 +45,7 @@ class CFPreferences:
             result[k] = self.get_value(k, application_id, username, hostname)
         return result
 
-    def set(self, key: str, value: str, application_id: str, username: str = kCFPreferencesCurrentUser,
+    def set(self, key: str, value, application_id: str, username: str = kCFPreferencesCurrentUser,
             hostname: str = kCFPreferencesCurrentHost):
         self._client.symbols.CFPreferencesSetValue(self._client.cf(key), self._client.cf(value),
                                                    self._client.cf(application_id), self._client.cf(username),
