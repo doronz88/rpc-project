@@ -16,6 +16,7 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     arm_thread_state64_t
 from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.processes import Processes
+from rpcclient.structs.consts import SIGTERM
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
@@ -158,6 +159,14 @@ class Process:
         self._thread_class = IntelThread64
         if self._client.uname.machine != 'x86_64':
             self._thread_class = ArmThread64
+
+    def kill(self, sig: int = SIGTERM):
+        """ kill(pid, sig) at remote. read man for more details. """
+        return self._client.processes.kill(self._pid, sig)
+
+    def waitpid(self, pid: int):
+        """ waitpid(pid, sig) at remote. read man for more details. """
+        return self._client.processes.waitpid(self._pid)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek at memory address """
