@@ -18,6 +18,7 @@ from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
 from rpcclient.structs.consts import RTLD_NOW
 
@@ -62,6 +63,7 @@ class DarwinClient(Client):
         self.network = DarwinNetwork(self)
         self.ioregistry = IORegistry(self)
         self.location = Location(self)
+        self.xpc = Xpc(self)
 
     @property
     def modules(self) -> typing.List[str]:
