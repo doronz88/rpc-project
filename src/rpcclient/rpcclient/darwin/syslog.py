@@ -1,5 +1,7 @@
 import datetime
 
+from rpcclient.exceptions import BadReturnValueError
+
 
 class Syslog:
     """" manage syslog """
@@ -21,6 +23,14 @@ class Syslog:
         enable/disable HAR logging
         https://github.com/doronz88/harlogger
         """
-        self._client.preferences.cf.set('har-capture-global',
-                                        self._client.cf(datetime.datetime(9999, 12, 31, 23, 59, 59)),
-                                        'com.apple.CFNetwork')
+        if enable:
+            self._client.preferences.cf.set('har-capture-global',
+                                            self._client.cf(datetime.datetime(9999, 12, 31, 23, 59, 59)),
+                                            'com.apple.CFNetwork')
+        else:
+            self._client.preferences.cf.set('har-capture-global',
+                                            self._client.cf(datetime.datetime(1970, 1, 1, 1, 1, 1)),
+                                            'com.apple.CFNetwork')
+
+        if self._client.symbols.notify_post('com.apple.CFNetwork.har-capture-update'):
+            raise BadReturnValueError('notify_post() failed')
