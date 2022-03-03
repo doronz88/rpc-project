@@ -3,6 +3,7 @@ import typing
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.darwin.reports import Reports
 from rpcclient.ios.backlight import Backlight
+from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
 
 CRASH_REPORTS_DIR = 'Library/Logs/CrashReporter'
@@ -14,6 +15,7 @@ class IosClient(DarwinClient):
         self.backlight = Backlight(self)
         self.reports = Reports(self, CRASH_REPORTS_DIR)
         self.mobile_gestalt = MobileGestalt(self)
+        self.lockdown = Lockdown(self)
 
     @property
     def roots(self) -> typing.List[str]:
