@@ -1,6 +1,7 @@
+from contextlib import suppress
 import typing
 
-from rpcclient.exceptions import RpcClientException
+from rpcclient.exceptions import RpcClientException, NoSuchPreferenceError
 
 kCFPreferencesCurrentUser = 'kCFPreferencesCurrentUser'
 kCFPreferencesAnyUser = 'kCFPreferencesAnyUser'
@@ -25,7 +26,10 @@ class CFPreferences:
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
-        return self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py
+        keys = self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py
+        if keys is None:
+            raise NoSuchPreferenceError()
+        return keys
 
     def get_value(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
                   hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[str]:
@@ -35,8 +39,8 @@ class CFPreferences:
         hostname = self._client.cf(hostname)
         return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py
 
-    def get_values(self, application_id: str, username: str = kCFPreferencesCurrentUser,
-                   hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
+    def get_dict(self, application_id: str, username: str = kCFPreferencesCurrentUser,
+                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
         result = {}
         key_list = self.get_keys(application_id, username, hostname)
         if not key_list:
@@ -59,6 +63,12 @@ class CFPreferences:
 
     def set_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost):
+        with suppress(NoSuchPreferenceError):
+            self.clear(application_id, username, hostname)
+        self.update_dict(d, application_id, username, hostname)
+
+    def update_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
+                    hostname: str = kCFPreferencesCurrentHost):
         for k, v in d.items():
             self.set(k, v, application_id, username, hostname)
 
