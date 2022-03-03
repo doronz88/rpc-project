@@ -20,6 +20,7 @@ from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
+from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
 from rpcclient.structs.consts import RTLD_NOW
@@ -67,6 +68,7 @@ class DarwinClient(Client):
         self.location = Location(self)
         self.xpc = Xpc(self)
         self.syslog = Syslog(self)
+        self.time = Time(self)
 
     @property
     def modules(self) -> typing.List[str]:

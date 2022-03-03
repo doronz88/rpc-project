@@ -3,7 +3,7 @@ from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, t
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
-    in_addr, uint8_t, u_char, UNIX_PATH_MAX
+    in_addr, uint8_t, u_char, UNIX_PATH_MAX, time_t
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
@@ -712,3 +712,12 @@ STRUCT_X86_THREAD_STATE64 = Struct(
 )
 
 x86_thread_state64_t = STRUCT_X86_THREAD_STATE64
+
+suseconds_t = uint32_t
+
+timeval = Struct(
+    'tv_sec' / time_t,
+    Padding(4),
+    'tv_usec' / suseconds_t,
+    Padding(4),
+)
