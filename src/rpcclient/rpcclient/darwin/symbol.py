@@ -32,12 +32,12 @@ class DarwinSymbol(Symbol):
     def _decode_cfstr(self) -> str:
         ptr = self._client.symbols.CFStringGetCStringPtr(self, CFStringEncoding.kCFStringEncodingMacRoman)
         if ptr:
-            return ptr.peek_str()
+            return ptr.peek_str('mac_roman')
 
         with self._client.safe_malloc(4096) as buf:
             if not self._client.symbols.CFStringGetCString(self, buf, 4096, CFStringEncoding.kCFStringEncodingMacRoman):
                 raise CfSerializationError('CFStringGetCString failed')
-            return buf.peek_str()
+            return buf.peek_str('mac_roman')
 
     def _decode_cfbool(self) -> bool:
         return bool(self._client.symbols.CFBooleanGetValue(self))

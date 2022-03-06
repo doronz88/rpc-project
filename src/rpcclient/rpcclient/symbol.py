@@ -77,9 +77,9 @@ class Symbol(int):
     def poke(self, buf):
         return self._client.poke(self, buf)
 
-    def peek_str(self) -> str:
+    def peek_str(self, encoding='utf-8') -> str:
         """ peek string at given address """
-        return self.peek(self._client.symbols.strlen(self)).decode()
+        return self.peek(self._client.symbols.strlen(self)).decode(encoding)
 
     def close(self):
         """ Construct compliance. """
