@@ -1,3 +1,5 @@
+from typing import List, Mapping
+
 from rpcclient.common import path_to_str
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.fs import Fs, DirEntry, ScandirIterator
@@ -54,6 +56,48 @@ class DarwinFs(Fs):
         if not dp:
             raise BadReturnValueError(f'failed to opendir(): {path} ({self._client.last_error})')
         return DarwinScandirIterator(path, dp, self._client)
+
+    @path_to_str('path')
+    def setxattr(self, path: str, name: str, value: bytes):
+        """ set an extended attribute value """
+        count = self._client.symbols.setxattr(path, name, value, len(value), 0, 0).c_int64
+        if count == -1:
+            raise BadReturnValueError(f'failed to setxattr(): {path} ({self._client.last_error})')
+
+    @path_to_str('path')
+    def removexattr(self, path: str, name: str):
+        """ remove an extended attribute value """
+        count = self._client.symbols.removexattr(path, name, 0).c_int64
+        if count == -1:
+            raise BadReturnValueError(f'failed to removexattr(): {path} ({self._client.last_error})')
+
+    @path_to_str('path')
+    def listxattr(self, path: str) -> List[str]:
+        """ list extended attribute names """
+        max_buf_len = 1024
+        with self._client.safe_malloc(max_buf_len) as xattributes_names:
+            count = self._client.symbols.listxattr(path, xattributes_names, max_buf_len, 0).c_int64
+            if count == -1:
+                raise BadReturnValueError(f'failed to listxattr(): {path} ({self._client.last_error})')
+            return [s.decode() for s in xattributes_names.peek(count).split(b'\x00')[:-1]]
+
+    @path_to_str('path')
+    def getxattr(self, path: str, name: str) -> bytes:
+        """ get an extended attribute value """
+        max_buf_len = 1024
+        with self._client.safe_malloc(max_buf_len) as value:
+            count = self._client.symbols.getxattr(path, name, value, max_buf_len, 0, 0).c_int64
+            if count == -1:
+                raise BadReturnValueError(f'failed to getxattr(): {path} ({self._client.last_error})')
+            return value.peek(count)
+
+    @path_to_str('path')
+    def dictxattr(self, path: str) -> Mapping[str, bytes]:
+        """ get a dictionary of all extended attributes """
+        result = {}
+        for k in self.listxattr(path):
+            result[k] = self.getxattr(path, k)
+        return result
 
     @path_to_str('path')
     def statfs(self, path: str):

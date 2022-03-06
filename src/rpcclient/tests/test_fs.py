@@ -118,3 +118,12 @@ def test_walk(client, tmp_path):
     (tmp_path / 'dir_b' / 'b1.txt').touch()
     (tmp_path / 'dir_b' / 'b2.txt').touch()
     assert list(os.walk(tmp_path)) == list(client.fs.walk(tmp_path))
+
+
+def test_xattr(client, tmp_path):
+    client.fs.setxattr(tmp_path, 'KEY', b'VALUE')
+    assert client.fs.getxattr(tmp_path, 'KEY') == b'VALUE'
+    assert client.fs.listxattr(tmp_path) == ['KEY']
+    assert client.fs.dictxattr(tmp_path) == {'KEY': b'VALUE'}
+    client.fs.removexattr(tmp_path, 'KEY')
+    assert client.fs.listxattr(tmp_path) == []
