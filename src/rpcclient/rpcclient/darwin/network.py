@@ -73,7 +73,7 @@ class WifiInterface(Allocated):
         self._client.symbols.Apple80211Disassociate(self._interface)
 
     def _set(self, is_on: bool):
-        with self._client.preferences.sc.get_preferences_object('com.apple.wifi.plist') as pref:
+        with self._client.preferences.sc.open('com.apple.wifi.plist') as pref:
             pref.set('AllowEnable', int(is_on))
 
         if not is_on:
