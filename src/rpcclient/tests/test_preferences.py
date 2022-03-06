@@ -105,6 +105,123 @@ def test_cf_clear(client):
                                   'kCFPreferencesAnyUser')
 
 
+def test_sc_get_keys(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    keys = client.preferences.sc.get_keys('preferences.plist')
+    assert '__VERSION__' in keys
+    assert 'Model' in keys
+
+
+def test_sc_get_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    dict_ = client.preferences.sc.get_dict('preferences.plist')
+    assert '__VERSION__' in dict_ and dict_['__VERSION__']
+    assert 'Model' in dict_ and dict_['Model']
+
+
+def test_sc_object_keys(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.open('preferences.plist') as pref:
+        keys = pref.keys
+    assert '__VERSION__' in keys
+    assert 'Model' in keys
+
+
+def test_sc_object_set(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    model = client.preferences.sc.get_dict('preferences.plist')['Model']
+    try:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set('Model', 'MyModel')
+        assert client.preferences.sc.get_dict('preferences.plist')['Model'] == 'MyModel'
+    finally:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set('Model', model)
+
+
+def test_sc_object_set_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    dict_ = client.preferences.sc.get_dict('preferences.plist')
+    try:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set_dict({'hey': 'you'})
+        assert client.preferences.sc.get_dict('preferences.plist') == {'hey': 'you'}
+    finally:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set_dict(dict_)
+
+
+def test_sc_object_update_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    old_dict_ = client.preferences.sc.get_dict('preferences.plist')
+    try:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.update_dict({'hey': 'you'})
+        dict_ = client.preferences.sc.get_dict('preferences.plist')
+        assert '__VERSION__' in dict_ and dict_['__VERSION__']
+        assert 'Model' in dict_ and dict_['Model']
+        assert dict_['hey'] == 'you'
+    finally:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set_dict(old_dict_)
+
+
+def test_sc_object_remove(client):
+    model = client.preferences.sc.get_dict('preferences.plist')['Model']
+    try:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.remove('Model')
+        assert 'Model' not in client.preferences.sc.get_dict('preferences.plist')
+    finally:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set('Model', model)
+
+
+def test_sc_object_get(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.open('preferences.plist') as pref:
+        model = pref.get('Model')
+    assert model
+
+
+def test_sc_object_get_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.open('preferences.plist') as pref:
+        dict_ = pref.get_dict()
+    assert '__VERSION__' in dict_ and dict_['__VERSION__']
+    assert 'Model' in dict_ and dict_['Model']
+
+
+def test_sc_object_clear(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    old_dict_ = client.preferences.sc.get_dict('preferences.plist')
+    try:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.clear()
+        assert not client.preferences.sc.get_dict('preferences.plist')
+    finally:
+        with client.preferences.sc.open('preferences.plist') as pref:
+            pref.set_dict(old_dict_)
+
+
 class TestCustomDomain:
     @pytest.fixture(autouse=True)
     def clear_domain(self, client):
@@ -127,22 +244,22 @@ class TestCustomDomain:
 
 
 def test_sc_preferences(client):
-    with client.preferences.sc.get_preferences_object(DOMAIN) as pref:
-        if pref.to_dict() != {}:
+    with client.preferences.sc.open(DOMAIN) as pref:
+        if pref.get_dict() != {}:
             # if from some reason this domain already exist, empty it
             pref.clear()
-            assert pref.to_dict() == {}
+            assert pref.get_dict() == {}
 
         # test set a full dictionary
         test_dict = {'KEY1': 'VALUE1', 'KEY2': 'VALUE2'}
         pref.set_dict(test_dict)
-        assert test_dict == pref.to_dict()
+        assert test_dict == pref.get_dict()
 
         # test set remove a single value
         pref.remove('KEY2')
         test_dict.pop('KEY2')
-        assert test_dict == pref.to_dict()
+        assert test_dict == pref.get_dict()
 
         # remove out test data and verify it works
         pref.clear()
-        assert pref.to_dict() == {}
+        assert pref.get_dict() == {}

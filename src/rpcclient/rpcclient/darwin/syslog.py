@@ -14,7 +14,7 @@ class Syslog:
         enable/disable unredacted logs (allows seeing the <private> strings)
         https://github.com/EthanArbuckle/unredact-private-os_logs
         """
-        with self._client.preferences.sc.get_preferences_object(
+        with self._client.preferences.sc.open(
                 '/Library/Preferences/Logging/com.apple.system.logging.plist') as pref:
             pref.set_dict({'Enable-Logging': True, 'Enable-Private-Data': enable})
 

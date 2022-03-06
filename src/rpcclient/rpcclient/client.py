@@ -322,6 +322,7 @@ class Client:
         c.InteractiveShellApp.exec_lines = [
             '''IPython.get_ipython().events.register('pre_run_cell', p._ipython_run_cell_hook)'''
         ]
+        c.TerminalInteractiveShell.autoformatter = None
         namespace = globals()
         namespace.update({'p': self, 'symbols': self.symbols})
         print(USAGE)
