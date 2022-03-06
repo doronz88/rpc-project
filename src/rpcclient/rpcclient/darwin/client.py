@@ -10,6 +10,7 @@ from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
 from rpcclient.darwin.fs import DarwinFs
+from rpcclient.darwin.hid import Hid
 from rpcclient.darwin.ioregistry import IORegistry
 from rpcclient.darwin.location import Location
 from rpcclient.darwin.media import DarwinMedia
@@ -69,6 +70,7 @@ class DarwinClient(Client):
         self.xpc = Xpc(self)
         self.syslog = Syslog(self)
         self.time = Time(self)
+        self.hid = Hid(self)
 
     @property
     def modules(self) -> typing.List[str]:

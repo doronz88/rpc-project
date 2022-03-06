@@ -22,6 +22,14 @@
     <true/>
     <key>com.apple.locationd.status</key>
     <true/>
+    <key>com.apple.private.hid.client.admin</key>
+    <true/>
+    <key>com.apple.private.hid.client.event-dispatch</key>
+    <true/>
+    <key>com.apple.private.hid.client.event-filter</key>
+    <true/>
+    <key>com.apple.private.hid.client.event-monitor</key>
+    <true/>
     <key>task_for_pid-allow</key>
     <true/>
     <key>com.apple.private.tcc.allow</key>
