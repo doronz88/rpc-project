@@ -32,6 +32,12 @@ def test_cf_get_value(client):
                                                                              'kCFPreferencesAnyUser')
 
 
+def test_false_test(client):
+    print(client.preferences.cf.get_value('drop_all_level', 'com.apple.networkextension.necp',
+                                               'kCFPreferencesAnyUser')))
+    assert False
+
+
 def test_cf_get_dict(client):
     """
     :param rpcclient.client.Client client:
@@ -124,6 +130,81 @@ class TestCustomDomain:
         client.preferences.cf.remove('KEY2', DOMAIN)
         test_dict.pop('KEY2')
         assert test_dict == client.preferences.cf.get_dict(DOMAIN)
+
+
+def test_sc_get_keys(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    keys = client.preferences.sc.get_keys('preferences.plist')
+    assert '__VERSION__' in keys
+    assert 'Model' in keys
+
+
+def test_sc_get_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    dict_ = client.preferences.sc.get_dict('preferences.plist')
+    assert '__VERSION__' in dict_ and dict_['__VERSION__']
+    assert 'Model' in dict_ and dict_['Model']
+
+
+def test_sc_object_keys(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+        keys = pref.keys
+    assert '__VERSION__' in keys
+    assert 'Model' in keys
+
+
+def test_sc_object_set(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    model = client.preferences.sc.get_dict('preferences.plist')['Model']
+    try:
+        with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+            pref.set('Model', 'MyModel')
+        assert client.preferences.sc.get_dict('preferences.plist')['Model'] == 'MyModel'
+    finally:
+        with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+            pref.set('Model', model)
+
+
+def test_sc_object_set_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    dict_ = client.preferences.sc.get_dict('preferences.plist')
+    try:
+        with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+            pref.set_dict({'hey': 'you'})
+        assert client.preferences.sc.get_dict('preferences.plist') == {'hey': 'you'}
+    finally:
+        with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+            pref.set(dict_)
+
+
+def test_sc_object_get(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+        model = pref.get('Model')
+    assert model
+
+
+def test_sc_object_get_dict(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.preferences.sc.get_preferences_object('preferences.plist') as pref:
+        dict_ = pref.get_dict()
+    assert '__VERSION__' in dict_ and dict_['__VERSION__']
+    assert 'Model' in dict_ and dict_['Model']
 
 
 def test_sc_preferences(client):

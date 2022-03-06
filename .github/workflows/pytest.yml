@@ -17,7 +17,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [ 3.6, 3.7, 3.8, 3.9, "3.10" ]
+        python-version: [ "3.10" ]
         os: [ macos-latest ]
 
     steps:
@@ -40,4 +40,4 @@ jobs:
       - name: pytest
         working-directory: ./src/rpcclient
         run: |
-          python -m pytest --ci
+          python -m pytest -k test_false_test -vv
