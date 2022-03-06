@@ -27,17 +27,17 @@ def test_cf_get_value(client):
     """
     :param rpcclient.client.Client client:
     """
-    assert 'com.apple.system.diagnostics' in client.preferences.cf.get_value('uuid-mappings',
-                                                                             'com.apple.networkextension.uuidcache',
-                                                                             'kCFPreferencesAnyUser')
+    assert 0 == client.preferences.cf.get_value('drop_all_level',
+                                                'com.apple.networkextension.necp',
+                                                'kCFPreferencesAnyUser')
 
 
 def test_cf_get_dict(client):
     """
     :param rpcclient.client.Client client:
     """
-    assert 'com.apple.system.diagnostics' in client.preferences.cf.get_dict('com.apple.networkextension.uuidcache',
-                                                                            'kCFPreferencesAnyUser')['uuid-mappings']
+    assert 0 == client.preferences.cf.get_dict('com.apple.networkextension.necp',
+                                               'kCFPreferencesAnyUser')['drop_all_level']
 
 
 def test_cf_set(client):
