@@ -2,6 +2,8 @@ import datetime
 
 import pytest
 
+pytestmark = pytest.mark.darwin
+
 
 @pytest.mark.parametrize('data', [
     None,

@@ -2,8 +2,9 @@ import pytest
 
 from rpcclient.darwin.consts import NSStringEncoding
 
+pytestmark = pytest.mark.darwin
 
-@pytest.mark.darwin
+
 def test_method_by_method_name(client):
     NSString = client.objc_get_class('NSString')
     ascii_encoding = NSStringEncoding.NSASCIIStringEncoding
@@ -14,7 +15,6 @@ def test_method_by_method_name(client):
     assert str1.uppercaseString().cStringUsingEncoding_(ascii_encoding).peek_str() == 'TAYLOR SWIFT'
 
 
-@pytest.mark.darwin
 def test_calling_property(client):
     d = client.symbols.objc_getClass('NSMutableDictionary').objc_call('new').objc_symbol
     # call method

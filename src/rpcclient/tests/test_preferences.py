@@ -4,6 +4,7 @@ import pytest
 
 from rpcclient.exceptions import NoSuchPreferenceError
 
+pytestmark = pytest.mark.darwin
 DOMAIN = 'rpcserver'
 
 

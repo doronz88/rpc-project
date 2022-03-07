@@ -90,6 +90,7 @@ class Client:
         print(f'ppid: {self.symbols.getppid():d}')
         print(f'progname: {self.symbols.getprogname().peek_str()}')
 
+    @property
     def uname(self):
         """ get the utsname struct from remote """
         raise NotImplementedError()

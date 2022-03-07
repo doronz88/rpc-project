@@ -1,7 +1,8 @@
 import pytest
 
+pytestmark = pytest.mark.darwin
 
-@pytest.mark.darwin
+
 def test_from_xpc_object(client):
     """
     :param rpcclient.darwin.client.DarwinClient client:
