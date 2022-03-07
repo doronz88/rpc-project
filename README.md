@@ -36,8 +36,8 @@ On iOS:
 
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
-cd src
-./build_ios.sh
+cd src/rpcserver
+./build_darwin.sh
 ```
 
 ## Installing python client

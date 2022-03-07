@@ -23,6 +23,7 @@ class CFPreferences:
 
     def get_keys(self, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:
+        """ wrapper for CFPreferencesCopyKeyList """
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
@@ -33,6 +34,7 @@ class CFPreferences:
 
     def get_value(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
                   hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[str]:
+        """ wrapper for CFPreferencesCopyValue """
         key = self._client.cf(key)
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
@@ -41,6 +43,7 @@ class CFPreferences:
 
     def get_dict(self, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
+        """ get a dictionary representation of given preference """
         result = {}
         key_list = self.get_keys(application_id, username, hostname)
         if not key_list:
@@ -51,24 +54,28 @@ class CFPreferences:
 
     def set(self, key: str, value, application_id: str, username: str = kCFPreferencesCurrentUser,
             hostname: str = kCFPreferencesCurrentHost):
+        """ wrapper for CFPreferencesSetValue """
         self._client.symbols.CFPreferencesSetValue(self._client.cf(key), self._client.cf(value),
                                                    self._client.cf(application_id), self._client.cf(username),
                                                    self._client.cf(hostname))
 
     def remove(self, key: str, application_id: str, username: str = kCFPreferencesCurrentUser,
                hostname: str = kCFPreferencesCurrentHost):
+        """ remove a given key from a preference """
         self._client.symbols.CFPreferencesSetValue(self._client.cf(key), 0,
                                                    self._client.cf(application_id), self._client.cf(username),
                                                    self._client.cf(hostname))
 
     def set_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost):
+        """ set entire preference dictionary (erase first if exists) """
         with suppress(NoSuchPreferenceError):
             self.clear(application_id, username, hostname)
         self.update_dict(d, application_id, username, hostname)
 
     def update_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
                     hostname: str = kCFPreferencesCurrentHost):
+        """ update preference dictionary """
         for k, v in d.items():
             self.set(k, v, application_id, username, hostname)
 

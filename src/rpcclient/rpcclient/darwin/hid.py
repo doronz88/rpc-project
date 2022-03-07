@@ -9,6 +9,8 @@ from rpcclient.exceptions import BadReturnValueError
 
 
 class Hid:
+    """ Control HID devices and simulate events """
+
     def __init__(self, client):
         self._client = client
 
