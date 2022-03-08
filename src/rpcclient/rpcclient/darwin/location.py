@@ -47,30 +47,39 @@ class Location:
 
     @property
     def location_services_enabled(self) -> bool:
+        """ opt-in status for location services """
         return bool(self._location_manager.objc_call('locationServicesEnabled'))
 
     @location_services_enabled.setter
     def location_services_enabled(self, value: bool):
+        """ opt-in status for location services """
         self._CLLocationManager.objc_call('setLocationServicesEnabled:', value)
 
     @property
     def authorization_status(self) -> CLAuthorizationStatus:
+        """ authorization status for current server process of accessing location services """
         return CLAuthorizationStatus.from_value(self._location_manager.objc_call('authorizationStatus'))
 
     @property
     def last_sample(self) -> Optional[Mapping]:
-        return self._location_manager.objc_call('location').objc_call('jsonObject').py
+        """ last taken location sample (or None if there isn't any) """
+        location = self._location_manager.objc_call('location')
+        if not location:
+            return None
+        return location.objc_call('jsonObject').py
 
     def start_updating_location(self):
+        """ request location updates from CLLocationManager """
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
             raise PermissionDeniedError()
         self._location_manager.objc_call('startUpdatingLocation')
 
     def stop_updating_location(self):
+        """ stop requesting location updates from CLLocationManager """
         self._location_manager.objc_call('stopUpdatingLocation')
 
     def request_oneshot_location(self):
-        """ Requests the one-time delivery of the user’s current location. """
+        """ requests the one-time delivery of the user’s current location """
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
             raise PermissionDeniedError()
         self._location_manager.objc_call('requestLocation')

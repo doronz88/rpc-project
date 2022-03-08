@@ -14,13 +14,23 @@ This project includes two components:
 
 The python client utilizes the ability to call native functions in order to provide APIs for different aspects:
 
-* Remote shell commands
-* Filesystem management (APIs for `open()`, `read()`, etc...)
-* Network management (WiFi scan, TCP connect, etc...)
+* Remote shell commands (`p.spawn()`)
+* Filesystem management (`p.fs.*`)
+* Network management (WiFi scan, TCP connect, etc...) (`p.network.*`)
 * Darwin only:
-  * Multimedia automation (recording and playing)
-  * Preferences managemnent (remote manage CFPreference and SCPreferences)
-  * Process management (kill, list, query open FDs, etc...)
+  * Multimedia automation (recording and playing) (`p.media.*`)
+  * Preferences managemnent (remote manage CFPreference and SCPreferences) (`p.preferences.*`)
+  * Process management (kill, list, query open FDs, etc...) (`p.processes`)
+  * Location services (`p.location.*`)
+  * HID simulation (`p.hid.*`)
+  * IORegistry API (`p.ioregistry.*`)
+  * Reports management (Logs and Crash Reports) (`p.reports.*`)
+  * Time settings (`p.time.*`)
+  * iOS Only:
+    * MobileGestalt (`p.mobile_gestalt.*`)
+    * Backlight adjusting (`p.backlight.*`)
+
+and much more...
 
 ## Building C Server
 
@@ -32,7 +42,7 @@ cd src/rpcserver
 make
 ```
 
-On iOS:
+On iOS (Make sure to have XCode installed):
 
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
