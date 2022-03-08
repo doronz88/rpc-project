@@ -59,7 +59,11 @@ class Location:
 
     @property
     def last_sample(self) -> Optional[Mapping]:
-        return self._location_manager.objc_call('location').objc_call('jsonObject').py
+        """ last taken location sample (or None if there isn't any) """
+        location = self._location_manager.objc_call('location')
+        if not location:
+            return None
+        return location.objc_call('jsonObject').py
 
     def start_updating_location(self):
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
