@@ -26,6 +26,7 @@
 #include <sys/utsname.h>
 
 #ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
 #endif // __APPLE__
 
@@ -800,6 +801,11 @@ int main(int argc, const char *argv[])
 
     CHECK(0 == listen(server_fd, MAX_CONNECTIONS));
 
+    pthread_t thread;
+#ifdef __APPLE__
+    CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))CFRunLoopRun, NULL));
+#endif  // __APPLE__
+
     while (1)
     {
         struct sockaddr_storage their_addr; // connector's address information
@@ -812,7 +818,6 @@ int main(int argc, const char *argv[])
         CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
-        pthread_t thread;
         CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))handle_client, (void *)(long)client_fd));
     }
 

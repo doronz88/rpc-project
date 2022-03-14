@@ -138,14 +138,13 @@ def test_sc_object_set(client):
     """
     :param rpcclient.client.Client client:
     """
-    model = client.preferences.sc.get_dict('preferences.plist')['Model']
     try:
         with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set('Model', 'MyModel')
-        assert client.preferences.sc.get_dict('preferences.plist')['Model'] == 'MyModel'
+            pref.set('test', 'MyModel')
+        assert client.preferences.sc.get_dict('preferences.plist')['test'] == 'MyModel'
     finally:
         with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set('Model', model)
+            pref.remove('test')
 
 
 def test_sc_object_set_dict(client):

@@ -18,6 +18,7 @@ from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
     InvalidServerVersionMagicError
 from rpcclient.fs import Fs
+from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
@@ -75,6 +76,7 @@ class Client:
         self.fs = Fs(self)
         self.processes = Processes(self)
         self.network = Network(self)
+        self.lief = Lief(self)
 
     def info(self):
         """ print information about current target """
@@ -288,6 +290,17 @@ class Client:
             result.append(environ[i].peek_str())
             i += 1
         return result
+
+    def setenv(self, name: str, value: str):
+        """ set process environment variable """
+        self.symbols.setenv(name, value)
+
+    def getenv(self, name: str) -> typing.Optional[str]:
+        """ get process environment variable """
+        value = self.symbols.getenv(name)
+        if not value:
+            return None
+        return value.peek_str()
 
     @property
     def pid(self):
