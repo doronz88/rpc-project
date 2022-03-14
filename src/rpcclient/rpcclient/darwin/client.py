@@ -8,6 +8,7 @@ from cached_property import cached_property
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
+from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
 from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
@@ -25,7 +26,6 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError
-from rpcclient.macos.bluetooth import Bluetooth
 from rpcclient.structs.consts import RTLD_NOW
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')

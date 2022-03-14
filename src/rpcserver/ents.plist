@@ -32,11 +32,16 @@
     <true/>
     <key>task_for_pid-allow</key>
     <true/>
+    <key>com.apple.driver.AppleBluetoothModule.user-access</key>
+    <true/>
+    <key>com.apple.bluetooth.system</key>
+    <true/>
     <key>com.apple.private.tcc.allow</key>
     <array>
         <string>kTCCServiceMicrophone</string>
         <string>kTCCServiceCamera</string>
         <string>kTCCServiceLocation</string>
+        <string>kTCCServiceBluetoothPeripheral</string>
     </array>
 </dict>
 </plist>

@@ -291,6 +291,17 @@ class Client:
             i += 1
         return result
 
+    def setenv(self, name: str, value: str):
+        """ set process environment variable """
+        self.symbols.setenv(name, value)
+
+    def getenv(self, name: str) -> typing.Optional[str]:
+        """ get process environment variable """
+        value = self.symbols.getenv(name)
+        if not value:
+            return None
+        return value.peek_str()
+
     @property
     def pid(self):
         return int(self.symbols.getpid())
