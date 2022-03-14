@@ -621,3 +621,10 @@ kHIDUsage_Csmr_ACTileVertically = 0x23B  # Selector
 kHIDUsage_Csmr_ACFormat = 0x23C  # Selector
 # 0x23D - 0xFFFF Reserved
 kHIDUsage_Csmr_Reserved = 0xFFFF
+
+kSecCodeMagicRequirement = 0xfade0c00  # single requirement
+kSecCodeMagicRequirementSet = 0xfade0c01  # requirement set
+kSecCodeMagicCodeDirectory = 0xfade0c02  # CodeDirectory
+kSecCodeMagicEmbeddedSignature = 0xfade0cc0  # single-architecture embedded signature
+kSecCodeMagicDetachedSignature = 0xfade0cc1  # detached multi-architecture signature
+kSecCodeMagicEntitlement = 0xfade7171  # entitlement blob

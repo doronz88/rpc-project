@@ -66,3 +66,8 @@ class MissingLibraryError(RpcClientException):
 class PermissionDeniedError(RpcClientException):
     """ failed to access a certain something """
     pass
+
+
+class NoEntitlementsError(RpcClientException):
+    """ binary contains no entitlements """
+    pass
