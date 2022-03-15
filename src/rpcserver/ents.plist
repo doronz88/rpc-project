@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>application-identifier</key>
-    <string>com.cyber.rpcserver</string>
+    <string>com.apple.coretelephony</string>
     <key>platform-application</key>
     <true/>
     <key>com.apple.private.security.no-container</key>
@@ -42,6 +42,26 @@
         <string>kTCCServiceCamera</string>
         <string>kTCCServiceLocation</string>
         <string>kTCCServiceBluetoothPeripheral</string>
+    </array>
+    <key>com.apple.private.icfcallserver</key>
+    <true/>
+    <key>com.apple.private.communicationsfilter</key>
+    <true/>
+    <key>com.apple.coretelephony.Calls.allow</key>
+    <true/>
+    <key>com.apple.CallKit.call-directory.extension-host</key>
+    <true/>
+    <key>com.apple.callkit</key>
+	<array>
+		<string>private-controller-api</string>
+	</array>
+    <key>com.apple.CallKit.call-directory</key>
+    <true/>
+    <key>com.apple.CommCenter.fine-grained</key>
+    <array>
+        <string>phone</string>
+        <string>voice</string>
+        <string>spi</string>
     </array>
 </dict>
 </plist>

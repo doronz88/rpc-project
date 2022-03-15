@@ -5,6 +5,7 @@ from rpcclient.darwin.reports import Reports
 from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
+from rpcclient.ios.telephony import Telephony
 
 CRASH_REPORTS_DIR = 'Library/Logs/CrashReporter'
 
@@ -16,6 +17,7 @@ class IosClient(DarwinClient):
         self.reports = Reports(self, CRASH_REPORTS_DIR)
         self.mobile_gestalt = MobileGestalt(self)
         self.lockdown = Lockdown(self)
+        self.telephony = Telephony(self)
 
     @property
     def roots(self) -> typing.List[str]:
