@@ -52,7 +52,7 @@ class Telephony:
         """
         calls = self.cx_call_observer.objc_call('calls')
         for call_id in range(calls.objc_call('count')):
-            call = calls.objc_call('objectAtIndex:', call_id)
+            call = calls.py[call_id]
             if call.objc_call('hasEnded'):
                 continue
             return Call(self._client, self.cx_call_controller, call)
