@@ -25,7 +25,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import RpcClientException, MissingLibraryError
+from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError
 from rpcclient.structs.consts import RTLD_NOW
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
@@ -48,18 +48,6 @@ class DarwinClient(Client):
         if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
 
-        self._cf_types = {
-            self.symbols.CFNullGetTypeID(): 'null',
-            self.symbols.CFDateGetTypeID(): 'date',
-            self.symbols.CFDataGetTypeID(): 'data',
-            self.symbols.CFStringGetTypeID(): 'str',
-            self.symbols.CFArrayGetTypeID(): 'array',
-            self.symbols.CFBooleanGetTypeID(): 'bool',
-            self.symbols.CFNumberGetTypeID(): 'number',
-            self.symbols.CFSetGetTypeID(): 'set',
-            self.symbols.CFDictionaryGetTypeID(): 'dict',
-        }
-
         if self.uname.machine != 'x86_64':
             self.inode64 = True
         self.fs = DarwinFs(self)
@@ -75,6 +63,16 @@ class DarwinClient(Client):
         self.hid = Hid(self)
         self.lief = DarwinLief(self)
         self.bluetooth = Bluetooth(self)
+        self.type_decoders = {
+            self.symbols.CFNullGetTypeID(): self._decode_cfnull,
+            self.symbols.CFStringGetTypeID(): self._decode_cfstr,
+            self.symbols.CFBooleanGetTypeID(): self._decode_cfbool,
+            self.symbols.CFNumberGetTypeID(): self._decode_cfnumber,
+            self.symbols.CFDateGetTypeID(): self._decode_cfdate,
+            self.symbols.CFDataGetTypeID(): self._decode_cfdata,
+            self.symbols.CFArrayGetTypeID(): self._decode_cfarray,
+            self.symbols.CFDictionaryGetTypeID(): self._decode_cfdict,
+        }
 
     @property
     def modules(self) -> typing.List[str]:
@@ -233,3 +231,53 @@ class DarwinClient(Client):
                 return True
 
         return False
+
+    def _decode_cfnull(self, symbol) -> None:
+        return None
+
+    def _decode_cfstr(self, symbol) -> str:
+        ptr = self.symbols.CFStringGetCStringPtr(symbol, CFStringEncoding.kCFStringEncodingMacRoman)
+        if ptr:
+            return ptr.peek_str('mac_roman')
+
+        with self.safe_malloc(4096) as buf:
+            if not self.symbols.CFStringGetCString(symbol, buf, 4096, CFStringEncoding.kCFStringEncodingMacRoman):
+                raise CfSerializationError('CFStringGetCString failed')
+            return buf.peek_str('mac_roman')
+
+    def _decode_cfbool(self, symbol) -> bool:
+        return bool(self.symbols.CFBooleanGetValue(symbol))
+
+    def _decode_cfnumber(self, symbol) -> int:
+        with self.safe_malloc(200) as buf:
+            if self.symbols.CFNumberIsFloatType(symbol):
+                if not self.symbols.CFNumberGetValue(symbol, kCFNumberDoubleType, buf):
+                    raise CfSerializationError(f'failed to deserialize float: {symbol}')
+                return struct.unpack('<d', buf.peek(8))[0]
+            if not self.symbols.CFNumberGetValue(symbol, kCFNumberSInt64Type, buf):
+                raise CfSerializationError(f'failed to deserialize int: {symbol}')
+            return int(buf[0])
+
+    def _decode_cfdate(self, symbol) -> datetime.datetime:
+        return datetime.datetime.strptime(symbol.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
+
+    def _decode_cfdata(self, symbol) -> bytes:
+        count = self.symbols.CFDataGetLength(symbol)
+        return self.symbols.CFDataGetBytePtr(symbol).peek(count)
+
+    def _decode_cfarray(self, symbol) -> typing.List:
+        result = []
+        count = self.symbols.CFArrayGetCount(symbol)
+        for i in range(count):
+            result.append(self.symbols.CFArrayGetValueAtIndex(symbol, i).py)
+        return result
+
+    def _decode_cfdict(self, symbol) -> typing.Mapping:
+        result = {}
+        count = self.symbols.CFArrayGetCount(symbol)
+        with self.safe_malloc(8 * count) as keys:
+            with self.safe_malloc(8 * count) as values:
+                self.symbols.CFDictionaryGetKeysAndValues(symbol, keys, values)
+                for i in range(count):
+                    result[keys[i].py] = values[i].py
+                return result
