@@ -3,7 +3,7 @@ from pathlib import Path
 from setuptools import setup, find_packages
 
 BASE_DIR = Path(__file__).parent.resolve(strict=True)
-VERSION = '2.5.0'
+VERSION = '2.6.0'
 PACKAGE_NAME = 'rpcclient'
 DATA_FILES_EXTENSIONS = ['*.txt', '*.json', '*.js']
 PACKAGES = [p for p in find_packages() if not p.startswith('tests')]
