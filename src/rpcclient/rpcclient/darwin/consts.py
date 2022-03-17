@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, auto
 
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0
@@ -628,3 +628,163 @@ kSecCodeMagicCodeDirectory = 0xfade0c02  # CodeDirectory
 kSecCodeMagicEmbeddedSignature = 0xfade0cc0  # single-architecture embedded signature
 kSecCodeMagicDetachedSignature = 0xfade0cc1  # detached multi-architecture signature
 kSecCodeMagicEntitlement = 0xfade7171  # entitlement blob
+
+
+class IOHIDDigitizerTransducerType(Enum):
+    kIOHIDDigitizerTransducerTypeStylus = 0
+    kIOHIDDigitizerTransducerTypePuck = 1
+    kIOHIDDigitizerTransducerTypeFinger = 2
+    kIOHIDDigitizerTransducerTypeHand = 3
+
+
+class IOHIDSwipeMask(Enum):
+    kIOHIDSwipeNone = 0x00000000
+    kIOHIDSwipeUp = 0x00000001
+    kIOHIDSwipeDown = 0x00000002
+    kIOHIDSwipeLeft = 0x00000004
+    kIOHIDSwipeRight = 0x00000008
+    kIOHIDScaleExpand = 0x00000010
+    kIOHIDScaleContract = 0x00000020
+    kIOHIDRotateCW = 0x00000040
+    kIOHIDRotateCCW = 0x00000080
+
+
+def IOHIDEventTypeMask(type_):
+    return 1 << type_
+
+
+def IOHIDEventFieldBase(type_):
+    return type_ << 16
+
+
+def IOHIDEventFieldOffsetOf(field):
+    return field & 0xffff
+
+
+class IOHIDEventType(Enum):
+    kIOHIDEventTypeNULL = 0
+    kIOHIDEventTypeVendorDefined = 1
+    kIOHIDEventTypeButton = 2
+    kIOHIDEventTypeKeyboard = 3
+    kIOHIDEventTypeTranslation = 4
+    kIOHIDEventTypeRotation = 5
+    kIOHIDEventTypeScroll = 6
+    kIOHIDEventTypeScale = 7
+    kIOHIDEventTypeZoom = 8
+    kIOHIDEventTypeVelocity = 9
+    kIOHIDEventTypeOrientation = 10
+    kIOHIDEventTypeDigitizer = 11
+    kIOHIDEventTypeAmbientLightSensor = 12
+    kIOHIDEventTypeAccelerometer = 13
+    kIOHIDEventTypeProximity = 14
+    kIOHIDEventTypeTemperature = 15
+    kIOHIDEventTypeNavigationSwipe = 16
+    kIOHIDEventTypePointer = 17
+    kIOHIDEventTypeProgress = 18
+    kIOHIDEventTypeMultiAxisPointer = 19
+    kIOHIDEventTypeGyro = 20
+    kIOHIDEventTypeCompass = 21
+    kIOHIDEventTypeZoomToggle = 22
+    kIOHIDEventTypeDockSwipe = 23  # just like kIOHIDEventTypeNavigationSwipe, but intended for consumption by Dock
+    kIOHIDEventTypeSymbolicHotKey = 24
+    kIOHIDEventTypePower = 25
+    kIOHIDEventTypeLED = 26
+    kIOHIDEventTypeFluidTouchGesture = 27  # This will eventually superseed Navagation and Dock swipes
+    kIOHIDEventTypeBoundaryScroll = 28
+    kIOHIDEventTypeBiometric = 29
+    kIOHIDEventTypeUnicode = 30
+    kIOHIDEventTypeAtmosphericPressure = 31
+    kIOHIDEventTypeForce = 32
+    kIOHIDEventTypeMotionActivity = 33
+    kIOHIDEventTypeMotionGesture = 34
+    kIOHIDEventTypeGameController = 35
+    kIOHIDEventTypeHumidity = 36
+    kIOHIDEventTypeCollection = 37
+    kIOHIDEventTypeBrightness = 38
+    kIOHIDEventTypeCount = 39  # This should always be last
+
+    # DEPRECATED:
+    kIOHIDEventTypeSwipe = 16
+    kIOHIDEventTypeMouse = 17
+
+
+class IOHIDDigitizerEventMask(Enum):
+    kIOHIDDigitizerEventRange = 1 << 0
+    kIOHIDDigitizerEventTouch = 1 << 1
+    kIOHIDDigitizerEventPosition = 1 << 2
+    kIOHIDDigitizerEventStop = 1 << 3
+    kIOHIDDigitizerEventPeak = 1 << 4
+    kIOHIDDigitizerEventIdentity = 1 << 5
+    kIOHIDDigitizerEventAttribute = 1 << 6
+    kIOHIDDigitizerEventCancel = 1 << 7
+    kIOHIDDigitizerEventStart = 1 << 8
+    kIOHIDDigitizerEventResting = 1 << 9
+    kIOHIDDigitizerEventFromEdgeFlat = 1 << 10
+    kIOHIDDigitizerEventFromEdgeTip = 1 << 11
+    kIOHIDDigitizerEventFromCorner = 1 << 12
+    kIOHIDDigitizerEventSwipePending = 1 << 13
+    kIOHIDDigitizerEventFromEdgeForcePending = 1 << 14
+    kIOHIDDigitizerEventFromEdgeForceActive = 1 << 15
+    kIOHIDDigitizerEventForcePopped = 1 << 16
+    kIOHIDDigitizerEventSwipeUp = 1 << 24
+    kIOHIDDigitizerEventSwipeDown = 1 << 25
+    kIOHIDDigitizerEventSwipeLeft = 1 << 26
+    kIOHIDDigitizerEventSwipeRight = 1 << 27
+    kIOHIDDigitizerEventEstimatedAltitude = 1 << 28
+    kIOHIDDigitizerEventEstimatedAzimuth = 1 << 29
+    kIOHIDDigitizerEventEstimatedPressure = 1 << 30
+    kIOHIDDigitizerEventSwipeMask = 0xF << 24
+
+
+class IOHIDEventField(Enum):
+    kIOHIDEventFieldIsRelative = IOHIDEventFieldBase(IOHIDEventType.kIOHIDEventTypeNULL.value)
+    kIOHIDEventFieldIsCollection = auto()
+    kIOHIDEventFieldIsPixelUnits = auto()
+    kIOHIDEventFieldIsCenterOrigin = auto()
+    kIOHIDEventFieldIsBuiltIn = auto()
+
+
+class IOHIDEventOptionBits(Enum):
+    kIOHIDEventOptionNone = 0
+    kIOHIDEventOptionIsAbsolute = 1 << 0
+    kIOHIDEventOptionIsCollection = 1 << 1
+    kIOHIDEventOptionIsPixelUnits = 1 << 2
+    kIOHIDEventOptionIsCenterOrigin = 1 << 3
+    kIOHIDEventOptionIsBuiltIn = 1 << 4
+
+    # misspellings
+    kIOHIDEventOptionPixelUnits = kIOHIDEventOptionIsPixelUnits
+
+
+class IOHIDEventFieldDigitizer(Enum):
+    kIOHIDEventFieldDigitizerX = IOHIDEventFieldBase(IOHIDEventType.kIOHIDEventTypeDigitizer.value)
+    kIOHIDEventFieldDigitizerY = auto()
+    kIOHIDEventFieldDigitizerZ = auto()
+    kIOHIDEventFieldDigitizerButtonMask = auto()
+    kIOHIDEventFieldDigitizerType = auto()
+    kIOHIDEventFieldDigitizerIndex = auto()
+    kIOHIDEventFieldDigitizerIdentity = auto()
+    kIOHIDEventFieldDigitizerEventMask = auto()
+    kIOHIDEventFieldDigitizerRange = auto()
+    kIOHIDEventFieldDigitizerTouch = auto()
+    kIOHIDEventFieldDigitizerPressure = auto()
+    kIOHIDEventFieldDigitizerAuxiliaryPressure = auto()  # BarrelPressure
+    kIOHIDEventFieldDigitizerTwist = auto()
+    kIOHIDEventFieldDigitizerTiltX = auto()
+    kIOHIDEventFieldDigitizerTiltY = auto()
+    kIOHIDEventFieldDigitizerAltitude = auto()
+    kIOHIDEventFieldDigitizerAzimuth = auto()
+    kIOHIDEventFieldDigitizerQuality = auto()
+    kIOHIDEventFieldDigitizerDensity = auto()
+    kIOHIDEventFieldDigitizerIrregularity = auto()
+    kIOHIDEventFieldDigitizerMajorRadius = auto()
+    kIOHIDEventFieldDigitizerMinorRadius = auto()
+    kIOHIDEventFieldDigitizerCollection = auto()
+    kIOHIDEventFieldDigitizerCollectionChord = auto()
+    kIOHIDEventFieldDigitizerChildEventMask = auto()
+    kIOHIDEventFieldDigitizerIsDisplayIntegrated = auto()
+    kIOHIDEventFieldDigitizerQualityRadiiAccuracy = auto()
+    kIOHIDEventFieldDigitizerGenerationCount = auto()
+    kIOHIDEventFieldDigitizerWillUpdateMask = auto()
+    kIOHIDEventFieldDigitizerDidUpdateMask = auto()
+    kIOHIDEventFieldDigitizerEstimatedMask = auto()

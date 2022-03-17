@@ -1,11 +1,44 @@
 import contextlib
 import time
+from enum import Enum
+from typing import Union
 
 from rpcclient.darwin.consts import kCFAllocatorDefault, kHIDUsage_Csmr_Menu, kHIDUsage_Csmr_Power, \
     kHIDUsage_Csmr_VolumeDecrement, kHIDUsage_Csmr_VolumeIncrement, kHIDPage_Consumer, kHIDUsage_Csmr_Mute, \
     kHIDUsage_Csmr_ACSearch, kHIDUsage_Csmr_PlayOrPause, kHIDUsage_Csmr_Play, kHIDUsage_Csmr_Pause, \
-    kHIDUsage_Csmr_Rewind, kHIDUsage_Csmr_RandomPlay, kHIDUsage_Csmr_Repeat, kHIDUsage_Csmr_FastForward
+    kHIDUsage_Csmr_Rewind, kHIDUsage_Csmr_RandomPlay, kHIDUsage_Csmr_Repeat, kHIDUsage_Csmr_FastForward, \
+    IOHIDEventField, IOHIDDigitizerEventMask, IOHIDDigitizerTransducerType, IOHIDEventFieldDigitizer
 from rpcclient.exceptions import BadReturnValueError
+
+
+class TouchEventType(Enum):
+    TOUCH_DOWN = 0
+    TOUCH_UP = 1
+    TOUCH_MOVE = 2
+
+
+EVENT_TYPE_PARAMS = {
+    TouchEventType.TOUCH_DOWN: {
+        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value |
+                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value |
+                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value),
+        'button_mask': 1,
+        'touch': True,
+    },
+    TouchEventType.TOUCH_MOVE: {
+        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventPosition.value |
+                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value),
+        'button_mask': 1,
+        'touch': True,
+    },
+    TouchEventType.TOUCH_UP: {
+        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value |
+                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value |
+                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value),
+        'button_mask': 0,
+        'touch': False,
+    },
+}
 
 
 class Hid:
@@ -68,6 +101,73 @@ class Hid:
                                                                    self._client.symbols.mach_absolute_time(),
                                                                    page, key_code, down, 0)
         self.dispatch(event)
+
+    def send_swipe_right(self):
+        self.send_swipe(0.5, 0.5, 1.0, 0.5)
+
+    def send_swipe_left(self):
+        self.send_swipe(0.5, 0.5, 0.0, 0.5)
+
+    def send_swipe_up(self):
+        self.send_swipe(0.5, 1.5, 0.5, 0.5)
+
+    def send_swipe_down(self):
+        self.send_swipe(0.5, 0.5, 0.5, 1.5)
+
+    def send_swipe(self, from_x: float, from_y: float, to_x: float, to_y: float):
+        self.send_touch_event(TouchEventType.TOUCH_DOWN, from_x, from_y)
+        self.send_touch_event(TouchEventType.TOUCH_MOVE, to_x, to_y)
+        self.send_touch_event(TouchEventType.TOUCH_UP, to_x, to_y)
+
+    def send_touch_event(self, event_type: TouchEventType, x: float, y: float, pressure: float = 0.4):
+        params = EVENT_TYPE_PARAMS[event_type]
+
+        timestamp = self._client.symbols.mach_absolute_time()
+
+        event_flags = params['event_flags']
+        touch = params['touch']
+        button_mask = params['button_mask']
+
+        parent = self.create_digitizer_event(IOHIDDigitizerTransducerType.kIOHIDDigitizerTransducerTypeHand,
+                                             0, 0, event_flags, 0, x, y, 0.0, 0.0, 0.0, touch, touch, 0,
+                                             timestamp=timestamp)
+
+        child = self.create_digitizer_finger_event(2, 2, event_flags, button_mask, x, y, 0.0, pressure, 0.0,
+                                                   touch, touch, 0, timestamp=timestamp)
+
+        self._client.symbols.IOHIDEventAppendEvent(parent, child)
+        self.dispatch(parent)
+
+    def create_digitizer_event(self, type_: Union[IOHIDDigitizerTransducerType, int], index: int, identity: int,
+                               event_mask: int, button_mask: int, x: float, y: float, z: float, tip_pressure: float,
+                               barrel_pressure: float, range_: bool, touch: bool, options: int, timestamp=None):
+        if timestamp is None:
+            timestamp = self._client.symbols.mach_absolute_time()
+
+        event = self._client.symbols.IOHIDEventCreateDigitizerEvent(
+            kCFAllocatorDefault, timestamp, type_, index, identity, event_mask,
+            button_mask, x, y, z, tip_pressure, barrel_pressure, range_, touch, options)
+
+        self._client.symbols.IOHIDEventSetIntegerValue(event, IOHIDEventField.kIOHIDEventFieldIsBuiltIn, 0)
+        self._client.symbols.IOHIDEventSetIntegerValue(
+            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1)
+        self._client.symbols.IOHIDEventSetSenderID(event, 0x8000000817319375)
+
+        return event
+
+    def create_digitizer_finger_event(self, index: int, identity: int, event_mask: int,
+                                      button_mask: int, x: float, y: float, z: float, tip_pressure: float,
+                                      twist: float, range_: bool, touch: bool, options: int, timestamp=None):
+        if timestamp is None:
+            timestamp = self._client.symbols.mach_absolute_time()
+
+        event = self._client.symbols.IOHIDEventCreateDigitizerFingerEvent(
+            kCFAllocatorDefault, timestamp, index, identity, event_mask,
+            button_mask, x, y, z, tip_pressure, twist, range_, touch, options)
+
+        self._client.symbols.IOHIDEventSetFloatValue(
+            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerMajorRadius, 0.5)
+        return event
 
     @contextlib.contextmanager
     def create_hid_client(self):
