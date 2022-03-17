@@ -25,6 +25,7 @@ from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exe
     reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
+from rpcclient.sysctl import Sysctl
 
 tty_support = False
 try:
@@ -77,6 +78,7 @@ class Client:
         self.processes = Processes(self)
         self.network = Network(self)
         self.lief = Lief(self)
+        self.sysctl = Sysctl(self)
 
     def info(self):
         """ print information about current target """
