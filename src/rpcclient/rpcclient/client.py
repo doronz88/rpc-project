@@ -11,7 +11,7 @@ from select import select
 from socket import socket
 
 import IPython
-from construct import Int64sl
+from construct import Int64sl, Float64l, Float32l
 from traitlets.config import Config
 
 from rpcclient.darwin.structs import pid_t, exitcode_t
@@ -22,7 +22,7 @@ from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
-    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION
+    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -131,7 +131,7 @@ class Client:
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
-    def call(self, address: int, argv: typing.List[int] = None) -> Symbol:
+    def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False) -> Symbol:
         """ call a remote function and retrieve its return value as Symbol object """
         fixed_argv = []
         free_list = []
@@ -156,27 +156,37 @@ class Client:
                 tmp.poke(arg)
                 free_list.append(tmp)
 
-            elif isinstance(arg, int) or isinstance(arg, Symbol):
-                pass
+            if isinstance(tmp, int):
+                tmp &= 0xffffffffffffffff
+                fixed_argv.append({'type': argument_type_t.Integer, 'value': tmp})
+
+            elif isinstance(tmp, float):
+                fixed_argv.append({'type': argument_type_t.Double, 'value': tmp})
 
             else:
                 raise ArgumentError(f'invalid parameter type: {arg}')
-
-            tmp &= 0xffffffffffffffff
-
-            fixed_argv.append(tmp)
 
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_CALL,
             'data': {'address': address, 'argv': fixed_argv},
         })
         self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+        integer_err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+
+        double_buf = self._recvall(Float64l.sizeof())
+        float32_err = Float32l.parse(double_buf)
+        float64_err = Float64l.parse(double_buf)
 
         for f in free_list:
             self.symbols.free(f)
 
-        return self.symbol(err)
+        if return_float32:
+            return float32_err
+
+        if return_float64:
+            return float64_err
+
+        return self.symbol(integer_err)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek data at given address """

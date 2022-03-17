@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul, Int8ul
+    Int64ul, Int8ul, IfThenElse, Float64l
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -41,9 +41,18 @@ cmd_dlsym_t = Struct(
     'symbol_name' / PaddedString(MAX_PATH_LEN, 'utf8'),
 )
 
+argument_type_t = Enum(Int64ul,
+                       Integer=0,
+                       Double=1)
+
+argument_t = Struct(
+    'type' / argument_type_t,
+    'value' / IfThenElse(this.type == argument_type_t.Integer, Int64ul, Float64l),
+)
+
 cmd_call_t = Struct(
     'address' / Int64ul,
-    'argv' / PrefixedArray(Int64ul, Int64ul),
+    'argv' / PrefixedArray(Int64ul, argument_t),
 )
 
 cmd_peek_t = Struct(
