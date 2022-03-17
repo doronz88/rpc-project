@@ -196,4 +196,4 @@ class Symbol(int):
         return hex(self)
 
     def __call__(self, *args, **kwargs):
-        return self._client.call(self, args)
+        return self._client.call(self, args, **kwargs)

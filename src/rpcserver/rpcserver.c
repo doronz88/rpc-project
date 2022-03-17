@@ -99,9 +99,15 @@ typedef struct
 
 typedef struct
 {
+    u64 type;
+    u64 value;
+} argument_t;
+
+typedef struct
+{
     u64 address;
     u64 argc;
-    u64 argv[0];
+    argument_t argv[0];
 } cmd_call_t;
 
 typedef struct
@@ -450,7 +456,222 @@ error:
     return result;
 }
 
-bool handle_call(int sockfd)
+#ifdef __ARM_ARCH_ISA_A64
+bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv);
+__asm__(
+"_call_function:\n"
+    // the "stack_arguments" must be the first local ([sp, 0]) to serialize stack arguments
+    // the 0x100 is enough to store 0x100/8 = 32 stack arguments which should be enough for 
+    // every function
+    ".set stack_arguments, 0\n"
+    ".set result, stack_arguments+0x100\n"
+    ".set address, result+0x08\n"
+    ".set argc, address+0x08\n"
+    ".set argv, argc+0x08\n"
+    ".set sockfd, argv+0x08\n"
+    ".set err_integer, sockfd+0x08\n"
+    ".set err_double, err_integer+0x08\n"
+    ".set size, err_double\n"
+
+    // backup registers x19 -> x30 = 8*12 bytes = 0x60 bytes
+    // according to arm abi, the stack is structured as follows:
+    // -------------------------
+    // | x30(lr)               | 0x58
+    // | x29(frame pointer)    | 0x50
+    // | register backup       | 0x00
+    // -------------------------
+    "stp x28, x27, [sp, -0x60]!\n"
+    "stp x26, x25, [sp, 0x10]\n"
+    "stp x23, x24, [sp, 0x20]\n"
+    "stp x21, x22, [sp, 0x30]\n"
+    "stp x19, x20, [sp, 0x40]\n"
+    "stp x29, x30, [sp, 0x50]\n"
+    // current x29 should point to previous x29
+    "add x29, sp, 0x50\n"
+
+    // allocate stack locals
+    "sub sp, sp, size\n"
+
+    // backup arguments to stack
+    "str x0, [sp, sockfd]\n"
+    "str x1, [sp, address]\n"
+    "str x2, [sp, argc]\n"
+    "str x3, [sp, argv]\n"
+
+    // result = 0
+    "str xzr, [sp, result]\n"
+
+    // x19 = argument = *argv
+    // x24 = argc
+    // x21 = integer_offset = 0
+    // x22 = double_offset = 0
+    // x23 = current_arg_index = 0
+    // x26 = stack_offset = 0
+    "ldr x19, [sp, argv]\n"
+    "ldr x19, [x19]\n"
+    "ldr x24, [sp, argc]\n"
+    "mov x21, 0\n"
+    "mov x22, 0\n"
+    "mov x23, 0\n"
+    "mov x26, 0\n"
+
+"1:\n"
+    // if (current_arg_index == argc) goto 3
+    "cmp x23, x24\n"
+    "beq 3f\n"
+
+    // x20 = argument.type
+    "ldr x20, [x19]\n"
+
+    // argument++
+    "add x19, x19, 8\n"
+
+    // if (argument.type == INTEGER) goto 2
+    "cmp x20, 0\n"
+    "beq 2f\n"
+
+    // else {
+
+    // -- double argument
+    
+    // x20 = argument.value
+    "ldr x20, [x19]\n"
+    "add x19, x19, 8\n"
+
+    // if (double_offset*8 >= MAX_DOUBLE_REG*8) goto 7
+    "cmp x22, 8 * 8\n"
+    "bge 7f\n"
+
+    // 6[double_offset]()
+    "adr x25, 6f\n"
+    "add x25, x25, x22\n"
+    "blr x25\n"
+
+    // double_offset += 8
+    "add x22, x22, 8\n"
+
+    // current_arg_index += 1
+    "add x23, x23, 1\n"
+
+    // goto 1
+    "b 1b\n"
+
+"2:\n"
+    // -- integer argument
+
+    // x20 = argument.value
+    "ldr x20, [x19]\n"
+
+    // argument++
+    "add x19, x19, 8\n"
+
+    // if (integer_offset*8 >= MAX_INT_REG*8) goto 7
+    "cmp x21, 8 * 8\n"
+    "bge 7f\n"
+    
+    // 5[integer_offset]()
+    "adr x25, 5f\n"
+    "add x25, x25, x21\n"
+    "blr x25\n"
+
+    // integer_offset += 8
+    "add x21, x21, 8\n"
+
+    // current_arg_index += 1
+    "add x23, x23, 1\n"
+
+    // goto 1
+    "b 1b\n"
+
+"3:\n"
+    // err.integer, err.double = address(params)
+    "ldr x19, [sp, address]\n"
+    "blr x19\n"
+    "str x0, [sp, err_integer]\n"
+    "str d0, [sp, err_double]\n"
+
+    // if (!sendall(sockfd, &err, 0x10)) goto 4;
+    "ldr x0, [sp, sockfd]\n"
+    "add x1, sp, err_integer\n"
+    "mov x2, 0x10\n"
+    "bl _sendall\n"
+    "cmp x0, 0\n"
+    "beq 4f\n"
+
+    // result = true
+    "mov x0, 1\n"
+    "str x0, [sp, result]\n"
+
+"4:\n"
+    // return result
+    "ldr x0, [sp, result]\n"
+    "add sp, sp, size\n"
+
+    // restore backed up registers
+    "ldp x29, x30, [sp, 0x50]\n"
+    "ldp x19, x20, [sp, 0x40]\n"
+    "ldp x21, x22, [sp, 0x30]\n"
+    "ldp x23, x24, [sp, 0x20]\n"
+    "ldp x25, x26, [sp, 0x10]\n"
+    "ldp x27, x28, [sp], 0x60\n"
+
+    "ret\n"
+
+"5:\n"
+    "mov x0, x20\n"
+    "ret\n"
+    "mov x1, x20\n"
+    "ret\n"
+    "mov x2, x20\n"
+    "ret\n"
+    "mov x3, x20\n"
+    "ret\n"
+    "mov x4, x20\n"
+    "ret\n"
+    "mov x5, x20\n"
+    "ret\n"
+    "mov x6, x20\n"
+    "ret\n"
+    "mov x7, x20\n"
+    "ret\n"
+
+"6:\n"
+    "fmov d0, x20\n"
+    "ret\n"
+    "fmov d1, x20\n"
+    "ret\n"
+    "fmov d2, x20\n"
+    "ret\n"
+    "fmov d3, x20\n"
+    "ret\n"
+    "fmov d4, x20\n"
+    "ret\n"
+    "fmov d5, x20\n"
+    "ret\n"
+    "fmov d6, x20\n"
+    "ret\n"
+    "fmov d7, x20\n"
+    "ret\n"
+
+"7:\n"
+    // -- stack argument
+
+    // x20 = argument.value
+    "ldr x20, [x19]\n"
+    "add x19, x19, 8\n"
+
+    // pack into stack (into stack_arguments+x26)
+    "str x20, [sp, x26]\n"
+    // current_arg_index += 1
+    "add x23, x23, 1\n"
+    // stack_offset += 8
+    "add x26, x26, 8\n"
+
+    "b 1b\n"
+);
+
+#else
+bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv)
 {
     typedef u64 (*call_argc0_t)();
     typedef u64 (*call_argc1_t)(u64);
@@ -465,59 +686,80 @@ bool handle_call(int sockfd)
     typedef u64 (*call_argc10_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64, u64);
     typedef u64 (*call_argc11_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, u64);
 
+    bool result = false;
+    s64 err;
+
+    argument_t *argv = *p_argv;
+
     TRACE("enter");
-    s64 err = 0;
-    int result = false;
-    u64 *argv = NULL;
-    cmd_call_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
-    argv = (u64 *)malloc(sizeof(u64) * cmd.argc);
-    CHECK(recvall(sockfd, (char *)argv, sizeof(u64) * cmd.argc));
-
-    TRACE("address: %p", cmd.address);
-
-    switch (cmd.argc)
+    switch (argc)
     {
     case 0:
-        err = ((call_argc0_t)cmd.address)();
+        err = ((call_argc0_t)address)();
         break;
     case 1:
-        err = ((call_argc1_t)cmd.address)(argv[0]);
+        err = ((call_argc1_t)address)(argv[0].value);
         break;
     case 2:
-        err = ((call_argc2_t)cmd.address)(argv[0], argv[1]);
+        err = ((call_argc2_t)address)(argv[0].value, argv[1].value);
         break;
     case 3:
-        err = ((call_argc3_t)cmd.address)(argv[0], argv[1], argv[2]);
+        err = ((call_argc3_t)address)(argv[0].value, argv[1].value, argv[2].value);
         break;
     case 4:
-        err = ((call_argc4_t)cmd.address)(argv[0], argv[1], argv[2], argv[3]);
+        err = ((call_argc4_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value);
         break;
     case 5:
-        err = ((call_argc5_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4]);
+        err = ((call_argc5_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value);
         break;
     case 6:
-        err = ((call_argc6_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+        err = ((call_argc6_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value);
         break;
     case 7:
-        err = ((call_argc7_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+        err = ((call_argc7_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value, argv[6].value);
         break;
     case 8:
-        err = ((call_argc8_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
+        err = ((call_argc8_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value, argv[6].value, argv[7].value);
         break;
     case 9:
-        err = ((call_argc9_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);
+        err = ((call_argc9_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value, argv[6].value, argv[7].value, argv[8].value);
         break;
     case 10:
-        err = ((call_argc10_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9]);
+        err = ((call_argc10_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value, argv[6].value, argv[7].value, argv[8].value, argv[9].value);
         break;
     case 11:
-        err = ((call_argc11_t)cmd.address)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9], argv[10]);
+        err = ((call_argc11_t)address)(argv[0].value, argv[1].value, argv[2].value, argv[3].value, argv[4].value, argv[5].value, argv[6].value, argv[7].value, argv[8].value, argv[9].value, argv[10].value);
         break;
     }
 
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+    
+    // return double isn't supported
+    err = 0;
+    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+
+    result = true;
+
+error:
+    return result;
+}
+#endif  // __ARM_ARCH
+
+bool handle_call(int sockfd)
+{
+    TRACE("enter");
+    s64 err = 0;
+    int result = false;
+    argument_t *argv = NULL;
+    cmd_call_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+
+    argv = (argument_t *)malloc(sizeof(argument_t) * cmd.argc);
+    CHECK(recvall(sockfd, (char *)argv, sizeof(argument_t) * cmd.argc));
+
+    TRACE("address: %p", cmd.address);
+    CHECK(call_function(sockfd, cmd.address, cmd.argc, (argument_t **)cmd.argv));
 
     result = true;
 
