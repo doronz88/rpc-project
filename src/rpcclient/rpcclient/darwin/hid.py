@@ -90,7 +90,7 @@ class Hid:
     def send_volume_up_button_press(self, interval: int = 0):
         self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_VolumeIncrement, interval=interval)
 
-    def send_key_press(self, page: int, key_code: int, interval: int = 0):
+    def send_key_press(self, page: int, key_code: int, interval: Union[float, int] = 0):
         self.send_keyboard_event(page, key_code, True)
         if interval:
             time.sleep(interval)
@@ -100,6 +100,9 @@ class Hid:
         event = self._client.symbols.IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault,
                                                                    self._client.symbols.mach_absolute_time(),
                                                                    page, key_code, down, 0)
+        if not event:
+            raise BadReturnValueError('IOHIDEventCreateKeyboardEvent() failed')
+
         self.dispatch(event)
 
     def send_swipe_right(self):
@@ -134,7 +137,6 @@ class Hid:
 
         child = self.create_digitizer_finger_event(2, 2, event_flags, button_mask, x, y, 0.0, pressure, 0.0,
                                                    touch, touch, 0, timestamp=timestamp)
-
         self._client.symbols.IOHIDEventAppendEvent(parent, child)
         self.dispatch(parent)
 
@@ -147,6 +149,9 @@ class Hid:
         event = self._client.symbols.IOHIDEventCreateDigitizerEvent(
             kCFAllocatorDefault, timestamp, type_, index, identity, event_mask,
             button_mask, x, y, z, tip_pressure, barrel_pressure, range_, touch, options)
+
+        if not event:
+            raise BadReturnValueError('IOHIDEventCreateDigitizerEvent() failed')
 
         self._client.symbols.IOHIDEventSetIntegerValue(event, IOHIDEventField.kIOHIDEventFieldIsBuiltIn, 0)
         self._client.symbols.IOHIDEventSetIntegerValue(
@@ -164,6 +169,9 @@ class Hid:
         event = self._client.symbols.IOHIDEventCreateDigitizerFingerEvent(
             kCFAllocatorDefault, timestamp, index, identity, event_mask,
             button_mask, x, y, z, tip_pressure, twist, range_, touch, options)
+
+        if not event:
+            raise BadReturnValueError('IOHIDEventCreateDigitizerFingerEvent() failed')
 
         self._client.symbols.IOHIDEventSetFloatValue(
             event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerMajorRadius, 0.5)
