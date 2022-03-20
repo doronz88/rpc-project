@@ -10,6 +10,7 @@ from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
+from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.hid import Hid
@@ -63,6 +64,7 @@ class DarwinClient(Client):
         self.hid = Hid(self)
         self.lief = DarwinLief(self)
         self.bluetooth = Bluetooth(self)
+        self.core_graphics = CoreGraphics(self)
         self.type_decoders = {
             self.symbols.CFNullGetTypeID(): self._decode_cfnull,
             self.symbols.CFStringGetTypeID(): self._decode_cfstr,
