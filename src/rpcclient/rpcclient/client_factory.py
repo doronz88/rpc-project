@@ -3,11 +3,11 @@ from socket import socket
 
 from rpcclient.client import Client
 from rpcclient.darwin.client import DarwinClient
+from rpcclient.exceptions import FailedToConnectError, InvalidServerVersionMagicError
 from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
-from rpcclient.exceptions import FailedToConnectError, InvalidServerVersionMagicError
 from rpcclient.macos.client import MacosClient
-from rpcclient.protocol import UNAME_VERSION_LEN, DEFAULT_PORT, SERVER_MAGIC_VERSION
+from rpcclient.protocol import DEFAULT_PORT, SERVER_MAGIC_VERSION, protocol_handshake_t
 
 
 def recvall(sock, size: int) -> bytes:
@@ -29,21 +29,24 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
         # wrap in our own exception
         raise FailedToConnectError() from e
 
-    magic = recvall(sock, len(SERVER_MAGIC_VERSION))
-    if magic != SERVER_MAGIC_VERSION:
-        raise InvalidServerVersionMagicError(f'got an invalid server magic: {magic.hex()}')
+    handshake = protocol_handshake_t.parse(recvall(sock, protocol_handshake_t.sizeof()))
 
-    sysname = recvall(sock, UNAME_VERSION_LEN).split(b'\x00', 1)[0].decode().lower()
-    logging.info(f'connection uname.sysname: {sysname}')
+    if handshake.magic != SERVER_MAGIC_VERSION:
+        raise InvalidServerVersionMagicError()
+
+    sysname = handshake.sysname.lower()
+    arch = handshake.arch
+
+    logging.info(f'connection uname.sysname: {handshake.sysname}')
 
     if sysname == 'darwin':
-        client = DarwinClient(sock, sysname, hostname, port)
+        client = DarwinClient(sock, sysname, arch, hostname, port)
 
         if client.uname.machine.startswith('iPhone'):
-            return IosClient(sock, sysname, hostname, port)
+            return IosClient(sock, sysname, arch, hostname, port)
         else:
-            return MacosClient(sock, sysname, hostname, port)
+            return MacosClient(sock, sysname, arch, hostname, port)
     elif sysname == 'linux':
-        return LinuxClient(sock, sysname, hostname, port)
+        return LinuxClient(sock, sysname, arch, hostname, port)
 
-    return Client(sock, sysname, hostname, port)
+    return Client(sock, sysname, arch, hostname, port)

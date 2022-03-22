@@ -27,6 +27,7 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError
+from rpcclient.protocol import arch_t
 from rpcclient.structs.consts import RTLD_NOW
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
@@ -41,9 +42,8 @@ OBJC_TAG_MASK = (1 << 63)
 
 
 class DarwinClient(Client):
-
-    def __init__(self, sock, sysname: str, hostname: str, port: int = None):
-        super().__init__(sock, sysname, hostname, port)
+    def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
+        super().__init__(sock, sysname, arch, hostname, port)
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
 
         if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):

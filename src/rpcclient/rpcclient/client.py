@@ -11,7 +11,7 @@ from select import select
 from socket import socket
 
 import IPython
-from construct import Int64sl, Float64l, Float32l
+from construct import Int64sl, Float64l, Float32l, Float16l
 from traitlets.config import Config
 
 from rpcclient.darwin.structs import pid_t, exitcode_t
@@ -21,8 +21,9 @@ from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
-from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, UNAME_VERSION_LEN, \
-    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t
+from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
+    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
+    protocol_handshake_t, call_response_t_size
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -61,7 +62,8 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock, sysname: str, hostname: str, port: int = None):
+    def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
+        self._arch = arch
         self._hostname = hostname
         self._port = port
         self._sock = sock
@@ -99,6 +101,11 @@ class Client:
         """ get the utsname struct from remote """
         raise NotImplementedError()
 
+    @property
+    def arch(self):
+        """ get remote arch """
+        return self._arch
+
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
         message = protocol_message_t.build({
@@ -131,7 +138,8 @@ class Client:
         err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
 
-    def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False) -> Symbol:
+    def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False,
+             return_float16=False, return_raw=False) -> Symbol:
         """ call a remote function and retrieve its return value as Symbol object """
         fixed_argv = []
         free_list = []
@@ -171,22 +179,33 @@ class Client:
             'data': {'address': address, 'argv': fixed_argv},
         })
         self._sock.sendall(message)
-        integer_err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
 
-        double_buf = self._recvall(Float64l.sizeof())
-        float32_err = Float32l.parse(double_buf)
-        float64_err = Float64l.parse(double_buf)
+        response = call_response_t.parse(self._recvall(call_response_t_size))
 
         for f in free_list:
             self.symbols.free(f)
 
-        if return_float32:
-            return float32_err
+        if self.arch == arch_t.ARCH_ARM64:
+            double_buf = Float64l.build(response.return_values.arm_registers.d[0])
+            float16_err = Float16l.parse(double_buf)
+            float32_err = Float32l.parse(double_buf)
+            float64_err = response.return_values.arm_registers.d[0]
 
-        if return_float64:
-            return float64_err
+            if return_float16:
+                return float16_err
 
-        return self.symbol(integer_err)
+            if return_float32:
+                return float32_err
+
+            if return_float64:
+                return float64_err
+
+            if return_raw:
+                return response.return_values.arm_registers
+
+            return self.symbol(response.return_values.arm_registers.x[0])
+
+        return self.symbol(response.return_values.return_value)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek data at given address """
@@ -399,12 +418,11 @@ class Client:
         self.close()
         self._sock = socket()
         self._sock.connect((self._hostname, self._port))
-        magic = self._recvall(len(SERVER_MAGIC_VERSION))
 
-        if magic != SERVER_MAGIC_VERSION:
-            raise InvalidServerVersionMagicError(f'got an invalid server magic: {magic.hex()}')
+        handshake = protocol_handshake_t.parse(self._recvall(protocol_handshake_t.sizeof()))
 
-        self._recvall(UNAME_VERSION_LEN)
+        if handshake.magic != SERVER_MAGIC_VERSION:
+            raise InvalidServerVersionMagicError()
 
     def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
         message = protocol_message_t.build({
@@ -485,6 +503,6 @@ class Client:
     def __repr__(self):
         buf = f'<{self.__class__.__name__} '
         buf += f'PID:{self.symbols.getpid():d} UID:{self.symbols.getuid():d} GID:{self.symbols.getgid():d} ' \
-               f'SYSNAME:{self._sysname}'
+               f'SYSNAME:{self._sysname} ARCH:{self.arch}'
         buf += '>'
         return buf

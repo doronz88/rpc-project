@@ -3,13 +3,13 @@ from rpcclient.symbol import Symbol
 
 
 class DarwinSymbol(Symbol):
-    def objc_call(self, selector, *params):
+    def objc_call(self, selector, *params, **kwargs):
         """ call an objc method on a given object """
         sel = self._client.symbols.sel_getUid(selector)
         if not self._client.symbols.objc_msgSend(self, self._client.symbols.sel_getUid("respondsToSelector:"), sel):
             raise UnrecognizedSelectorError(f"unrecognized selector '{selector}' sent to class")
 
-        return self._client.symbols.objc_msgSend(self, sel, *params)
+        return self._client.symbols.objc_msgSend(self, sel, *params, **kwargs)
 
     @property
     def cfdesc(self):
