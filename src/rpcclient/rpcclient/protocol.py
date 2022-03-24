@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul, Int8ul, IfThenElse, Float64l
+    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -15,11 +15,23 @@ cmd_type_t = Enum(Int32ul,
                   CMD_CLOSE=10,
                   CMD_REPLY_POKE=11,
                   )
+
+arch_t = Enum(Int32ul,
+              ARCH_UNKNOWN=0,
+              ARCH_ARM64=1,
+              )
+
+
 DEFAULT_PORT = 5910
-SERVER_MAGIC_VERSION = Int32ul.build(0x88888800)
+SERVER_MAGIC_VERSION = 0x88888801
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
-UNAME_VERSION_LEN = 256
+
+protocol_handshake_t = Struct(
+    'magic' / Int32ul,
+    'arch' / arch_t,
+    'sysname' / PaddedString(256, 'utf8'),
+)
 
 cmd_exec_t = Struct(
     'background' / Int8ul,
@@ -93,6 +105,20 @@ exec_chunk_type_t = Enum(Int32ul,
 exec_chunk_t = Struct(
     'chunk_type' / exec_chunk_type_t,
     'size' / Int32ul,
+)
+
+return_registers_arm_t = Struct(
+    'x' / Array(8, Int64ul),
+    'd' / Array(8, Float64l),
+)
+
+call_response_t_size = 128
+
+call_response_t = Struct(
+    'return_values' / Union(None,
+                            'arm_registers' / return_registers_arm_t,
+                            'return_value' / Int64ul,
+                            ),
 )
 
 dummy_block_t = Int64ul

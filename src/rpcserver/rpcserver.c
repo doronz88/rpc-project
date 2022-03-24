@@ -1,7 +1,7 @@
 #ifndef __APPLE__
 #define _XOPEN_SOURCE (600)
 #define _GNU_SOURCE (1)
-#endif  // __APPLE__
+#endif // __APPLE__
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -32,6 +32,7 @@
 
 #include "common.h"
 
+#define HANDSHAKE_SYSNAME_LEN (256)
 #define DEFAULT_PORT ("5910")
 #define DEFAULT_SHELL ("/bin/sh")
 #define USAGE ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] \n\
@@ -40,14 +41,13 @@
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define SERVER_MAGIC_VERSION (0x88888800)
+#define SERVER_MAGIC_VERSION (0x88888801)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
 #define MAX_PATH_LEN (1024)
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
-#define UNAME_VERSION_LEN (256)
 #define INVALID_PID (0xffffffff)
 
 extern char **environ;
@@ -73,6 +73,19 @@ typedef enum
     CMD_EXEC_CHUNK_TYPE_STDOUT = 0,
     CMD_EXEC_CHUNK_TYPE_EXITCODE = 1,
 } cmd_exec_chunk_type_t;
+
+typedef enum
+{
+    ARCH_UNKNOWN = 0,
+    ARCH_ARM64 = 1,
+} arch_t;
+
+typedef struct
+{
+    u32 magic;
+    u32 arch; // arch_t
+    char sysname[HANDSHAKE_SYSNAME_LEN];
+} protocol_handshake_t;
 
 typedef struct
 {
@@ -128,6 +141,21 @@ typedef struct
     u32 magic;
     u32 cmd_type;
 } protocol_message_t;
+
+typedef struct
+{
+    u64 x[8];
+    u64 d[8];
+} return_registers_arm_t;
+
+typedef struct
+{
+    union
+    {
+        return_registers_arm_t arm_registers;
+        u64 return_value;
+    } return_values;
+} call_response_t;
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
@@ -214,7 +242,8 @@ error:
     return false;
 }
 
-typedef struct {
+typedef struct
+{
     int sockfd;
     pid_t pid;
 } thread_notify_client_spawn_error_t;
@@ -290,7 +319,7 @@ bool handle_exec(int sockfd)
 
     if (background)
     {
-        CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))thread_waitpid, (void *)(intptr_t)pid));
+        CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))thread_waitpid, (void *)(intptr_t)pid));
     }
     else
     {
@@ -348,11 +377,11 @@ bool handle_exec(int sockfd)
         TRACE("wait for process to finish");
         s32 error;
         CHECK(pid == waitpid(pid, &error, 0));
-     
+
         cmd_exec_chunk_t chunk;
         chunk.type = CMD_EXEC_CHUNK_TYPE_EXITCODE;
         chunk.size = sizeof(error);
-     
+
         CHECK(sendall(sockfd, (const char *)&chunk, sizeof(chunk)));
         CHECK(sendall(sockfd, (const char *)&error, sizeof(error)));
     }
@@ -459,9 +488,9 @@ error:
 #ifdef __ARM_ARCH_ISA_A64
 bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv);
 __asm__(
-"_call_function:\n"
+    "_call_function:\n"
     // the "stack_arguments" must be the first local ([sp, 0]) to serialize stack arguments
-    // the 0x100 is enough to store 0x100/8 = 32 stack arguments which should be enough for 
+    // the 0x100 is enough to store 0x100/8 = 32 stack arguments which should be enough for
     // every function
     ".set stack_arguments, 0\n"
     ".set result, stack_arguments+0x100\n"
@@ -469,9 +498,28 @@ __asm__(
     ".set argc, address+0x08\n"
     ".set argv, argc+0x08\n"
     ".set sockfd, argv+0x08\n"
-    ".set err_integer, sockfd+0x08\n"
-    ".set err_double, err_integer+0x08\n"
-    ".set size, err_double\n"
+
+    ".set register_x0, sockfd+0x08\n"
+    ".set register_x1, register_x0+0x08\n"
+    ".set register_x2, register_x1+0x08\n"
+    ".set register_x3, register_x2+0x08\n"
+    ".set register_x4, register_x3+0x08\n"
+    ".set register_x5, register_x4+0x08\n"
+    ".set register_x6, register_x5+0x08\n"
+    ".set register_x7, register_x6+0x08\n"
+
+    ".set register_d0, register_x7+0x08\n"
+    ".set register_d1, register_d0+0x08\n"
+    ".set register_d2, register_d1+0x08\n"
+    ".set register_d3, register_d2+0x08\n"
+    ".set register_d4, register_d3+0x08\n"
+    ".set register_d5, register_d4+0x08\n"
+    ".set register_d6, register_d5+0x08\n"
+    ".set register_d7, register_d6+0x08\n"
+
+    ".set register_end, register_d7+0x08\n"
+
+    ".set size, register_end+0x08\n"
 
     // backup registers x19 -> x30 = 8*12 bytes = 0x60 bytes
     // according to arm abi, the stack is structured as follows:
@@ -533,7 +581,7 @@ __asm__(
     // else {
 
     // -- double argument
-    
+
     // x20 = argument.value
     "ldr x20, [x19]\n"
     "add x19, x19, 8\n"
@@ -568,7 +616,7 @@ __asm__(
     // if (integer_offset*8 >= MAX_INT_REG*8) goto 7
     "cmp x21, 8 * 8\n"
     "bge 7f\n"
-    
+
     // 5[integer_offset]()
     "adr x25, 5f\n"
     "add x25, x25, x21\n"
@@ -587,13 +635,29 @@ __asm__(
     // err.integer, err.double = address(params)
     "ldr x19, [sp, address]\n"
     "blr x19\n"
-    "str x0, [sp, err_integer]\n"
-    "str d0, [sp, err_double]\n"
 
-    // if (!sendall(sockfd, &err, 0x10)) goto 4;
+    "str x0, [sp, register_x0]\n"
+    "str x1, [sp, register_x1]\n"
+    "str x2, [sp, register_x2]\n"
+    "str x3, [sp, register_x3]\n"
+    "str x4, [sp, register_x4]\n"
+    "str x5, [sp, register_x5]\n"
+    "str x6, [sp, register_x6]\n"
+    "str x7, [sp, register_x7]\n"
+
+    "str d0, [sp, register_d0]\n"
+    "str d1, [sp, register_d1]\n"
+    "str d2, [sp, register_d2]\n"
+    "str d3, [sp, register_d3]\n"
+    "str d4, [sp, register_d4]\n"
+    "str d5, [sp, register_d5]\n"
+    "str d6, [sp, register_d6]\n"
+    "str d7, [sp, register_d7]\n"
+
+    // if (!sendall(sockfd, &err, register_end - register_x0)) goto 4;
     "ldr x0, [sp, sockfd]\n"
-    "add x1, sp, err_integer\n"
-    "mov x2, 0x10\n"
+    "add x1, sp, register_x0\n"
+    "mov x2, register_end - register_x0\n"
     "bl _sendall\n"
     "cmp x0, 0\n"
     "beq 4f\n"
@@ -602,7 +666,7 @@ __asm__(
     "mov x0, 1\n"
     "str x0, [sp, result]\n"
 
-"4:\n"
+    "4:\n"
     // return result
     "ldr x0, [sp, result]\n"
     "add sp, sp, size\n"
@@ -667,8 +731,7 @@ __asm__(
     // stack_offset += 8
     "add x26, x26, 8\n"
 
-    "b 1b\n"
-);
+    "b 1b\n");
 
 #else
 bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv)
@@ -733,18 +796,17 @@ bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_arg
         break;
     }
 
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
-    
-    // return double isn't supported
-    err = 0;
-    CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
+    call_response_t response = {0};
+    response.return_values.return_value = err;
+
+    CHECK(sendall(sockfd, (char *)&response, sizeof(response)));
 
     result = true;
 
 error:
     return result;
 }
-#endif  // __ARM_ARCH
+#endif // __ARM_ARCH_ISA_A64
 
 bool handle_call(int sockfd)
 {
@@ -843,7 +905,7 @@ bool handle_poke(int sockfd)
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
     CHECK(recvall(sockfd, (char *)cmd.address, cmd.size));
     CHECK(send_reply(sockfd, CMD_REPLY_POKE));
-#endif  // __APPLE__
+#endif // __APPLE__
 
     success = true;
 
@@ -859,7 +921,7 @@ error:
     return success;
 }
 
-#if  __APPLE__
+#if __APPLE__
 
 void (^dummy_block)(void) = ^{
 };
@@ -887,14 +949,19 @@ void handle_client(int sockfd)
     bool disconnected = false;
     TRACE("enter. fd: %d", sockfd);
 
-    // send MAGIC
-    u32 magic = SERVER_MAGIC_VERSION;
-    CHECK(sendall(sockfd, (const char *)&magic, sizeof(magic)));
-
-    // notify client of the connected target os version
     struct utsname uname_buf;
     CHECK(0 == uname(&uname_buf));
-    CHECK(sendall(sockfd, uname_buf.sysname, UNAME_VERSION_LEN));
+
+    protocol_handshake_t handshake = {0};
+    handshake.magic = SERVER_MAGIC_VERSION;
+    handshake.arch = ARCH_UNKNOWN;
+    strncpy(handshake.sysname, uname_buf.sysname, HANDSHAKE_SYSNAME_LEN - 1);
+
+#ifdef __ARM_ARCH_ISA_A64
+    handshake.arch = ARCH_ARM64;
+#endif
+
+    CHECK(sendall(sockfd, (char *)&handshake, sizeof(handshake)));
 
     while (true)
     {
@@ -1045,8 +1112,8 @@ int main(int argc, const char *argv[])
 
     pthread_t thread;
 #ifdef __APPLE__
-    CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))CFRunLoopRun, NULL));
-#endif  // __APPLE__
+    CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))CFRunLoopRun, NULL));
+#endif // __APPLE__
 
     while (1)
     {
@@ -1060,7 +1127,7 @@ int main(int argc, const char *argv[])
         CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
-        CHECK(0 == pthread_create(&thread, NULL, (void * (*)(void *))handle_client, (void *)(long)client_fd));
+        CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))handle_client, (void *)(long)client_fd));
     }
 
 error:

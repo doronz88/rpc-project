@@ -16,9 +16,7 @@ class CrashReports:
         enable/disable crash reports symbolication
         https://github.com/dlevi309/Symbolicator
         """
-        with self._client.sc.open(
-                '/var/root/Library/Preferences/com.apple.CrashReporter.plist') as pref:
-            pref.set_dict({'SymbolicateCrashes': enabled})
+        self._client.preferences.cf.set('SymbolicateCrashes', enabled, 'com.apple.CrashReporter', 'root')
 
     def list(self, prefixed='') -> List[CrashReport]:
         """ get a list of all crash reports as CrashReport parsed objects """
