@@ -1,8 +1,12 @@
+import logging
 import plistlib
 import struct
 from typing import Mapping
 
-import lief
+try:
+    import lief
+except ImportError:
+    logging.warning('failed to import lief. install seperately to use LIEF features')
 
 from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import kSecCodeMagicEntitlement
