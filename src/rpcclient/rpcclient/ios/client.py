@@ -5,6 +5,7 @@ from rpcclient.darwin.reports import Reports
 from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
+from rpcclient.ios.screen_capture import ScreenCapture
 from rpcclient.ios.telephony import Telephony
 from rpcclient.protocol import arch_t
 
@@ -19,6 +20,7 @@ class IosClient(DarwinClient):
         self.mobile_gestalt = MobileGestalt(self)
         self.lockdown = Lockdown(self)
         self.telephony = Telephony(self)
+        self.screen_capture = ScreenCapture(self)
 
     @property
     def roots(self) -> typing.List[str]:

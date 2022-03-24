@@ -42,6 +42,7 @@
         <string>kTCCServiceCamera</string>
         <string>kTCCServiceLocation</string>
         <string>kTCCServiceBluetoothPeripheral</string>
+        <string>kTCCServiceScreenCapture</string>
     </array>
     <key>com.apple.private.icfcallserver</key>
     <true/>
@@ -62,6 +63,16 @@
         <string>phone</string>
         <string>voice</string>
         <string>spi</string>
+    </array>
+    <key>com.apple.QuartzCore.global-capture</key>
+    <true/>
+    <key>com.apple.QuartzCore.get-client-port</key>
+    <true/>
+    <key>com.apple.accessibility.api</key>
+    <true/>
+    <key>com.apple.security.iokit-user-client-class</key>
+    <array>
+        <string>IOSurfaceRootUserClient</string>
     </array>
 </dict>
 </plist>
