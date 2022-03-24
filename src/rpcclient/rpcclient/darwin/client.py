@@ -163,7 +163,7 @@ class DarwinClient(Client):
                 for i in range(len(cfvalues)):
                     values_buf[i] = cfvalues[i]
                 return self.symbols.CFDictionaryCreate(
-                    kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0, 0)
+                    kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0)
 
     def cf(self, o: object) -> DarwinSymbol:
         """ construct a CFObject from a given python object """
