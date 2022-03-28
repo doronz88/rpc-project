@@ -17,6 +17,7 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
 from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.processes import Processes
 from rpcclient.structs.consts import SIGTERM
+from rpcclient.protocol import arch_t
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
@@ -156,9 +157,10 @@ class Process:
         self._client = client
         self._pid = pid
 
-        self._thread_class = IntelThread64
-        if self._client.uname.machine != 'x86_64':
+        if self._client.arch == arch_t.ARCH_ARM64:
             self._thread_class = ArmThread64
+        else:
+            self._thread_class = IntelThread64
 
     def kill(self, sig: int = SIGTERM):
         """ kill(pid, sig) at remote. read man for more details. """
