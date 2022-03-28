@@ -84,14 +84,14 @@ class ObjectiveCSymbol(DarwinSymbol):
         """
         print(highlight(self._to_str(recursive), ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
 
-    def objc_call(self, selector: str, *params):
+    def objc_call(self, selector: str, *params, **kwargs):
         """
         Make objc_call() from self return ObjectiveCSymbol when it's an objc symbol.
         :param selector: Selector to execute.
         :param params: Additional parameters.
         :return: ObjectiveCSymbol when return type is an objc symbol.
         """
-        symbol = super(ObjectiveCSymbol, self).objc_call(selector, *params)
+        symbol = super(ObjectiveCSymbol, self).objc_call(selector, *params, **kwargs)
         return symbol.objc_symbol if self._client.is_objc_type(symbol) else symbol
 
     def _set_ivar(self, name, value):

@@ -116,6 +116,11 @@ class Symbol(int):
         return ctypes.c_int64(self).value
 
     @property
+    def c_uint64(self) -> int:
+        """ cast to c_uint64 """
+        return ctypes.c_uint64(self).value
+
+    @property
     def c_int32(self) -> int:
         """ cast to c_int32 """
         return ctypes.c_int32(self).value

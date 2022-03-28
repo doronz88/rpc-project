@@ -1,6 +1,7 @@
 import dataclasses
 import errno
 from collections import namedtuple
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Mapping
 
@@ -14,10 +15,14 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
     arm_thread_state64_t
-from rpcclient.exceptions import BadReturnValueError, ArgumentError
+from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError
 from rpcclient.processes import Processes
-from rpcclient.structs.consts import SIGTERM
 from rpcclient.protocol import arch_t
+from rpcclient.structs.consts import SIGTERM, RTLD_NOW
+
+_CF_STRING_ARRAY_PREFIX_LEN = len('    "')
+_CF_STRING_ARRAY_SUFFIX_LEN = len('",')
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
@@ -150,6 +155,24 @@ class ArmThread64(Thread):
             raise BadReturnValueError('thread_set_state() failed')
 
 
+@dataclasses.dataclass
+class Region:
+    region_type: str
+    start: int
+    end: int
+    vsize: str
+    protection: str
+    protection_max: str
+    region_detail: str
+
+
+@dataclasses.dataclass
+class LoadedClass:
+    name: str
+    type_name: str
+    binary_path: str
+
+
 class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
@@ -196,6 +219,28 @@ class Process:
         """ poke at memory address """
         if self._client.symbols.vm_write(self.task, address, buf, len(buf)):
             raise BadReturnValueError('vm_write() failed')
+
+    def get_symbol_name(self, address: int) -> str:
+        if self._client.arch != arch_t.ARCH_ARM64:
+            raise NotImplementedError('implemented only on ARCH_ARM64')
+        x = self.vmu_object_identifier.objc_call('symbolForAddress:', address, return_raw=True).x
+        if x[0] == 0 and x[1] == 0:
+            raise SymbolAbsentError()
+        return self._client.symbols.CSSymbolGetName(x[0], x[1]).peek_str()
+
+    def get_symbol_address(self, name: str, lib: str) -> int:
+        return self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64
+
+    @property
+    def loaded_classes(self):
+        realized_classes = self.vmu_object_identifier.objc_call('realizedClasses')
+
+        for i in range(1, realized_classes.objc_call('count') + 1):
+            class_info = realized_classes.objc_call('classInfoForIndex:', i)
+            name = class_info.objc_call('className').py
+            type_name = class_info.objc_call('typeName').py
+            binary_path = class_info.objc_call('binaryPath').py
+            yield LoadedClass(name=name, type_name=type_name, binary_path=binary_path)
 
     @property
     def images(self) -> List[Image]:
@@ -337,6 +382,28 @@ class Process:
                 raise BadReturnValueError('proc_pidinfo(PROC_PIDTASKALLINFO) failed')
             return proc_taskallinfo.parse_stream(pti)
 
+    @property
+    def callstacks(self) -> str:
+        result = ''
+        for bt in self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task).py:
+            result += bt.objc_call('description').py + '\n'
+        return result
+
+    @cached_property
+    def vmu_proc_info(self) -> DarwinSymbol:
+        return self._client.symbols.objc_getClass('VMUProcInfo').objc_call('alloc').objc_call('initWithTask:',
+                                                                                              self.task)
+
+    @cached_property
+    def vmu_region_identifier(self) -> DarwinSymbol:
+        return self._client.symbols.objc_getClass('VMUVMRegionIdentifier').objc_call('alloc').objc_call('initWithTask:',
+                                                                                                        self.task)
+
+    @cached_property
+    def vmu_object_identifier(self) -> DarwinSymbol:
+        return self._client.symbols.objc_getClass('VMUObjectIdentifier').objc_call('alloc').objc_call('initWithTask:',
+                                                                                                      self.task)
+
     @cached_property
     def task(self) -> int:
         with self._client.safe_malloc(8) as p_task:
@@ -384,12 +451,84 @@ class Process:
     def rgid(self) -> int:
         return self.task_all_info.pbsd.pbi_rgid
 
+    @cached_property
+    def start_time(self) -> datetime:
+        if self._client.arch != arch_t.ARCH_ARM64:
+            raise NotImplementedError('implemented only on ARCH_ARM64')
+        val = self.vmu_proc_info.objc_call('startTime', return_raw=True)
+        tv_sec = val.x[0]
+        tv_nsec = val.x[1]
+        return datetime.fromtimestamp(tv_sec + (tv_nsec / (10 ** 9)))
+
+    @property
+    def environ(self) -> List[str]:
+        return self.vmu_proc_info.objc_call('envVars').py
+
+    @property
+    def arguments(self) -> List[str]:
+        return self.vmu_proc_info.objc_call('arguments').py
+
+    @property
+    def regions(self) -> List[Region]:
+        result = []
+
+        # remove the '()' wrapping the list:
+        #   (
+        #       "item1",
+        #       "item2",
+        #   )
+        buf = self.vmu_region_identifier.objc_call('regions').cfdesc.split('\n')[1:-1]
+
+        for line in buf:
+            # remove line prefix and suffix and split into words
+            line = line[_CF_STRING_ARRAY_PREFIX_LEN:-_CF_STRING_ARRAY_SUFFIX_LEN].split()
+            i = 0
+
+            region_type = line[i]
+            i += 1
+
+            while '-' not in line[i]:
+                # skip till address range
+                i += 1
+
+            address_range = line[i]
+            i += 1
+            start, end = address_range.split('-')
+            start = int(start, 0)
+            end = int(end, 0)
+            vsize = line[i].split('V=', 1)[1].split(']', 1)[0]
+            i += 1
+            protection = line[i].split('/')
+            i += 1
+
+            region_detail = None
+            if len(line) >= i + 1:
+                region_detail = line[i]
+
+            result.append(Region(region_type=region_type, start=start, end=end, vsize=vsize, protection=protection[0],
+                                 protection_max=protection[1], region_detail=region_detail))
+
+        return result
+
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
 
 
 class DarwinProcesses(Processes):
     """ manage processes """
+
+    def __init__(self, client):
+        super().__init__(client)
+        self._load_symbolication_library()
+
+    def _load_symbolication_library(self):
+        options = [
+            '/System/Library/PrivateFrameworks/Symbolication.framework/Symbolication'
+        ]
+        for option in options:
+            if self._client.dlopen(option, RTLD_NOW):
+                return
+        raise MissingLibraryError('Symbolication library isn\'t available')
 
     def get_by_pid(self, pid: int) -> Process:
         """ get process object by pid """
