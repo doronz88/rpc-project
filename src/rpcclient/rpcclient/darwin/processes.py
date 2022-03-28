@@ -398,10 +398,10 @@ class DarwinProcesses(Processes):
         raise ArgumentError(f'failed to locate process with pid: {pid}')
 
     def get_by_basename(self, name: str) -> Process:
-        """ get process object by name """
+        """ get process object by basename """
         proc_list = self.list()
         for p in proc_list:
-            if p.name == name:
+            if p.basename == name:
                 return p
         raise ArgumentError(f'failed to locate process with name: {name}')
 
