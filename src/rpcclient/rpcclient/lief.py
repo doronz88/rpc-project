@@ -1,11 +1,7 @@
-import logging
 from collections import namedtuple
 from typing import Mapping
 
-try:
-    import lief
-except ImportError:
-    logging.warning('failed to import lief. install seperately to use LIEF features')
+import lief
 
 from rpcclient.common import path_to_str
 
