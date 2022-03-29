@@ -83,13 +83,13 @@ class Class:
         """
         print(highlight(str(self), ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
 
-    def objc_call(self, sel: str, *args):
+    def objc_call(self, sel: str, *args, **kwargs):
         """
         Invoke a selector on the given class object.
         :param sel: Selector name.
         :return: whatever the selector returned as a symbol.
         """
-        return self._class_object.objc_call(sel, *args)
+        return self._class_object.objc_call(sel, *args, **kwargs)
 
     def get_method(self, name: str):
         """
