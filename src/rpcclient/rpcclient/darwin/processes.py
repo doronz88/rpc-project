@@ -1,5 +1,6 @@
 import dataclasses
 import errno
+import re
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from rpcclient.structs.consts import SIGTERM, RTLD_NOW
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
+_BACKTRACE_FRAME_REGEX = re.compile(r'\[\s*(\d+)\] (0x[0-9a-f]+)\s+\{(.+?) \+ (.+?)\} (.*)')
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
@@ -171,6 +173,54 @@ class LoadedClass:
     name: str
     type_name: str
     binary_path: str
+
+
+@dataclasses.dataclass
+class Frame:
+    depth: int
+    address: int
+    section: str
+    offset: int
+    symbol_name: str
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} [{self.depth:3}] 0x{self.address:x} ({self.section} + 0x{self.offset:x}) ' \
+               f'{self.symbol_name}>'
+
+
+@dataclasses.dataclass
+class Backtrace:
+    flavor: str
+    time_start: float
+    time_end: float
+    pid: int
+    thread_id: int
+    dispatch_queue_serial_num: int
+    frames: List[Frame]
+
+    def __init__(self, vmu_backtrace: DarwinSymbol):
+        backtrace = vmu_backtrace.objc_call('description').py
+        match = re.match(r'VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time_start>.+?) - (?P<time_end>.+?) '
+                         r'Process: (?P<pid>\d+) Thread: (?P<thread_id>.+?)  Dispatch queue serial num: '
+                         r'(?P<dispatch_queue_serial_num>\d+)\)', backtrace)
+        self.flavor = match.group('flavor')
+        self.time_start = float(match.group('time_start'))
+        self.time_end = float(match.group('time_end'))
+        self.pid = match.group('pid')
+        self.thread_id = int(match.group('thread_id'), 16)
+        self.dispatch_queue_serial_num = match.group('dispatch_queue_serial_num')
+
+        self.frames = []
+        for frame in re.findall(_BACKTRACE_FRAME_REGEX, backtrace):
+            self.frames.append(Frame(depth=int(frame[0]), address=int(frame[1], 0), section=frame[2],
+                                     offset=int(frame[3], 0), symbol_name=frame[4]))
+
+    def __repr__(self):
+        buf = f'<{self.__class__.__name__} PID: {self.pid} TID: {self.thread_id}\n'
+        for frame in self.frames:
+            buf += f'    {frame}\n'
+        buf += '>'
+        return buf
 
 
 class Process:
@@ -383,10 +433,10 @@ class Process:
             return proc_taskallinfo.parse_stream(pti)
 
     @property
-    def callstacks(self) -> str:
-        result = ''
+    def backtraces(self) -> List[Backtrace]:
+        result = []
         for bt in self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task).py:
-            result += bt.objc_call('description').py + '\n'
+            result.append(Backtrace(bt))
         return result
 
     @cached_property
