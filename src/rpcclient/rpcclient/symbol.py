@@ -2,8 +2,12 @@ import ctypes
 import os
 import struct
 from contextlib import contextmanager
+from typing import List
 
+from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN, CS_ARCH_X86, CS_MODE_64, CsInsn
 from construct import FormatField
+
+from rpcclient.protocol import arch_t
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 RETVAL_BIT_COUNT = 64
@@ -109,6 +113,14 @@ class Symbol(int):
     def tell(self):
         """ Construct compliance. """
         return self + self._offset
+
+    def disass(self, size=40) -> List[CsInsn]:
+        """ peek disassembled lines of 'size' bytes """
+        if self._client.arch == arch_t.ARCH_ARM64:
+            return list(Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN).disasm(self.peek(size), self))
+        else:
+            # assume x86_64 by default
+            return list(Cs(CS_ARCH_X86, CS_MODE_LITTLE_ENDIAN | CS_MODE_64).disasm(self.peek(size), self))
 
     @property
     def c_int64(self) -> int:
