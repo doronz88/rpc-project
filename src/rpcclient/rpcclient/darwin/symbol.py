@@ -12,6 +12,13 @@ class DarwinSymbol(Symbol):
         return self._client.symbols.objc_msgSend(self, sel, *params, **kwargs)
 
     @property
+    def region(self):
+        """ get corresponding region """
+        for region in self._client.processes.get_by_pid(self._client.pid).regions:
+            if (self >= region.start) and (self <= region.end):
+                return region
+
+    @property
     def cfdesc(self):
         """
         Get output from CFCopyDescription()
