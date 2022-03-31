@@ -45,7 +45,7 @@ class Socket(Allocated):
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
         """ recv(fd, buf, size, 0) at remote. read man for more details. """
         with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.recv(self.fd, chunk, self.CHUNK_SIZE).c_int64
+            err = self._client.symbols.recv(self.fd, chunk, size).c_int64
             if err < 0:
                 raise BadReturnValueError(f'read failed for fd: {self.fd}')
             return chunk.peek(err)
@@ -53,9 +53,9 @@ class Socket(Allocated):
     def recvall(self, size: int) -> bytes:
         """ recv at remote until all buffer is received """
         buf = b''
-        with self._client.safe_malloc(self.CHUNK_SIZE) as chunk:
+        with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.read(self.fd, chunk, self.CHUNK_SIZE).c_int64
+                err = self._client.symbols.read(self.fd, chunk, size).c_int64
                 if err <= 0:
                     raise BadReturnValueError(f'read failed for fd: {self.fd}')
                 buf += chunk.peek(err)
