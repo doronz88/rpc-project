@@ -563,7 +563,7 @@ __asm__(
     "mov x23, 0\n"
     "mov x26, 0\n"
 
-"1:\n"
+    "1:\n"
     // if (current_arg_index == argc) goto 3
     "cmp x23, x24\n"
     "beq 3f\n"
@@ -604,7 +604,7 @@ __asm__(
     // goto 1
     "b 1b\n"
 
-"2:\n"
+    "2:\n"
     // -- integer argument
 
     // x20 = argument.value
@@ -631,7 +631,7 @@ __asm__(
     // goto 1
     "b 1b\n"
 
-"3:\n"
+    "3:\n"
     // err.integer, err.double = address(params)
     "ldr x19, [sp, address]\n"
     "blr x19\n"
@@ -681,7 +681,7 @@ __asm__(
 
     "ret\n"
 
-"5:\n"
+    "5:\n"
     "mov x0, x20\n"
     "ret\n"
     "mov x1, x20\n"
@@ -699,7 +699,7 @@ __asm__(
     "mov x7, x20\n"
     "ret\n"
 
-"6:\n"
+    "6:\n"
     "fmov d0, x20\n"
     "ret\n"
     "fmov d1, x20\n"
@@ -717,7 +717,7 @@ __asm__(
     "fmov d7, x20\n"
     "ret\n"
 
-"7:\n"
+    "7:\n"
     // -- stack argument
 
     // x20 = argument.value
@@ -843,11 +843,10 @@ bool handle_peek(int sockfd)
 
 #ifdef __APPLE__
     mach_port_t task;
-    vm_offset_t data;
+    vm_offset_t data = 0;
     mach_msg_type_number_t size;
 
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-
     CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
     if (vm_read(task, cmd.address, cmd.size, &data, &size) == KERN_SUCCESS)
     {
@@ -871,6 +870,13 @@ error:
     {
         free(argv);
     }
+
+#ifdef __APPLE__
+    if (data)
+    {
+        vm_deallocate(task, data, size);
+    }
+#endif // __APPLE__
     return result;
 }
 
