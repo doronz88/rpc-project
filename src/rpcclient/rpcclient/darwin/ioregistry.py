@@ -53,7 +53,7 @@ class IOService(Allocated):
         self._client.symbols.IOObjectRelease(self._service)
 
     def __repr__(self):
-        return f'<IOService NAME:{self.name}>'
+        return f'<{self.__class__.__name__} NAME:{self.name}>'
 
 
 class BacklightControlService(IOService):
