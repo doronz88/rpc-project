@@ -61,6 +61,9 @@ class Socket(Allocated):
                 buf += chunk.peek(err)
         return buf
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__} FD:{self.fd}>'
+
 
 class Network:
     def __init__(self, client):

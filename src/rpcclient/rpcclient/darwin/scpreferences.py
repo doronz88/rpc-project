@@ -5,10 +5,11 @@ from rpcclient.exceptions import RpcClientException
 
 
 class SCPreference(Allocated):
-    def __init__(self, client, ref):
+    def __init__(self, client, preferences_id: str, ref):
         super().__init__()
         self._client = client
         self._ref = ref
+        self._preferences_id = preferences_id
 
     @property
     def keys(self) -> typing.List[str]:
@@ -82,6 +83,9 @@ class SCPreference(Allocated):
             raise RpcClientException('SCPreferencesCommitChanges failed')
         self._client.symbols.SCPreferencesSynchronize(self._ref)
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__} NAME:{self._preferences_id}>'
+
 
 class SCPreferences:
     """
@@ -100,7 +104,7 @@ class SCPreferences:
         ref = self._client.symbols.SCPreferencesCreate(0, self._client.cf('rpcserver'), self._client.cf(preferences_id))
         if not ref:
             raise RpcClientException(f'SCPreferencesCreate failed for: {preferences_id}')
-        return SCPreference(self._client, ref)
+        return SCPreference(self._client, preferences_id, ref)
 
     def get_keys(self, preferences_id: str) -> typing.List[str]:
         """ get all keys from given preferences_id """

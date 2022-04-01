@@ -87,6 +87,9 @@ class ScandirIterator(Allocated):
     def __iter__(self) -> Iterator[DirEntry]:
         raise NotImplementedError()
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__} PATH:{self.path} DIRP:{self._dirp}>'
+
 
 class File(Allocated):
     CHUNK_SIZE = 1024
@@ -150,6 +153,9 @@ class File(Allocated):
                     raise BadReturnValueError(f'read failed for fd: {self.fd}')
                 buf += chunk.peek(err)
         return buf
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} FD:{self.fd}>'
 
 
 class Fs:
