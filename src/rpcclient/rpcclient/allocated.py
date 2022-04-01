@@ -13,12 +13,6 @@ class Allocated:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.deallocate()
 
-    def __del__(self):
-        try:
-            self.deallocate()
-        except Exception:
-            pass
-
     @abstractmethod
     def _deallocate(self):
         pass
