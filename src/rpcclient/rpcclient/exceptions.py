@@ -71,3 +71,8 @@ class PermissionDeniedError(RpcClientException):
 class NoEntitlementsError(RpcClientException):
     """ binary contains no entitlements """
     pass
+
+
+class ElementNotFoundError(RpcClientException):
+    """ Failed to find element """
+    pass

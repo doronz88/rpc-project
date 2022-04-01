@@ -8,6 +8,7 @@ from cached_property import cached_property
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
+from rpcclient.darwin.accessiblity import Accessibility
 from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
 from rpcclient.darwin.core_graphics import CoreGraphics
@@ -65,6 +66,7 @@ class DarwinClient(Client):
         self.lief = DarwinLief(self)
         self.bluetooth = Bluetooth(self)
         self.core_graphics = CoreGraphics(self)
+        self.accessibility = Accessibility(self)
         self.type_decoders = {
             self.symbols.CFNullGetTypeID(): self._decode_cfnull,
             self.symbols.CFStringGetTypeID(): self._decode_cfstr,
