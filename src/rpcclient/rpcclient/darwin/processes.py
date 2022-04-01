@@ -15,7 +15,7 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
-    arm_thread_state64_t
+    arm_thread_state64_t, PROX_FDTYPE_KQUEUE
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError
 from rpcclient.processes import Processes
@@ -32,6 +32,11 @@ FdStruct = namedtuple('FdStruct', 'fd struct')
 @dataclasses.dataclass()
 class Fd:
     fd: int
+
+
+@dataclasses.dataclass()
+class KQueueFd(Fd):
+    pass
 
 
 @dataclasses.dataclass()
@@ -341,6 +346,9 @@ class Process:
             if fd.proc_fdtype == PROX_FDTYPE_VNODE:
                 result.append(FileFd(fd=fd.proc_fd, path=parsed.pvip.vip_path))
 
+            elif fd.proc_fdtype == PROX_FDTYPE_KQUEUE:
+                result.append(KQueueFd(fd=fd.proc_fd))
+
             elif fd.proc_fdtype == PROX_FDTYPE_PIPE:
                 result.append(PipeFd(fd=fd.proc_fd))
 
@@ -393,6 +401,9 @@ class Process:
                         result.append(
                             FdStruct(fd=fd,
                                      struct=vnode_fdinfowithpath.parse(vi_buf.peek(vnode_fdinfowithpath.sizeof()))))
+
+                    elif fd.proc_fdtype == PROX_FDTYPE_KQUEUE:
+                        result.append(FdStruct(fd=fd, struct=None))
 
                     elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
                         # socket
