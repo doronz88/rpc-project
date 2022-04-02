@@ -29,8 +29,16 @@ class Socket(Allocated):
         if fd < 0:
             raise BadReturnValueError(f'failed to close fd: {fd}')
 
-    def send(self, buf: bytes, size: int) -> int:
-        """ send(fd, buf, size, 0) at remote. read man for more details. """
+    def send(self, buf: bytes, size: int = None) -> int:
+        """
+        send(fd, buf, size, 0) at remote. read man for more details.
+
+        :param buf: buffer to send
+        :param size: If None, use len(buf)
+        :return: how many bytes were sent
+        """
+        if size is None:
+            size = len(buf)
         n = self._client.symbols.send(self.fd, buf, size, 0).c_int64
         if n < 0:
             raise BadReturnValueError(f'failed to send on fd: {self.fd}')
