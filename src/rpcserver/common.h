@@ -37,5 +37,6 @@ bool recvall_ext(int sockfd, char *buf, size_t len, bool *disconnected);
 bool recvall(int sockfd, char *buf, size_t len);
 bool sendall(int sockfd, const char *buf, size_t len);
 bool writeall(int fd, const char *buf, size_t len);
+int tcp_connect(sa_family_t family, const char *ipstr, int port);
 
 #endif // __COMMON_H_

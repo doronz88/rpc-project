@@ -4,8 +4,11 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <fcntl.h>
 #include <execinfo.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "common.h"
 
@@ -14,6 +17,8 @@ bool g_syslog = false;
 FILE *g_file = NULL;
 
 #define BT_BUF_SIZE (100)
+#define MAX_CONNECT_RETRY_ATTEMPTS (5)
+#define CONNECT_RETRY_SLEEP (5)
 
 void print_backtrace()
 {
@@ -28,7 +33,7 @@ void print_backtrace()
         would produce similar output to the following: */
 
     strings = backtrace_symbols(buffer, nptrs);
-    if (strings == NULL) 
+    if (strings == NULL)
     {
         perror("backtrace_symbols");
         return;
@@ -146,4 +151,75 @@ bool writeall(int fd, const char *buf, size_t len)
 
 error:
     return false;
+}
+
+int connect_with_retry(int fd, const struct sockaddr *servaddr, int address_size)
+{
+    int saved_errno;
+    for (int attempts = 0; attempts < MAX_CONNECT_RETRY_ATTEMPTS; ++attempts)
+    {
+        int res = connect(fd, servaddr, address_size);
+        if (0 == res)
+        {
+            return 0;
+        }
+
+        if (EADDRNOTAVAIL != errno)
+        {
+            return -1;
+        }
+
+        if (MAX_CONNECT_RETRY_ATTEMPTS != (attempts + 1))
+        {
+            TRACE("No available sockets, Waiting %d seconds for OS to clear closed fds. Attempt: %d", CONNECT_RETRY_SLEEP, attempts + 1);
+            sleep(CONNECT_RETRY_SLEEP);
+        }
+    }
+
+    return -1;
+}
+
+int tcp_connect(sa_family_t family, const char *ipstr, int port)
+{
+    int sockfd = -1;
+    int result = -1;
+
+    sockfd = socket(family, SOCK_STREAM, 0);
+    CHECK(sockfd != -1);
+
+    switch (family)
+    {
+    case AF_INET:
+    {
+        struct sockaddr_in servaddr;
+        servaddr.sin_family = family;
+        servaddr.sin_addr.s_addr = inet_addr(ipstr);
+        servaddr.sin_port = htons(port);
+        CHECK(0 == connect_with_retry(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)));
+        break;
+    }
+    case AF_INET6:
+    {
+        struct sockaddr_in6 servaddr;
+        servaddr.sin6_family = family;
+        CHECK(inet_pton(family, ipstr, &servaddr.sin6_addr) == 1);
+        servaddr.sin6_port = htons(port);
+        CHECK(0 == connect_with_retry(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)));
+        break;
+    }
+    }
+
+    CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
+    result = sockfd;
+
+error:
+    if (-1 == result)
+    {
+        if (sockfd != -1)
+        {
+            close(sockfd);
+        }
+    }
+
+    return result;
 }

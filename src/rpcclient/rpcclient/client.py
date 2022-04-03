@@ -11,19 +11,22 @@ from select import select
 from socket import socket
 
 import IPython
-from construct import Int64sl, Float64l, Float32l, Float16l
+from construct import Float64l, Float32l, Float16l
 from traitlets.config import Config
 
-from rpcclient.darwin.structs import pid_t, exitcode_t
-from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
+from rpcclient.client_connection import ClientConnection
+from rpcclient.darwin.structs import exitcode_t
+from rpcclient.exceptions import ArgumentError, SymbolAbsentError, ServerDiedError, \
     InvalidServerVersionMagicError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
-    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
-    protocol_handshake_t, call_response_t_size
+    SERVER_MAGIC_VERSION, argument_type_t, arch_t, \
+    protocol_handshake_t
+from rpcclient.rpc_commands import RPCDlopenCommand, RPCDlsymCommand, RPCDlcloseCommand, RPCPeekCommand, RPCPokeCommand, \
+    RPCGetDummyBlockCommand, RPCExecuteCommand, RPCCallCommand
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -41,7 +44,6 @@ io_or_str = typing.TypeVar('io_or_str', typing.IO, str)
 
 SpawnResult = namedtuple('SpawnResult', 'error pid stdout')
 
-INVALID_PID = 0xffffffff
 CHUNK_SIZE = 1024
 
 USAGE = '''
@@ -67,6 +69,7 @@ class Client:
         self._hostname = hostname
         self._port = port
         self._sock = sock
+        self._client_connection = ClientConnection(sock)
         self._old_settings = None
         self._endianness = '<'
         self._sysname = sysname
@@ -108,35 +111,17 @@ class Client:
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLOPEN,
-            'data': {'filename': filename, 'mode': mode},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return self.symbol(err)
+        return self.symbol(self._client_connection.send_command(RPCDlopenCommand(filename, mode)))
 
     def dlclose(self, lib: int):
         """ call dlclose() at remote and return its handle. see the man page for more details. """
         lib &= 0xffffffffffffffff
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLCLOSE,
-            'data': {'lib': lib},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
+        return self._client_connection.send_command(RPCDlcloseCommand(lib))
 
     def dlsym(self, lib: int, symbol_name: str):
         """ call dlsym() at remote and return its handle. see the man page for more details. """
         lib &= 0xffffffffffffffff
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLSYM,
-            'data': {'lib': lib, 'symbol_name': symbol_name},
-        })
-        self._sock.sendall(message)
-        err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
+        return self._client_connection.send_command(RPCDlsymCommand(lib, symbol_name))
 
     def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False,
              return_float16=False, return_raw=False) -> Symbol:
@@ -174,13 +159,7 @@ class Client:
             else:
                 raise ArgumentError(f'invalid parameter type: {arg}')
 
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_CALL,
-            'data': {'address': address, 'argv': fixed_argv},
-        })
-        self._sock.sendall(message)
-
-        response = call_response_t.parse(self._recvall(call_response_t_size))
+        response = self._client_connection.send_command(RPCCallCommand(address, fixed_argv))
 
         for f in free_list:
             self.symbols.free(f)
@@ -209,35 +188,15 @@ class Client:
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek data at given address """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_PEEK,
-            'data': {'address': address, 'size': size},
-        })
-        self._sock.sendall(message)
-        reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
-        if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
-            raise ArgumentError(f'failed to read {size} bytes from {address}')
-        return self._recvall(size)
+        return self._client_connection.send_command(RPCPeekCommand(address, size))
 
     def poke(self, address: int, data: bytes):
         """ poke data at given address """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_POKE,
-            'data': {'address': address, 'size': len(data), 'data': data},
-        })
-        self._sock.sendall(message)
-        reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
-        if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
-            raise ArgumentError(f'failed to write {len(data)} bytes to {address}')
+        self._client_connection.send_command(RPCPokeCommand(address, data))
 
     def get_dummy_block(self) -> Symbol:
         """ get an address for a stub block containing nothing """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_GET_DUMMY_BLOCK,
-            'data': None,
-        })
-        self._sock.sendall(message)
-        return self.symbol(dummy_block_t.parse(self._recvall(8)))
+        return self.symbol(self._client_connection.send_command(RPCGetDummyBlockCommand()))
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
               stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:
@@ -258,37 +217,48 @@ class Client:
         if envp is None:
             envp = self.DEFAULT_ENVP
 
-        try:
-            pid = self._execute(argv, envp, background=background)
-        except SpawnError:
-            # depends on where the error occurred, the socket might be closed
-            raise
+        def execution_loop_function(server_socket, read_function, write_function):
+            fds = []
+            if hasattr(stdin, 'fileno'):
+                fds.append(stdin)
+            else:
+                # assume it's just raw bytes
+                write_function(stdin.encode())
+            fds.append(server_socket)
 
-        logging.info(f'shell process started as pid: {pid}')
+            while True:
+                rlist, _, _ = select(fds, [], [])
 
-        if background:
-            return SpawnResult(error=None, pid=pid, stdout=None)
+                for fd in rlist:
+                    if fd == sys.stdin:
+                        if stdin == sys.stdin:
+                            buf = os.read(stdin.fileno(), CHUNK_SIZE)
+                        else:
+                            buf = stdin.read(CHUNK_SIZE)
+                        write_function(buf)
+                    elif fd == server_socket:
+                        try:
+                            data, err = read_function()
+                        except ConnectionResetError:
+                            print('Bye. 👋')
+                            return
+
+                        if data is not None:
+                            stdout.write(data)
+                            stdout.flush()
+
+                        if err is not None:
+                            return err
+
+        pre_func = None
+        post_func = None
 
         if raw_tty:
-            self._prepare_terminal()
-        try:
-            # the socket must be non-blocking for using select()
-            self._sock.setblocking(False)
-            error = self._execution_loop(stdin, stdout)
-        except Exception:  # noqa: E722
-            self._sock.setblocking(True)
-            # this is important to really catch every exception here, even exceptions not inheriting from Exception
-            # so the controlling terminal will remain working with its previous settings
-            if raw_tty:
-                self._restore_terminal()
-            raise
+            pre_func = self._prepare_terminal
+            post_func = self._restore_terminal
 
-        if raw_tty:
-            self._restore_terminal()
-
-        # TODO: we should be able to return here without the need to reconnect but from some reason the
-        # socket goes out of sync when doing so
-        self.reconnect()
+        pid, error = self._client_connection.send_command(
+            RPCExecuteCommand(argv, envp, background, execution_loop_function, pre_func, post_func))
 
         return SpawnResult(error=error, pid=pid, stdout=stdout)
 
@@ -423,17 +393,6 @@ class Client:
 
         if handshake.magic != SERVER_MAGIC_VERSION:
             raise InvalidServerVersionMagicError()
-
-    def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_EXEC,
-            'data': {'background': background, 'argv': argv, 'envp': envp},
-        })
-        self._sock.sendall(message)
-        pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))
-        if pid == INVALID_PID:
-            raise SpawnError(f'failed to spawn: {argv}')
-        return pid
 
     def _restore_terminal(self):
         if not tty_support:

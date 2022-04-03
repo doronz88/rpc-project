@@ -139,8 +139,15 @@ typedef struct
 typedef struct
 {
     u32 magic;
+    u32 port;
     u32 cmd_type;
 } protocol_message_t;
+
+typedef struct
+{
+    u32 magic;
+    u32 cmd_type;
+} reply_protocol_message_t;
 
 typedef struct
 {
@@ -235,7 +242,7 @@ error:
 
 bool send_reply(int sockfd, cmd_type_t type)
 {
-    protocol_message_t protocol_message = {.magic = MAGIC, .cmd_type = type};
+    reply_protocol_message_t protocol_message = {.magic = MAGIC, .cmd_type = type};
     CHECK(sendall(sockfd, (char *)&protocol_message, sizeof(protocol_message)));
     return true;
 error:
@@ -255,7 +262,7 @@ void thread_waitpid(pid_t pid)
     waitpid(pid, &err, 0);
 }
 
-bool handle_exec(int sockfd)
+bool handle_exec(int mainfd, int sockfd)
 {
     u8 byte;
     pthread_t thread = 0;
@@ -269,9 +276,9 @@ bool handle_exec(int sockfd)
     u32 envc;
     u8 background;
 
-    CHECK(recvall(sockfd, (char *)&background, sizeof(background)));
+    CHECK(recvall(mainfd, (char *)&background, sizeof(background)));
 
-    CHECK(recvall(sockfd, (char *)&argc, sizeof(argc)));
+    CHECK(recvall(mainfd, (char *)&argc, sizeof(argc)));
     CHECK(argc > 0);
 
     // +1 for additional NULL at end of list
@@ -282,18 +289,18 @@ bool handle_exec(int sockfd)
     for (u32 i = 0; i < argc; ++i)
     {
         u32 len;
-        CHECK(recvall(sockfd, (char *)&len, sizeof(len)));
+        CHECK(recvall(mainfd, (char *)&len, sizeof(len)));
 
         // +1 for additional \0 at end of each string
         size_t str_size = (len + 1) * sizeof(char);
         argv[i] = malloc(str_size * sizeof(char));
         CHECK(argv[i] != NULL);
 
-        CHECK(recvall(sockfd, argv[i], len * sizeof(char)));
+        CHECK(recvall(mainfd, argv[i], len * sizeof(char)));
         argv[i][len] = '\0';
     }
 
-    CHECK(recvall(sockfd, (char *)&envc, sizeof(envc)));
+    CHECK(recvall(mainfd, (char *)&envc, sizeof(envc)));
 
     // +1 for additional NULL at end of list
     size_t envp_size = (envc + 1) * sizeof(char *);
@@ -303,14 +310,14 @@ bool handle_exec(int sockfd)
     for (u32 i = 0; i < envc; ++i)
     {
         u32 len;
-        CHECK(recvall(sockfd, (char *)&len, sizeof(len)));
+        CHECK(recvall(mainfd, (char *)&len, sizeof(len)));
 
         // +1 for additional \0 at end of each string
         size_t str_size = (len + 1) * sizeof(char);
         envp[i] = malloc(str_size * sizeof(char));
         CHECK(envp[i] != NULL);
 
-        CHECK(recvall(sockfd, envp[i], len * sizeof(char)));
+        CHECK(recvall(mainfd, envp[i], len * sizeof(char)));
         envp[i][len] = '\0';
     }
 
@@ -438,11 +445,11 @@ error:
     return success;
 }
 
-bool handle_dlopen(int sockfd)
+bool handle_dlopen(int mainfd, int sockfd)
 {
     int result = false;
     cmd_dlopen_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
 
     u64 err = (u64)dlopen(cmd.filename, cmd.mode);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
@@ -453,11 +460,11 @@ error:
     return result;
 }
 
-bool handle_dlclose(int sockfd)
+bool handle_dlclose(int mainfd, int sockfd)
 {
     int result = false;
     cmd_dlclose_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
 
     u64 err = (u64)dlclose((void *)cmd.lib);
     CHECK(sendall(sockfd, (char *)&err, sizeof(err)));
@@ -468,11 +475,11 @@ error:
     return result;
 }
 
-bool handle_dlsym(int sockfd)
+bool handle_dlsym(int mainfd, int sockfd)
 {
     int result = false;
     cmd_dlsym_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
 
     u64 ptr = (u64)dlsym((void *)cmd.lib, cmd.symbol_name);
     CHECK(sendall(sockfd, (char *)&ptr, sizeof(ptr)));
@@ -808,17 +815,17 @@ error:
 }
 #endif // __ARM_ARCH_ISA_A64
 
-bool handle_call(int sockfd)
+bool handle_call(int mainfd, int sockfd)
 {
     TRACE("enter");
     s64 err = 0;
     int result = false;
     argument_t *argv = NULL;
     cmd_call_t cmd;
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
 
     argv = (argument_t *)malloc(sizeof(argument_t) * cmd.argc);
-    CHECK(recvall(sockfd, (char *)argv, sizeof(argument_t) * cmd.argc));
+    CHECK(recvall(mainfd, (char *)argv, sizeof(argument_t) * cmd.argc));
 
     TRACE("address: %p", cmd.address);
     CHECK(call_function(sockfd, cmd.address, cmd.argc, (argument_t **)cmd.argv));
@@ -833,7 +840,7 @@ error:
     return result;
 }
 
-bool handle_peek(int sockfd)
+bool handle_peek(int mainfd, int sockfd)
 {
     TRACE("enter");
     s64 err = 0;
@@ -846,7 +853,7 @@ bool handle_peek(int sockfd)
     vm_offset_t data = 0;
     mach_msg_type_number_t size;
 
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
     CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
     if (vm_read(task, cmd.address, cmd.size, &data, &size) == KERN_SUCCESS)
     {
@@ -880,7 +887,7 @@ error:
     return result;
 }
 
-bool handle_poke(int sockfd)
+bool handle_poke(int mainfd, int sockfd)
 {
     TRACE("enter");
     s64 err = 0;
@@ -892,12 +899,12 @@ bool handle_poke(int sockfd)
 #ifdef __APPLE__
     mach_port_t task;
     CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
-    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    CHECK(recvall(mainfd, (char *)&cmd, sizeof(cmd)));
 
     // TODO: consider splitting recieve chunks
     data = malloc(cmd.size);
     CHECK(data);
-    CHECK(recvall(sockfd, data, cmd.size));
+    CHECK(recvall(mainfd, data, cmd.size));
 
     if (vm_write(task, cmd.address, (vm_offset_t)data, cmd.size) == KERN_SUCCESS)
     {
@@ -950,10 +957,21 @@ bool handle_get_dummy_block(int sockfd)
 
 #endif // __APPLE__
 
-void handle_client(int sockfd)
+typedef struct
+{
+    int sockfd;
+    socklen_t address_size;
+    struct sockaddr_storage address;
+    char ipstr[INET6_ADDRSTRLEN];
+} handle_client_params_t;
+
+void handle_client(handle_client_params_t *client_params)
 {
     bool disconnected = false;
-    TRACE("enter. fd: %d", sockfd);
+    TRACE("enter. fd: %d", client_params->sockfd);
+
+    // will be used by the client for back-connect
+    int fd = -1;
 
     struct utsname uname_buf;
     CHECK(0 == uname(&uname_buf));
@@ -967,55 +985,60 @@ void handle_client(int sockfd)
     handshake.arch = ARCH_ARM64;
 #endif
 
-    CHECK(sendall(sockfd, (char *)&handshake, sizeof(handshake)));
+    CHECK(sendall(client_params->sockfd, (char *)&handshake, sizeof(handshake)));
 
     while (true)
     {
         protocol_message_t cmd;
         TRACE("recv");
-        if (!recvall_ext(sockfd, (char *)&cmd, sizeof(cmd), &disconnected))
+        if (!recvall_ext(client_params->sockfd, (char *)&cmd, sizeof(cmd), &disconnected))
         {
             goto error;
         }
         CHECK(cmd.magic == MAGIC);
 
-        TRACE("client fd: %d, cmd type: %d", sockfd, cmd.cmd_type);
+        if (cmd.port)
+        {
+            fd = tcp_connect(client_params->address.ss_family, client_params->ipstr, cmd.port);
+            CHECK(fd != -1);
+        }
+        TRACE("client fd: %d, port: %d, cmd type: %d, client-reponse-fd: %d", client_params->sockfd, cmd.port, cmd.cmd_type, fd);
 
         switch (cmd.cmd_type)
         {
         case CMD_EXEC:
         {
-            handle_exec(sockfd);
+            handle_exec(client_params->sockfd, fd);
             break;
         }
         case CMD_DLOPEN:
         {
-            handle_dlopen(sockfd);
+            handle_dlopen(client_params->sockfd, fd);
             break;
         }
         case CMD_DLSYM:
         {
-            handle_dlsym(sockfd);
+            handle_dlsym(client_params->sockfd, fd);
             break;
         }
         case CMD_CALL:
         {
-            handle_call(sockfd);
+            handle_call(client_params->sockfd, fd);
             break;
         }
         case CMD_PEEK:
         {
-            handle_peek(sockfd);
+            handle_peek(client_params->sockfd, fd);
             break;
         }
         case CMD_POKE:
         {
-            handle_poke(sockfd);
+            handle_poke(client_params->sockfd, fd);
             break;
         }
         case CMD_GET_DUMMY_BLOCK:
         {
-            handle_get_dummy_block(sockfd);
+            handle_get_dummy_block(fd);
             break;
         }
         case CMD_CLOSE:
@@ -1028,24 +1051,29 @@ void handle_client(int sockfd)
             TRACE("unknown cmd");
         }
         }
+
+        if (fd != -1)
+        {
+            close(fd);
+            fd = -1;
+        }
     }
 
 error:
-    if (!disconnected)
+    if (fd != -1)
     {
-        // if client was disconnected, then os has already closed this fd
-        TRACE("close client fd: %d", sockfd);
-        if (0 != close(sockfd))
-        {
-            perror("close");
-        }
+        close(fd);
     }
+
+    close(client_params->sockfd);
+    free(client_params);
 }
 
 int main(int argc, const char *argv[])
 {
     int opt;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
+    handle_client_params_t *client_params = NULL;
 
     while ((opt = getopt(argc, (char *const *)argv, "hp:o:")) != -1)
     {
@@ -1123,17 +1151,19 @@ int main(int argc, const char *argv[])
 
     while (1)
     {
-        struct sockaddr_storage their_addr; // connector's address information
-        socklen_t addr_size = sizeof(their_addr);
-        int client_fd = accept(server_fd, (struct sockaddr *)&their_addr, &addr_size);
-        CHECK(client_fd >= 0);
-        CHECK(-1 != fcntl(client_fd, F_SETFD, FD_CLOEXEC));
+        // allocate client parameters to pass to client's thread later on
+        client_params = (handle_client_params_t *)malloc(sizeof(handle_client_params_t));
+        CHECK(client_params != NULL);
+        memset(client_params, 0, sizeof(*client_params));
 
-        char ipstr[INET6_ADDRSTRLEN];
-        CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
-        TRACE("Got a connection from %s [%d]", ipstr, client_fd);
+        client_params->address_size = sizeof(client_params->address);
+        client_params->sockfd = accept(server_fd, (struct sockaddr *)&(client_params->address), &client_params->address_size);
+        CHECK(client_params->sockfd >= 0);
+        CHECK(-1 != fcntl(client_params->sockfd, F_SETFD, FD_CLOEXEC));
+        CHECK(inet_ntop(client_params->address.ss_family, get_in_addr((struct sockaddr *)&client_params->address), client_params->ipstr, sizeof(client_params->ipstr)));
+        TRACE("Got a connection from %s [%d]", client_params->ipstr, client_params->sockfd);
 
-        CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))handle_client, (void *)(long)client_fd));
+        CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))handle_client, (void *)(long)client_params));
     }
 
 error:

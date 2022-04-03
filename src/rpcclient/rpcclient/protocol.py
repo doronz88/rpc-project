@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union
+    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union, Int16ul, Default
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -20,7 +20,6 @@ arch_t = Enum(Int32ul,
               ARCH_UNKNOWN=0,
               ARCH_ARM64=1,
               )
-
 
 DEFAULT_PORT = 5910
 SERVER_MAGIC_VERSION = 0x88888801
@@ -80,6 +79,7 @@ cmd_poke_t = Struct(
 
 protocol_message_t = Struct(
     'magic' / Const(MAGIC, Int32ul),
+    'port' / Default(Int32ul, 0),
     'cmd_type' / cmd_type_t,
     'data' / Switch(this.cmd_type, {
         cmd_type_t.CMD_EXEC: cmd_exec_t,

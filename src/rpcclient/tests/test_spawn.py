@@ -42,7 +42,7 @@ def test_spawn_background_sanity(client):
 
     # when running in background, no error is returned
     assert spawn_result.error is None
-    assert spawn_result.stdout is None
+    assert spawn_result.stdout.tell() == 0
 
     # instead, we can just make sure it ran by sending it a kill and don't fail
     client.processes.kill(spawn_result.pid)
