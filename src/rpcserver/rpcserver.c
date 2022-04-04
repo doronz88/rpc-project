@@ -1031,15 +1031,7 @@ void handle_client(int sockfd)
     }
 
 error:
-    if (!disconnected)
-    {
-        // if client was disconnected, then os has already closed this fd
-        TRACE("close client fd: %d", sockfd);
-        if (0 != close(sockfd))
-        {
-            perror("close");
-        }
-    }
+    close(sockfd);
 }
 
 int main(int argc, const char *argv[])
