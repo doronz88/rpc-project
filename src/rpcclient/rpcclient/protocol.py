@@ -1,5 +1,5 @@
 from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union
+    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union, Hex
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,
@@ -28,7 +28,7 @@ MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 
 protocol_handshake_t = Struct(
-    'magic' / Int32ul,
+    'magic' / Hex(Int32ul),
     'arch' / arch_t,
     'sysname' / PaddedString(256, 'utf8'),
 )
@@ -79,7 +79,7 @@ cmd_poke_t = Struct(
 )
 
 protocol_message_t = Struct(
-    'magic' / Const(MAGIC, Int32ul),
+    'magic' / Const(MAGIC, Hex(Int32ul)),
     'cmd_type' / cmd_type_t,
     'data' / Switch(this.cmd_type, {
         cmd_type_t.CMD_EXEC: cmd_exec_t,

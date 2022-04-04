@@ -32,7 +32,7 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
     handshake = protocol_handshake_t.parse(recvall(sock, protocol_handshake_t.sizeof()))
 
     if handshake.magic != SERVER_MAGIC_VERSION:
-        raise InvalidServerVersionMagicError()
+        raise InvalidServerVersionMagicError(f'got {handshake.magic:x} instead of {SERVER_MAGIC_VERSION:x}')
 
     sysname = handshake.sysname.lower()
     arch = handshake.arch
