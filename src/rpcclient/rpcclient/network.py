@@ -47,14 +47,20 @@ class Socket(Allocated):
             if self._client.errno == EPIPE:
                 self.deallocate()
             elif self._client.errno == EAGAIN:
-                raise pysock.timeout()
+                raise TimeoutError()
             raise BadReturnValueError(f'failed to send on fd: {self.fd}')
         return n
 
     def sendall(self, buf: bytes):
         """ continue call send() until """
         while buf:
-            err = self.send(buf, len(buf))
+            try:
+                err = self.send(buf, len(buf))
+            except TimeoutError:
+                if self._blocking:
+                    # when timeout, keep retrying till whole buffer is sent
+                    continue
+                raise
             buf = buf[err:]
 
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
@@ -65,7 +71,7 @@ class Socket(Allocated):
         :return: received bytes
         """
         with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.recv(self.fd, chunk, size).c_int64
+            err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
             if err < 0:
                 if self._client.errno == EAGAIN:
                     raise TimeoutError()
@@ -77,31 +83,31 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.recv(self.fd, chunk, size).c_int64
+                err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
                 if err < 0:
                     if self._client.errno == EAGAIN:
+                        if self._blocking:
+                            # when timeout, keep retrying till whole buffer is received
+                            continue
                         raise TimeoutError()
                     raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
                 buf += chunk.peek(err)
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
-        with self._client.safe_malloc(len(option_value)) as option:
-            option.poke(option_value)
-            if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option, len(option_value)):
-                raise BadReturnValueError(f'setsockopt() failed: {self._client.last_error}')
+        if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)):
+            raise BadReturnValueError(f'setsockopt() failed: {self._client.last_error}')
 
     def settimeout(self, seconds: int):
         self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
         self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
-        self.setblocking(seconds == 0)
 
     def setblocking(self, blocking: bool):
         opts = self._client.symbols.fcntl(self.fd, F_GETFL, 0).c_uint64
-        if blocking:
-            opts &= ~O_NONBLOCK
+        if not blocking:
+            opts |= O_NONBLOCK
         else:
-            opts |= ~O_NONBLOCK
+            opts &= ~O_NONBLOCK
         if 0 != self._client.symbols.fcntl(self.fd, F_SETFL, opts):
             raise BadReturnValueError(f'fcntl() failed: {self._client.last_error}')
         self._blocking = blocking
@@ -113,7 +119,7 @@ class Socket(Allocated):
         return not bool(self._client.symbols.fcntl(self.fd, F_GETFL, 0) & O_NONBLOCK)
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} FD:{self.fd}>'
+        return f'<{self.__class__.__name__} FD:{self.fd} BLOCKING:{self._blocking}>'
 
 
 class Network:
