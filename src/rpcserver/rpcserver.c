@@ -1034,6 +1034,11 @@ error:
     close(sockfd);
 }
 
+void signal_handler(int sig)
+{
+    TRACE("entered with signal code: %d", sig);
+}
+
 int main(int argc, const char *argv[])
 {
     int opt;
@@ -1078,6 +1083,8 @@ int main(int argc, const char *argv[])
         }
         }
     }
+
+    signal(SIGPIPE, signal_handler);
 
     int err = 0;
     int server_fd = -1;

@@ -115,7 +115,7 @@ bool sendall(int sockfd, const char *buf, size_t len)
 
     while (len > 0)
     {
-        bytes = send(sockfd, buf + total_bytes, len, 0);
+        bytes = send(sockfd, buf + total_bytes, len, MSG_NOSIGNAL);
         CHECK(bytes != -1);
 
         total_bytes += bytes;

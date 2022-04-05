@@ -2,9 +2,11 @@ import socket as pysock
 import typing
 from collections import namedtuple
 
-from rpcclient.exceptions import BadReturnValueError
 from rpcclient.allocated import Allocated
-from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
+from rpcclient.darwin.structs import timeval
+from rpcclient.exceptions import BadReturnValueError
+from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, MSG_NOSIGNAL, \
+    EPIPE, EAGAIN, F_GETFL, O_NONBLOCK, F_SETFL
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -22,6 +24,7 @@ class Socket(Allocated):
         super().__init__()
         self._client = client
         self.fd = fd
+        self._blocking = self._getblocking()
 
     def _deallocate(self):
         """ close(fd) at remote. read man for more details. """
@@ -39,8 +42,12 @@ class Socket(Allocated):
         """
         if size is None:
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, 0).c_int64
+        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL).c_int64
         if n < 0:
+            if self._client.errno == EPIPE:
+                self.deallocate()
+            elif self._client.errno == EAGAIN:
+                raise pysock.timeout()
             raise BadReturnValueError(f'failed to send on fd: {self.fd}')
         return n
 
@@ -51,11 +58,18 @@ class Socket(Allocated):
             buf = buf[err:]
 
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
-        """ recv(fd, buf, size, 0) at remote. read man for more details. """
+        """
+        recv(fd, buf, size, 0) at remote. read man for more details.
+
+        :param size: chunk size
+        :return: received bytes
+        """
         with self._client.safe_malloc(size) as chunk:
             err = self._client.symbols.recv(self.fd, chunk, size).c_int64
             if err < 0:
-                raise BadReturnValueError(f'read failed for fd: {self.fd}')
+                if self._client.errno == EAGAIN:
+                    raise TimeoutError()
+                raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
             return chunk.peek(err)
 
     def recvall(self, size: int) -> bytes:
@@ -63,11 +77,40 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.read(self.fd, chunk, size).c_int64
-                if err <= 0:
-                    raise BadReturnValueError(f'read failed for fd: {self.fd}')
+                err = self._client.symbols.recv(self.fd, chunk, size).c_int64
+                if err < 0:
+                    if self._client.errno == EAGAIN:
+                        raise TimeoutError()
+                    raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
                 buf += chunk.peek(err)
         return buf
+
+    def setsockopt(self, level: int, option_name: int, option_value: bytes):
+        with self._client.safe_malloc(len(option_value)) as option:
+            option.poke(option_value)
+            if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option, len(option_value)):
+                raise BadReturnValueError(f'setsockopt() failed: {self._client.last_error}')
+
+    def settimeout(self, seconds: int):
+        self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
+        self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
+        self.setblocking(seconds == 0)
+
+    def setblocking(self, blocking: bool):
+        opts = self._client.symbols.fcntl(self.fd, F_GETFL, 0).c_uint64
+        if blocking:
+            opts &= ~O_NONBLOCK
+        else:
+            opts |= ~O_NONBLOCK
+        if 0 != self._client.symbols.fcntl(self.fd, F_SETFL, opts):
+            raise BadReturnValueError(f'fcntl() failed: {self._client.last_error}')
+        self._blocking = blocking
+
+    def getblocking(self) -> bool:
+        return self._blocking
+
+    def _getblocking(self) -> bool:
+        return not bool(self._client.symbols.fcntl(self.fd, F_GETFL, 0) & O_NONBLOCK)
 
     def __repr__(self):
         return f'<{self.__class__.__name__} FD:{self.fd}>'
