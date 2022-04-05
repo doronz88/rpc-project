@@ -2,9 +2,10 @@ import socket as pysock
 import typing
 from collections import namedtuple
 
-from rpcclient.exceptions import BadReturnValueError
 from rpcclient.allocated import Allocated
-from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM
+from rpcclient.exceptions import BadReturnValueError
+from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, MSG_NOSIGNAL, \
+    EPIPE
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -39,8 +40,10 @@ class Socket(Allocated):
         """
         if size is None:
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, 0).c_int64
+        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL).c_int64
         if n < 0:
+            if self._client.errno == EPIPE:
+                self.deallocate()
             raise BadReturnValueError(f'failed to send on fd: {self.fd}')
         return n
 
@@ -63,7 +66,7 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.read(self.fd, chunk, size).c_int64
+                err = self._client.symbols.recv(self.fd, chunk, size).c_int64
                 if err <= 0:
                     raise BadReturnValueError(f'read failed for fd: {self.fd}')
                 buf += chunk.peek(err)
