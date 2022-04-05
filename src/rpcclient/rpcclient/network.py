@@ -6,7 +6,7 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, MSG_NOSIGNAL, \
-    EPIPE, EAGAIN, F_GETFL, O_NONBLOCK, F_SETFL
+    EPIPE, F_GETFL, O_NONBLOCK, F_SETFL
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -46,21 +46,13 @@ class Socket(Allocated):
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
-            elif self._client.errno == EAGAIN:
-                raise TimeoutError()
             raise BadReturnValueError(f'failed to send on fd: {self.fd}')
         return n
 
     def sendall(self, buf: bytes):
         """ continue call send() until """
         while buf:
-            try:
-                err = self.send(buf, len(buf))
-            except TimeoutError:
-                if self._blocking:
-                    # when timeout, keep retrying till whole buffer is sent
-                    continue
-                raise
+            err = self.send(buf, len(buf))
             buf = buf[err:]
 
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
@@ -72,9 +64,7 @@ class Socket(Allocated):
         """
         with self._client.safe_malloc(size) as chunk:
             err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
-            if err < 0:
-                if self._client.errno == EAGAIN:
-                    raise TimeoutError()
+            if err <= 0:
                 raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
             return chunk.peek(err)
 
@@ -84,12 +74,7 @@ class Socket(Allocated):
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
                 err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
-                if err < 0:
-                    if self._client.errno == EAGAIN:
-                        if self._blocking:
-                            # when timeout, keep retrying till whole buffer is received
-                            continue
-                        raise TimeoutError()
+                if err <= 0:
                     raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
                 buf += chunk.peek(err)
         return buf
