@@ -65,7 +65,7 @@ class Socket(Allocated):
         :return: received bytes
         """
         with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.recv(self.fd, chunk, size).c_int64
+            err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
             if err < 0:
                 if self._client.errno == EAGAIN:
                     raise TimeoutError()
@@ -77,7 +77,7 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.recv(self.fd, chunk, size).c_int64
+                err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
                 if err < 0:
                     if self._client.errno == EAGAIN:
                         raise TimeoutError()
