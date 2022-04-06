@@ -46,7 +46,7 @@ class Socket(Allocated):
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
-            raise BadReturnValueError(f'failed to send on fd: {self.fd}')
+            raise BadReturnValueError(f'failed to send on fd: {self.fd} ({self._client.last_error})')
         return n
 
     def sendall(self, buf: bytes):
@@ -118,7 +118,7 @@ class Network:
         """ socket(family, type, proto) at remote. read man for more details. """
         result = self._client.symbols.socket(family, type, proto).c_int64
         if 0 == result:
-            raise BadReturnValueError(f'failed to create socket: {result}')
+            raise BadReturnValueError(f'failed to create socket: {result} ({self._client.last_error})')
         return result
 
     def tcp_connect(self, address: str, port: int) -> Socket:
@@ -127,8 +127,8 @@ class Network:
         servaddr = sockaddr_in.build(
             {'sin_addr': pysock.inet_aton(address), 'sin_port': pysock.htons(port)})
         self._client.errno = 0
-        self._client.symbols.connect(sockfd, servaddr, len(servaddr))
-        if self._client.errno:
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        if error == -1:
             raise BadReturnValueError(f'failed connecting to: {address}:{port} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
@@ -137,8 +137,8 @@ class Network:
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
         self._client.errno = 0
-        self._client.symbols.connect(sockfd, servaddr, len(servaddr))
-        if self._client.errno:
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        if error == -1:
             raise BadReturnValueError(f'failed connecting to: {filename} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
