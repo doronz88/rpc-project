@@ -6,7 +6,7 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, MSG_NOSIGNAL, \
-    EPIPE, F_GETFL, O_NONBLOCK, F_SETFL
+    EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_DONTWAIT
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -42,7 +42,7 @@ class Socket(Allocated):
         """
         if size is None:
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL).c_int64
+        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | MSG_DONTWAIT).c_int64
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
@@ -63,7 +63,7 @@ class Socket(Allocated):
         :return: received bytes
         """
         with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
+            err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
             if err <= 0:
                 raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
             return chunk.peek(err)
@@ -73,9 +73,13 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.recv(self.fd, chunk, size, 0).c_int64
-                if err <= 0:
+                err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
+
+                if err < 0:
                     raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
+                elif err == 0:
+                    raise BadReturnValueError(f'recv() failed for fd: {self.fd} (peer closed)')
+
                 buf += chunk.peek(err)
         return buf
 
