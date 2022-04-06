@@ -46,7 +46,7 @@ class Socket(Allocated):
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
-            raise BadReturnValueError(f'failed to send on fd: {self.fd}')
+            raise BadReturnValueError(f'failed to send on fd: {self.fd} ({self._client.last_error})')
         return n
 
     def sendall(self, buf: bytes):
@@ -118,7 +118,7 @@ class Network:
         """ socket(family, type, proto) at remote. read man for more details. """
         result = self._client.symbols.socket(family, type, proto).c_int64
         if 0 == result:
-            raise BadReturnValueError(f'failed to create socket: {result}')
+            raise BadReturnValueError(f'failed to create socket: {result} ({self._client.last_error})')
         return result
 
     def tcp_connect(self, address: str, port: int) -> Socket:
