@@ -55,32 +55,30 @@ class Socket(Allocated):
             err = self.send(buf, len(buf))
             buf = buf[err:]
 
+    def _recv(self, chunk, size: int):
+        err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
+        if err < 0:
+            raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
+        elif err == 0:
+            raise BadReturnValueError(f'recv() failed for fd: {self.fd} (peer closed)')
+        return chunk.peek(size)
+
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
         """
-        recv(fd, buf, size, 0) at remote. read man for more details.
+        recv() at remote. read man for more details.
 
         :param size: chunk size
         :return: received bytes
         """
         with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
-            if err <= 0:
-                raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
-            return chunk.peek(err)
+            return self._recv(chunk, size)
 
     def recvall(self, size: int) -> bytes:
         """ recv at remote until all buffer is received """
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
-
-                if err < 0:
-                    raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
-                elif err == 0:
-                    raise BadReturnValueError(f'recv() failed for fd: {self.fd} (peer closed)')
-
-                buf += chunk.peek(err)
+                buf += self._recv(chunk, size)
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
