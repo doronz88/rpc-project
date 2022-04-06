@@ -998,6 +998,8 @@ void handle_client(int sockfd)
     handshake.arch = ARCH_UNKNOWN;
     strncpy(handshake.sysname, uname_buf.sysname, HANDSHAKE_SYSNAME_LEN - 1);
 
+    CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
+
 #ifdef __ARM_ARCH_ISA_A64
     handshake.arch = ARCH_ARM64;
 #endif
