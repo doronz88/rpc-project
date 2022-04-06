@@ -127,8 +127,8 @@ class Network:
         servaddr = sockaddr_in.build(
             {'sin_addr': pysock.inet_aton(address), 'sin_port': pysock.htons(port)})
         self._client.errno = 0
-        self._client.symbols.connect(sockfd, servaddr, len(servaddr))
-        if self._client.errno:
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        if error == -1:
             raise BadReturnValueError(f'failed connecting to: {address}:{port} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
@@ -137,8 +137,8 @@ class Network:
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
         self._client.errno = 0
-        self._client.symbols.connect(sockfd, servaddr, len(servaddr))
-        if self._client.errno:
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        if error == -1:
             raise BadReturnValueError(f'failed connecting to: {filename} ({self._client.last_error})')
         return Socket(self._client, sockfd)
 
