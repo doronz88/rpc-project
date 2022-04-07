@@ -138,7 +138,7 @@ class XonshRc:
         if '--help' in args:
             print('USAGE: press <label0> [label1] ...', file=stdout)
             return
-        self._client.accessibility.press_labels(self, args, stdin, stdout, stderr)
+        self._client.accessibility.press_labels(args)
 
     def _rpc_press_keys(self, args, stdin, stdout, stderr):
         keys = {
