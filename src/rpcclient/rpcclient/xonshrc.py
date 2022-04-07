@@ -4,6 +4,7 @@ import os
 import plistlib
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Union, List
@@ -115,6 +116,7 @@ class XonshRc:
 
         # -- misc
         self._register_rpc_command('open', self._rpc_open)
+        self._register_rpc_command('date', self._rpc_date)
 
         XSH.env['PROMPT'] = f'[{{BOLD_GREEN}}{self._client.uname.nodename}{{RESET}} ' \
                             f'{{BOLD_YELLOW}}{{cwd}}{{RESET}}]$ '
@@ -306,6 +308,15 @@ class XonshRc:
         remote = args[0]
         with self._edit_remotely(remote) as local:
             os.system(f'open -W "{local}"')
+
+    def _rpc_date(self, args, stdin, stdout, stderr):
+        if '--help' in args:
+            print('USAGE: date [new-date]', file=stdout)
+            return
+        if not args:
+            print(self._client.time.now(), file=stdout)
+            return
+        self._client.time.set_current(datetime.fromisoformat(args[0]))
 
     def _rpc_list_commands(self, args, stdin, stdout, stderr):
         for k, v in self._commands.items():
