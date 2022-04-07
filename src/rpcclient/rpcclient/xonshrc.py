@@ -4,6 +4,7 @@ import os
 import plistlib
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Union, List
@@ -120,6 +121,10 @@ class XonshRc:
         # -- plist
         self._register_rpc_command('plshow', self._rpc_plshow)
 
+        # -- media
+        self._register_rpc_command('record', self._rpc_record)
+        self._register_rpc_command('play', self._rpc_play)
+
         # -- misc
         self._register_rpc_command('open', self._rpc_open)
         self._register_rpc_command('date', self._rpc_date)
@@ -182,7 +187,7 @@ class XonshRc:
             keys[k]()
 
     def _rpc_run(self, args, stdin, stdout, stderr):
-        if '--help' in args:
+        if '--help' in args or not args:
             print('USAGE: run <arg0> [arg1] ...', file=stderr)
             return
         result = self.client.spawn(args, raw_tty=False, stdin=stdin, stdout=stdout)
@@ -339,6 +344,28 @@ class XonshRc:
             return
         with self.client.fs.open(args[0], 'r') as f:
             _print_json(plistlib.loads(f.readall()), file=stdout)
+
+    def _rpc_record(self, args, stdin, stdout, stderr):
+        if '--help' in args:
+            print('USAGE: record <filename> <seconds>', file=stdout)
+            return
+        with self.client.media.get_recorder(args[0]) as r:
+            r.record()
+            time.sleep(int(args[1]))
+            r.stop()
+
+    def _rpc_play(self, args, stdin, stdout, stderr):
+        if '--help' in args:
+            print('USAGE: play <filename> <seconds>', file=stdout)
+            return
+        seconds = int(args[1])
+        with self.client.media.get_player(args[0]) as r:
+            r.play()
+            if seconds:
+                time.sleep(seconds)
+            else:
+                while r.playing:
+                    time.sleep(.1)
 
     def _rpc_open(self, args, stdin, stdout, stderr):
         if '--help' in args:

@@ -1,5 +1,6 @@
 import struct
 
+from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import AVAudioSessionCategoryOptionDefaultToSpeaker
 from rpcclient.darwin.symbol import DarwinSymbol
@@ -7,18 +8,19 @@ from rpcclient.exceptions import BadReturnValueError, MissingLibraryError
 from rpcclient.structs.consts import RTLD_NOW
 
 
-class Recorder:
+class Recorder(Allocated):
     """
     Wrapper for AVAudioRecorder
     https://developer.apple.com/documentation/avfaudio/avaudiorecorder?language=objc
     """
 
     def __init__(self, client, session, recorder: DarwinSymbol):
+        super().__init__()
         self._client = client
         self._session = session
         self._recorder = recorder
 
-    def release(self):
+    def _deallocate(self):
         self._recorder.objc_call('release')
 
     def record(self):
@@ -43,18 +45,19 @@ class Recorder:
         return bool(self._recorder.objc_call('isRecording'))
 
 
-class Player:
+class Player(Allocated):
     """
     Wrapper for AVAudioPlayer
     https://developer.apple.com/documentation/avfaudio/avaudioplayer?language=objc
     """
 
     def __init__(self, client, session, player):
+        super().__init__()
         self._client = client
         self._session = session
         self._player = player
 
-    def release(self):
+    def _deallocate(self):
         self._player.objc_call('release')
 
     def play(self):
