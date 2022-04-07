@@ -138,7 +138,7 @@ class XonshRc:
         if '--help' in args:
             print('USAGE: press <label0> [label1] ...', file=stdout)
             return
-        self._client.accessibility.press_labels(self, args, stdin, stdout, stderr)
+        self._client.accessibility.press_labels(args)
 
     def _rpc_press_keys(self, args, stdin, stdout, stderr):
         keys = {
@@ -313,7 +313,8 @@ class XonshRc:
 
     @contextlib.contextmanager
     def _edit_remotely(self, remote):
-        with tempfile.NamedTemporaryFile(suffix='.' + Path(remote).parts[-1]) as local:
+        with tempfile.TemporaryDirectory() as local_dir:
+            local = Path(local_dir) / Path(remote).parts[-1]
             self._pull(remote, local.name)
             try:
                 yield local.name
