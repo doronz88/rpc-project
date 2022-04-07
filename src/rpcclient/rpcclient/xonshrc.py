@@ -315,11 +315,11 @@ class XonshRc:
     def _edit_remotely(self, remote):
         with tempfile.TemporaryDirectory() as local_dir:
             local = Path(local_dir) / Path(remote).parts[-1]
-            self._pull(remote, local.name)
+            self._pull(remote, local.absolute())
             try:
-                yield local.name
+                yield local.absolute()
             finally:
-                self._push(local.name, remote)
+                self._push(local.absolute(), remote)
 
     def _find(self, path: str):
         for root, dirs, files in self._client.fs.walk(path):
