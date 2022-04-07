@@ -182,6 +182,13 @@ class Fs:
         if self._client.symbols.remove(path).c_int32 < 0:
             raise BadReturnValueError(f'failed to remove: {path} ({self._client.last_error})')
 
+    @path_to_str('old')
+    @path_to_str('new')
+    def rename(self, old: str, new: str):
+        """ rename(old, new) at remote. read man for more details. """
+        if self._client.symbols.rename(old, new).c_int32 < 0:
+            raise BadReturnValueError(f'failed to rename: {old} -> {new} ({self._client.last_error})')
+
     @path_to_str('path')
     def mkdir(self, path: str, mode: int):
         """ mkdir(path, mode) at remote. read man for more details. """

@@ -10,3 +10,4 @@ objc_types_decoder
 pycrashreport>=0.0.8
 lief
 capstone
+xonsh

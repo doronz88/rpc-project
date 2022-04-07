@@ -8,13 +8,16 @@ import threading
 import typing
 from collections import namedtuple
 from enum import Enum
+from pathlib import Path
 from select import select
 from socket import socket
 
 import IPython
+import xonsh
 from construct import Int64sl, Float64l, Float32l, Float16l
 from traitlets.config import Config
 
+import rpcclient
 from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
     InvalidServerVersionMagicError
@@ -73,6 +76,7 @@ class Client:
         self._sysname = sysname
         self._dlsym_global_handle = -1  # RTLD_NEXT
         self._lock = threading.Lock()
+        self._logger = logging.getLogger(self.__module__)
 
         # whether the system uses inode structs of 64 bits
         self.inode64 = False
@@ -277,7 +281,7 @@ class Client:
                 # depends on where the error occurred, the socket might be closed
                 raise
 
-            logging.info(f'shell process started as pid: {pid}')
+            self._logger.info(f'shell process started as pid: {pid}')
 
             if background:
                 return SpawnResult(error=None, pid=pid, stdout=None)
@@ -430,6 +434,22 @@ class Client:
         with self._lock:
             self._close()
 
+    def shell(self):
+        os.environ['_RPC_AUTO_CONNECT_HOSTNAME'] = self._hostname
+        os.environ['_RPC_AUTO_CONNECT_PORT'] = str(self._port)
+        self._logger.disabled = True
+
+        args = ['--rc']
+        home_rc = Path('~/.xonshrc')
+        if home_rc.exists():
+            args.append(str(home_rc.expanduser().absolute()))
+        args.append(str((Path(rpcclient.__file__).parent / 'xonshrc.py').absolute()))
+
+        try:
+            xonsh.main.main(args)
+        except SystemExit:
+            self._logger.disabled = False
+
     def reconnect(self):
         """ close current socket and attempt to reconnect """
         with self._lock:
@@ -484,23 +504,25 @@ class Client:
         otherwise, we can simply write all stdin contents directly to the process
         """
         fds = []
-        if hasattr(stdin, 'fileno'):
-            fds.append(stdin)
-        else:
-            # assume it's just raw bytes
-            self._sock.sendall(stdin.encode())
+        if stdin:
+            if hasattr(stdin, 'fileno'):
+                fds.append(stdin)
+            else:
+                # assume it's just raw bytes
+                self._sock.sendall(stdin.encode())
         fds.append(self._sock)
 
         while True:
             rlist, _, _ = select(fds, [], [])
 
             for fd in rlist:
-                if fd == sys.stdin:
-                    if stdin == sys.stdin:
-                        buf = os.read(stdin.fileno(), CHUNK_SIZE)
-                    else:
-                        buf = stdin.read(CHUNK_SIZE)
-                    self._sock.sendall(buf)
+                if stdin:
+                    if fd == sys.stdin:
+                        if stdin == sys.stdin:
+                            buf = os.read(stdin.fileno(), CHUNK_SIZE)
+                        else:
+                            buf = stdin.read(CHUNK_SIZE)
+                        self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:
                         buf = self._recvall(exec_chunk_t.sizeof())
