@@ -313,7 +313,8 @@ class XonshRc:
 
     @contextlib.contextmanager
     def _edit_remotely(self, remote):
-        with tempfile.NamedTemporaryFile(suffix='.' + Path(remote).parts[-1]) as local:
+        with tempfile.TemporaryDirectory() as local_dir:
+            local = Path(local_dir) / Path(remote).parts[-1]
             self._pull(remote, local.name)
             try:
                 yield local.name
