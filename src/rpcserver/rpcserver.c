@@ -240,13 +240,14 @@ bool spawn_worker_server(int client_socket, const char *argv[], int argc)
 
     // append -w to original argv
     int new_argc = argc + 1;
-    const char **new_argv = malloc((new_argc+1)*sizeof(char*));
-    for(int i=0; i < argc; ++i) {
+    const char **new_argv = malloc((new_argc + 1) * sizeof(char *));
+    for (int i = 0; i < argc; ++i)
+    {
         new_argv[i] = argv[i];
     }
-    new_argv[new_argc-1] = "-w";
+    new_argv[new_argc - 1] = "-w";
     new_argv[new_argc] = NULL;
-    
+
     pid_t pid;
     posix_spawn_file_actions_t actions;
     CHECK(0 == posix_spawn_file_actions_init(&actions));
@@ -1073,21 +1074,17 @@ error:
 
 void signal_handler(int sig)
 {
-    TRACE("entered with signal code: %d", sig);
-}
-
-void wait_for_workers()
-{
     int status;
     pid_t pid;
-    while(true) {
-        pid_t pid = waitpid(-1, &status, 0);
-        if(-1 == pid) {
-            sleep(1);
-            continue;
-        }
+
+    if (SIGCHLD == sig)
+    {
+        pid = waitpid(-1, &status, 0);
         TRACE("PID: %d exited with status: %d", pid, status);
+        return;
     }
+
+    TRACE("entered with signal code: %d", sig);
 }
 
 int main(int argc, const char *argv[])
@@ -1141,13 +1138,14 @@ int main(int argc, const char *argv[])
         }
     }
 
-    if(worker_spawn) {
+    signal(SIGPIPE, signal_handler);
+
+    if (worker_spawn)
+    {
         TRACE("New worker spawned");
         handle_client(WORKER_CLIENT_SOCKET_FD);
         exit(EXIT_SUCCESS);
     }
-
-    signal(SIGPIPE, signal_handler);
 
     int err = 0;
     int server_fd = -1;
@@ -1183,8 +1181,7 @@ int main(int argc, const char *argv[])
     CHECK(0 == pthread_create(&runloop_thread, NULL, (void *(*)(void *))CFRunLoopRun, NULL));
 #endif // __APPLE__
 
-    pthread_t wait_thread;
-    CHECK(0 == pthread_create(&wait_thread, NULL, (void *(*)(void *))wait_for_workers, NULL));
+    signal(SIGCHLD, signal_handler);
 
     while (1)
     {
