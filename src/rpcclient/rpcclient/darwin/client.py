@@ -46,6 +46,10 @@ class DarwinClient(Client):
     def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
         super().__init__(sock, sysname, arch, hostname, port)
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
+        self._init_process_specific()
+
+    def _init_process_specific(self):
+        super(DarwinClient, self)._init_process_specific()
 
         if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
