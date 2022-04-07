@@ -93,6 +93,7 @@ class XonshRc:
         self._register_rpc_command('run-async', self._rpc_run_async)
         self._register_rpc_command('ps', self._rpc_ps)
         self._register_rpc_command('kill', self._rpc_kill)
+        self._register_rpc_command('killall', self._rpc_killall)
 
         # -- fs
         self._register_rpc_command('ls', self._rpc_ls)
@@ -176,6 +177,14 @@ class XonshRc:
             print('USAGE: kill <pid> <signal_number>', file=stdout)
             return
         self._client.processes.kill(args[0], int(args[1]))
+
+    def _rpc_killall(self, args, stdin, stdout, stderr):
+        if '--help' in args:
+            print('USAGE: killall <expression> <signal_number>', file=stdout)
+            return
+        for p in self._client.processes.grep(args[0]):
+            print(f'killing {p}', file=stdout)
+            p.kill(int(args[1]))
 
     def _rpc_ps(self, args, stdin, stdout, stderr):
         if '--help' in args:
