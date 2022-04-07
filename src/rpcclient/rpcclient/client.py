@@ -75,12 +75,17 @@ class Client:
         self._endianness = '<'
         self._sysname = sysname
         self._dlsym_global_handle = -1  # RTLD_NEXT
-        self._lock = threading.Lock()
+        self._protocol_lock = threading.Lock()
         self._logger = logging.getLogger(self.__module__)
+
+        self.reconnect_lock = threading.Lock()
 
         # whether the system uses inode structs of 64 bits
         self.inode64 = False
 
+        self._init_process_specific()
+
+    def _init_process_specific(self):
         self.symbols = SymbolsJar.create(self)
         self.fs = Fs(self)
         self.processes = Processes(self)
@@ -118,7 +123,7 @@ class Client:
             'cmd_type': cmd_type_t.CMD_DLOPEN,
             'data': {'filename': filename, 'mode': mode},
         })
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             address = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return self.symbol(address)
@@ -130,7 +135,7 @@ class Client:
             'cmd_type': cmd_type_t.CMD_DLCLOSE,
             'data': {'lib': lib},
         })
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return err
@@ -142,7 +147,7 @@ class Client:
             'cmd_type': cmd_type_t.CMD_DLSYM,
             'data': {'lib': lib, 'symbol_name': symbol_name},
         })
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             address = Int64sl.parse(self._recvall(Int64sl.sizeof()))
         return address
@@ -188,7 +193,7 @@ class Client:
             'data': {'address': address, 'argv': fixed_argv},
         })
 
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             response = call_response_t.parse(self._recvall(call_response_t_size))
 
@@ -223,7 +228,7 @@ class Client:
             'cmd_type': cmd_type_t.CMD_PEEK,
             'data': {'address': address, 'size': size},
         })
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
             if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
@@ -236,7 +241,7 @@ class Client:
             'cmd_type': cmd_type_t.CMD_POKE,
             'data': {'address': address, 'size': len(data), 'data': data},
         })
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
             if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
@@ -249,7 +254,7 @@ class Client:
             'data': None,
         })
 
-        with self._lock:
+        with self._protocol_lock:
             self._sock.sendall(message)
             result = dummy_block_t.parse(self._recvall(dummy_block_t.sizeof()))
 
@@ -274,7 +279,7 @@ class Client:
         if envp is None:
             envp = self.DEFAULT_ENVP
 
-        with self._lock:
+        with self._protocol_lock:
             try:
                 pid = self._execute(argv, envp, background=background)
             except SpawnError:
@@ -431,7 +436,7 @@ class Client:
         self._sock.close()
 
     def close(self):
-        with self._lock:
+        with self._protocol_lock:
             self._close()
 
     def shell(self):
@@ -452,14 +457,18 @@ class Client:
 
     def reconnect(self):
         """ close current socket and attempt to reconnect """
-        with self._lock:
-            self._close()
-            self._sock = socket()
-            self._sock.connect((self._hostname, self._port))
-            handshake = protocol_handshake_t.parse(self._recvall(protocol_handshake_t.sizeof()))
+        with self.reconnect_lock:
+            with self._protocol_lock:
+                self._close()
+                self._sock = socket()
+                self._sock.connect((self._hostname, self._port))
+                handshake = protocol_handshake_t.parse(self._recvall(protocol_handshake_t.sizeof()))
 
-        if handshake.magic != SERVER_MAGIC_VERSION:
-            raise InvalidServerVersionMagicError()
+            if handshake.magic != SERVER_MAGIC_VERSION:
+                raise InvalidServerVersionMagicError()
+
+            # new clients are handled in new processes so all symbols may reside in different addresses
+            self._init_process_specific()
 
     def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
         message = protocol_message_t.build({
@@ -504,25 +513,23 @@ class Client:
         otherwise, we can simply write all stdin contents directly to the process
         """
         fds = []
-        if stdin:
-            if hasattr(stdin, 'fileno'):
-                fds.append(stdin)
-            else:
-                # assume it's just raw bytes
-                self._sock.sendall(stdin.encode())
+        if hasattr(stdin, 'fileno'):
+            fds.append(stdin)
+        else:
+            # assume it's just raw bytes
+            self._sock.sendall(stdin.encode())
         fds.append(self._sock)
 
         while True:
             rlist, _, _ = select(fds, [], [])
 
             for fd in rlist:
-                if stdin:
-                    if fd == sys.stdin:
-                        if stdin == sys.stdin:
-                            buf = os.read(stdin.fileno(), CHUNK_SIZE)
-                        else:
-                            buf = stdin.read(CHUNK_SIZE)
-                        self._sock.sendall(buf)
+                if fd == sys.stdin:
+                    if stdin == sys.stdin:
+                        buf = os.read(stdin.fileno(), CHUNK_SIZE)
+                    else:
+                        buf = stdin.read(CHUNK_SIZE)
+                    self._sock.sendall(buf)
                 elif fd == self._sock:
                     try:
                         buf = self._recvall(exec_chunk_t.sizeof())

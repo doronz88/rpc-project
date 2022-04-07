@@ -133,7 +133,11 @@ class XonshRc:
 
         XSH.env['PROMPT'] = f'[{{BOLD_GREEN}}{self.client.uname.nodename}{{RESET}} ' \
                             f'{{BOLD_YELLOW}}{{cwd}}{{RESET}}]$ '
-        XSH.env['PROMPT_FIELDS']['cwd'] = self.client.fs.pwd
+        XSH.env['PROMPT_FIELDS']['cwd'] = self._rpc_cwd
+
+    def _rpc_cwd(self, ) -> str:
+        with self.client.reconnect_lock:
+            return self.client.fs.pwd()
 
     def _rpc_xattr_get_dict(self, args, stdin, stdout, stderr):
         if '--help' in args:
@@ -188,8 +192,10 @@ class XonshRc:
 
     def _rpc_run(self, args, stdin, stdout, stderr):
         if '--help' in args or not args:
-            print('USAGE: run <arg0> [arg1] ...', file=stderr)
+            print('USAGE: run <arg0> [arg1] ...', file=stdout)
             return
+        if not stdin:
+            stdin = ''
         result = self.client.spawn(args, raw_tty=False, stdin=stdin, stdout=stdout)
         return result.error
 
