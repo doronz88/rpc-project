@@ -11,3 +11,4 @@ pycrashreport>=0.0.8
 lief
 capstone
 xonsh
+plumbum
