@@ -14,4 +14,5 @@ def test_list_sanity(client):
 
 def test_get_process_by_listening_port(client):
     # there should only be one process listening on this port and that's us
-    assert client.processes.get_process_by_listening_port(DEFAULT_PORT).pid == client.pid
+    worker_process = client.processes.get_by_pid(client.pid)
+    assert client.processes.get_process_by_listening_port(DEFAULT_PORT).pid == worker_process.ppid

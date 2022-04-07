@@ -49,6 +49,7 @@ Example usage: \n\
 #define MAX_OPTION_LEN (256)
 #define BUFFERSIZE (64 * 1024)
 #define INVALID_PID (0xffffffff)
+#define WORKER_CLIENT_SOCKET_FD (3)
 
 extern char **environ;
 
@@ -230,6 +231,41 @@ error:
         }
         *pid = INVALID_PID;
     }
+    return success;
+}
+
+bool spawn_worker_server(int client_socket, const char *argv[], int argc)
+{
+    bool success = false;
+
+    // append -w to original argv
+    int new_argc = argc + 1;
+    const char **new_argv = malloc((new_argc + 1) * sizeof(char *));
+    for (int i = 0; i < argc; ++i)
+    {
+        new_argv[i] = argv[i];
+    }
+    new_argv[new_argc - 1] = "-w";
+    new_argv[new_argc] = NULL;
+
+    pid_t pid;
+    posix_spawn_file_actions_t actions;
+    CHECK(0 == posix_spawn_file_actions_init(&actions));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, STDIN_FILENO, STDIN_FILENO));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, STDOUT_FILENO, STDOUT_FILENO));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO, STDERR_FILENO));
+    CHECK(0 == posix_spawn_file_actions_adddup2(&actions, client_socket, WORKER_CLIENT_SOCKET_FD));
+
+    CHECK(0 == posix_spawnp(&pid, new_argv[0], &actions, NULL, (char *const *)new_argv, environ));
+    CHECK(pid != INVALID_PID);
+
+    TRACE("Spawned Worker Process: %d", pid);
+    success = true;
+
+error:
+    posix_spawn_file_actions_destroy(&actions);
+    free(new_argv);
+    close(client_socket);
     return success;
 }
 
@@ -963,6 +999,8 @@ void handle_client(int sockfd)
     handshake.arch = ARCH_UNKNOWN;
     strncpy(handshake.sysname, uname_buf.sysname, HANDSHAKE_SYSNAME_LEN - 1);
 
+    CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
+
 #ifdef __ARM_ARCH_ISA_A64
     handshake.arch = ARCH_ARM64;
 #endif
@@ -1036,15 +1074,26 @@ error:
 
 void signal_handler(int sig)
 {
+    int status;
+    pid_t pid;
+
+    if (SIGCHLD == sig)
+    {
+        pid = waitpid(-1, &status, 0);
+        TRACE("PID: %d exited with status: %d", pid, status);
+        return;
+    }
+
     TRACE("entered with signal code: %d", sig);
 }
 
 int main(int argc, const char *argv[])
 {
     int opt;
+    bool worker_spawn = false;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *)argv, "hp:o:")) != -1)
+    while ((opt = getopt(argc, (char *const *)argv, "hp:o:w")) != -1)
     {
         switch (opt)
         {
@@ -1074,6 +1123,11 @@ int main(int argc, const char *argv[])
             }
             break;
         }
+        case 'w':
+        {
+            worker_spawn = true;
+            break;
+        }
         case 'h':
         case '?':
         default: /* '?' */
@@ -1085,6 +1139,13 @@ int main(int argc, const char *argv[])
     }
 
     signal(SIGPIPE, signal_handler);
+
+    if (worker_spawn)
+    {
+        TRACE("New worker spawned");
+        handle_client(WORKER_CLIENT_SOCKET_FD);
+        exit(EXIT_SUCCESS);
+    }
 
     int err = 0;
     int server_fd = -1;
@@ -1115,10 +1176,12 @@ int main(int argc, const char *argv[])
 
     CHECK(0 == listen(server_fd, MAX_CONNECTIONS));
 
-    pthread_t thread;
 #ifdef __APPLE__
-    CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))CFRunLoopRun, NULL));
+    pthread_t runloop_thread;
+    CHECK(0 == pthread_create(&runloop_thread, NULL, (void *(*)(void *))CFRunLoopRun, NULL));
 #endif // __APPLE__
+
+    signal(SIGCHLD, signal_handler);
 
     while (1)
     {
@@ -1132,7 +1195,7 @@ int main(int argc, const char *argv[])
         CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
-        CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *))handle_client, (void *)(long)client_fd));
+        CHECK(spawn_worker_server(client_fd, argv, argc));
     }
 
 error:
