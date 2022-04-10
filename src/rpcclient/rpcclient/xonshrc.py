@@ -5,6 +5,7 @@ import plistlib
 import sys
 import tempfile
 import time
+from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 from typing import Union, List
@@ -18,6 +19,7 @@ from xonsh.completers.tools import contextual_completer
 import rpcclient
 from rpcclient.client_factory import create_client
 from rpcclient.protocol import DEFAULT_PORT
+from rpcclient.structs.consts import SIGTERM
 
 
 def _default_json_encoder(obj):
@@ -140,41 +142,40 @@ class XonshRc:
             return self.client.fs.pwd()
 
     def _rpc_xattr_get_dict(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: xattr-get-dict <filename>', file=stdout)
-            return
-        _print_json(self.client.fs.dictxattr(args[0]), file=stdout)
+        parser = ArgumentParser(description='view file xattributes')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        _print_json(self.client.fs.dictxattr(args.filename), file=stdout)
 
     def _rpc_vim(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: vim <filename>', file=stdout)
-            return
-
-        remote_filename = args[0]
-        with self._edit_remotely(remote_filename) as f:
+        parser = ArgumentParser(description='use "vim" to edit the given file')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        with self._edit_remotely(args.filename) as f:
             os.system(f'vim "{f}"')
 
     def _rpc_entitlements(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: entitlements <filename>', file=stdout)
-            return
-        _print_json(self.client.lief.get_entitlements(args[0]), file=stdout)
+        parser = ArgumentParser(description='view file entitlements')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        _print_json(self.client.lief.get_entitlements(args.filename), file=stdout)
 
     def _rpc_list_labels(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: press <label0> [label1] ...', file=stdout)
-            return
-
+        parser = ArgumentParser(description='list all labels in current main application')
+        parser.parse_args(args)
         for element in self.client.accessibility.primary_app:
-            print(element.label)
+            print(element.label, file=stdout)
 
     def _rpc_press_labels(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: press-labels <label0> [label1] ...', file=stdout)
-            return
-        self.client.accessibility.press_labels(args)
+        parser = ArgumentParser(description='press labels list by given order')
+        parser.add_argument('label', nargs='+')
+        args = parser.parse_args(args)
+        self.client.accessibility.press_labels(args.label)
 
     def _rpc_press_keys(self, args, stdin, stdout, stderr):
+        parser = ArgumentParser(description='press key list by given order')
+        parser.add_argument('key', nargs='+')
+        args = parser.parse_args(args)
         keys = {
             'power': self.client.hid.send_power_button_press,
             'home': self.client.hid.send_home_button_press,
@@ -182,244 +183,231 @@ class XonshRc:
             'voldown': self.client.hid.send_volume_down_button_press,
             'mute': self.client.hid.send_mute_button_press,
         }
-        if '--help' in args:
-            print('USAGE: press-keys <key0> [key1] ...', file=stdout)
-            print(f'key list: {keys.keys()}', file=stdout)
-            return
-
-        for k in args:
+        for k in args.key:
             keys[k]()
 
     def _rpc_run(self, args, stdin, stdout, stderr):
-        if '--help' in args or not args:
-            print('USAGE: run <arg0> [arg1] ...', file=stdout)
-            return
+        parser = ArgumentParser(description='execute a program')
+        parser.add_argument('arg', nargs='+')
+        args = parser.parse_args(args)
         if not stdin:
             stdin = ''
-        result = self.client.spawn(args, raw_tty=False, stdin=stdin, stdout=stdout)
+        result = self.client.spawn(args.arg, raw_tty=False, stdin=stdin, stdout=stdout)
         return result.error
 
     def _rpc_run_async(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: run-async <arg0> [arg1] ...', file=stdout)
-            return
-        print(self.client.spawn(args, raw_tty=False, background=True), file=stdout)
+        parser = ArgumentParser(description='execute a program in background')
+        parser.add_argument('arg', nargs='+')
+        args = parser.parse_args(args)
+        print(self.client.spawn(args.arg, raw_tty=False, background=True), file=stdout)
 
     def _rpc_kill(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: kill <pid> <signal_number>', file=stdout)
-            return
-        self.client.processes.kill(args[0], int(args[1]))
+        parser = ArgumentParser(description='kill a process')
+        parser.add_argument('pid', type=int)
+        parser.add_argument('signal_number', nargs='?', type=int, default=SIGTERM)
+        args = parser.parse_args(args)
+        self.client.processes.kill(args.pid, args.signal_number)
 
     def _rpc_killall(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: killall <expression> <signal_number>', file=stdout)
-            return
-        for p in self.client.processes.grep(args[0]):
+        parser = ArgumentParser(description='killall processes with given basename given as a "contain" expression')
+        parser.add_argument('expression')
+        parser.add_argument('signal_number', nargs='?', type=int, default=SIGTERM)
+        args = parser.parse_args(args)
+        for p in self.client.processes.grep(args.expression):
             print(f'killing {p}', file=stdout)
-            p.kill(int(args[1]))
+            p.kill(args.signal_number)
 
     def _rpc_ps(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: ps', file=stdout)
-            return
-
+        parser = ArgumentParser(description='list processes')
+        parser.parse_args(args)
         for p in self.client.processes.list():
             print(f'{p.pid:5} {p.path}', file=stdout)
 
     def _rpc_ls(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: ls <path>', file=stdout)
-            return
-
-        path = '.'
-        if args:
-            path = args[0]
-
-        for f in self.client.fs.scandir(path):
+        parser = ArgumentParser(description='list files')
+        parser.add_argument('path', nargs='?', default='.')
+        args = parser.parse_args(args)
+        for f in self.client.fs.scandir(args.path):
             print(f.name, file=stdout)
 
     def _rpc_ln(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: ln [-s] <src> <dst>', file=stdout)
-            return
-
-        if args[0] == '-s':
-            src = args[1]
-            dst = args[2]
-            self.client.fs.symlink(src, dst)
+        parser = ArgumentParser(description='create a link')
+        parser.add_argument('-s', '--symlink', action='store_true')
+        parser.add_argument('src')
+        parser.add_argument('dst')
+        args = parser.parse_args(args)
+        if args.symlink:
+            self.client.fs.symlink(args.src, args.dst)
         else:
-            src = args[0]
-            dst = args[1]
-            self.client.fs.link(src, dst)
+            self.client.fs.link(args.src, args.dst)
 
     def _rpc_touch(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: touch <filename>', file=stdout)
-            return
-
-        with self.client.fs.open(args[0], 'w'):
+        parser = ArgumentParser(description='create an empty file')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        with self.client.fs.open(args.filename, 'w'):
             pass
 
     def _rpc_pwd(self, args, stdin, stdout, stderr):
+        parser = ArgumentParser(description='get current working directory')
+        parser.parse_args(args)
         print(self.client.fs.pwd(), file=stdout)
 
     @contextual_completer
     def _rpc_cd(self, args, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr):
-        if '--help' in args:
-            print('USAGE: cd <path>', file=stdout)
-            return
-        self.client.fs.chdir(args[0])
+        parser = ArgumentParser(description='change directory')
+        parser.add_argument('path')
+        args = parser.parse_args(args)
+        self.client.fs.chdir(args.path)
 
     def _rpc_rm(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: rm [-r] <path0> [path1] ...', file=stdout)
-            return
+        parser = ArgumentParser(description='remove list of files')
+        parser.add_argument('path', nargs='+')
+        parser.add_argument('-r', '--recursive', action='store_true')
+        args = parser.parse_args(args)
 
-        if args[0] != '-r':
-            for filename in args:
-                self.client.fs.remove(filename)
-            return
-
-        # recursive
-        for path in args[1:]:
-            for filename in self._find(path):
-                self.client.fs.remove(filename)
+        for path in args.path:
+            if args.recursive:
+                for entry in self._find(path):
+                    self.client.fs.remove(entry)
             self.client.fs.remove(path)
 
     def _rpc_mv(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: rm <path>', file=stdout)
-            return
-        self.client.fs.rename(args[0], args[1])
+        parser = ArgumentParser(description='move a file')
+        parser.add_argument('src')
+        parser.add_argument('dst')
+        args = parser.parse_args(args)
+        self.client.fs.rename(args.src, args.dst)
 
     def _rpc_mkdir(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: mkdir <path>', file=stdout)
-            return
-        self.client.fs.mkdir(args[0], mode=0o777)
+        parser = ArgumentParser(description='create a directory')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        self.client.fs.mkdir(args.filename, mode=0o777)
 
     def _rpc_cat(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: cat <file0> [file1] ...', file=stdout)
-            return
-
-        for filename in args:
+        parser = ArgumentParser(description='read a list of files')
+        parser.add_argument('filename', nargs='+')
+        args = parser.parse_args(args)
+        for filename in args.filename:
             with self.client.fs.open(filename, 'r') as f:
                 print(f.readall(), file=stdout, end='')
-
         print('', file=stdout)
 
     def _rpc_bat(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: bat <file>', file=stdout)
-            return
-
-        with self._remote_file(args[0]) as f:
+        parser = ArgumentParser(description='"bat" (improved-cat) given file')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        with self._remote_file(args.filename) as f:
             os.system(f'bat "{f}"')
 
     def _rpc_pull(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: pull <remote> <local>', file=stdout)
-            return
-        return self._pull(args[0], args[1])
+        parser = ArgumentParser(description='pull a file from remote')
+        parser.add_argument('remote')
+        parser.add_argument('local')
+        args = parser.parse_args(args)
+        return self._pull(args.remote, args.local)
 
     def _rpc_push(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: push <local> <remote>', file=stdout)
-            return
-        return self._push(args[0], args[1])
+        parser = ArgumentParser(description='push a file into remote')
+        parser.add_argument('local')
+        parser.add_argument('remote')
+        args = parser.parse_args(args)
+        return self._push(args.local, args.remote)
 
     def _rpc_chmod(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: chmod <mode> <filename>', file=stdout)
-            return
-        self.client.fs.chmod(args[0], int(args[1], 8))
+        parser = ArgumentParser(description='chmod at remote')
+        parser.add_argument('mode')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        self.client.fs.chmod(args.filename, int(args.mode, 8))
 
     def _rpc_find(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: find <path>', file=stdout)
-            return
-
-        for filename in self._find(args[0]):
+        parser = ArgumentParser(description='find file recursively')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        for filename in self._find(args.filename):
             print(filename, file=stdout)
 
     def _rpc_plshow(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: plshow <filename>', file=stdout)
-            return
-        with self.client.fs.open(args[0], 'r') as f:
+        parser = ArgumentParser(description='parse and show plist')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+        with self.client.fs.open(args.filename, 'r') as f:
             _print_json(plistlib.loads(f.readall()), file=stdout)
 
     def _rpc_record(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: record <filename> <seconds>', file=stdout)
-            return
-        with self.client.media.get_recorder(args[0]) as r:
+        parser = ArgumentParser(description='start recording for specified duration')
+        parser.add_argument('filename')
+        parser.add_argument('duration', type=int)
+        args = parser.parse_args(args)
+        with self.client.media.get_recorder(args.filename) as r:
             r.record()
-            time.sleep(int(args[1]))
+            time.sleep(args.duration)
             r.stop()
 
     def _rpc_play(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: play <filename> <seconds>', file=stdout)
-            return
-        seconds = int(args[1])
-        with self.client.media.get_player(args[0]) as r:
+        parser = ArgumentParser(description='play file')
+        parser.add_argument('filename')
+        parser.add_argument('duration', type=int, nargs='?')
+        args = parser.parse_args(args)
+        with self.client.media.get_player(args.filename) as r:
             r.play()
-            if seconds:
-                time.sleep(seconds)
+            if args.duration:
+                time.sleep(args.duration)
             else:
                 while r.playing:
                     time.sleep(.1)
 
     def _rpc_open(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: open <filename>', file=stdout)
-            return
+        parser = ArgumentParser(description='open a file from remote using default program')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
+
         open_ = plumbum.local['open']
-        remote = args[0]
-        with self._edit_remotely(remote) as f:
+        with self._edit_remotely(args.filename) as f:
             open_('-W', f)
 
     def _rpc_date(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: date [new-date]', file=stdout)
-            return
+        parser = ArgumentParser(description='get/set date')
+        parser.add_argument('new_date', nargs='?')
+        args = parser.parse_args(args)
         if not args:
             print(self.client.time.now(), file=stdout)
             return
-        self.client.time.set_current(datetime.fromisoformat(args[0]))
+        self.client.time.set_current(datetime.fromisoformat(args.new_date))
 
     def _rpc_which(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: which <binary>', file=stdout)
-            return
+        parser = ArgumentParser(description='traverse $PATH to find the first matching executable')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
 
         for p in self.client.getenv('PATH').split(':'):
-            filename = (Path(p) / args[0]).absolute()
-            if self.client.fs.accessible((Path(p) / args[0]).absolute()):
+            filename = (Path(p) / args.filename).absolute()
+            if self.client.fs.accessible((Path(p) / args.filename).absolute()):
                 print(filename)
                 return
 
     def _rpc_env(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: env', file=stdout)
-            return
+        parser = ArgumentParser(description='view all environment variables')
+        parser.parse_args(args)
 
         for e in self.client.environ:
             print(e, file=stdout)
 
     def _rpc_file(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('USAGE: file <filename>', file=stdout)
-            return
+        parser = ArgumentParser(description='show file type')
+        parser.add_argument('filename')
+        args = parser.parse_args(args)
 
         file = plumbum.local['file']
-        with self._remote_file(args[0]) as f:
+        with self._remote_file(args.filename) as f:
             file(f, stdout=stdout)
 
     def _rpc_list_commands(self, args, stdin, stdout, stderr):
+        parser = ArgumentParser(description='list all rpc commands')
+        parser.parse_args(args)
+
         for k, v in self._commands.items():
             print(f'👾 {k}', file=stdout)
 
@@ -427,7 +415,8 @@ class XonshRc:
     def _remote_file(self, remote):
         with tempfile.TemporaryDirectory() as local_dir:
             local = Path(local_dir) / Path(remote).parts[-1]
-            self._pull(remote, local.absolute())
+            if self.client.fs.accessible(remote):
+                self._pull(remote, local.absolute())
             try:
                 yield local.absolute()
             finally:
