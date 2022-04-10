@@ -77,6 +77,7 @@ class Client:
         self._dlsym_global_handle = -1  # RTLD_NEXT
         self._protocol_lock = threading.Lock()
         self._logger = logging.getLogger(self.__module__)
+        self._ipython_run_cell_hook_enabled = True
 
         self.reconnect_lock = threading.Lock()
 
@@ -403,6 +404,9 @@ class Client:
         Enable lazy loading for symbols
         :param info: IPython's CellInf4o object
         """
+        if not self._ipython_run_cell_hook_enabled:
+            return
+
         if info.raw_cell.startswith('!') or info.raw_cell.endswith('?'):
             return
 
@@ -443,6 +447,7 @@ class Client:
         os.environ['_RPC_AUTO_CONNECT_HOSTNAME'] = self._hostname
         os.environ['_RPC_AUTO_CONNECT_PORT'] = str(self._port)
         self._logger.disabled = True
+        self._ipython_run_cell_hook_enabled = False
 
         args = ['--rc']
         home_rc = Path('~/.xonshrc')
@@ -454,6 +459,7 @@ class Client:
             xonsh.main.main(args)
         except SystemExit:
             self._logger.disabled = False
+            self._ipython_run_cell_hook_enabled = True
 
     def reconnect(self):
         """ close current socket and attempt to reconnect """
