@@ -309,7 +309,7 @@ class Client:
             self._restore_terminal()
 
         # TODO: we should be able to return here without the need to reconnect but from some reason the
-        # socket goes out of sync when doing so
+        #       socket goes out of sync when doing so
         self.reconnect()
 
         return SpawnResult(error=error, pid=pid, stdout=stdout)

@@ -37,9 +37,9 @@ def _print_json(buf, colored=True, default=_default_json_encoder, file=None):
     if colored:
         colorful_json = highlight(formatted_json, lexers.JsonLexer(),
                                   formatters.TerminalTrueColorFormatter(style='stata-dark'))
-        print(colorful_json, file=file)
+        print(colorful_json, file=file, flush=True)
     else:
-        print(formatted_json, file=file)
+        print(formatted_json, file=file, flush=True)
 
 
 class XonshRc:
@@ -164,7 +164,7 @@ class XonshRc:
         parser = ArgumentParser(description='list all labels in current main application')
         parser.parse_args(args)
         for element in self.client.accessibility.primary_app:
-            print(element.label, file=stdout)
+            print(element.label, file=stdout, flush=True)
 
     def _rpc_press_labels(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='press labels list by given order')
@@ -191,15 +191,15 @@ class XonshRc:
         parser.add_argument('arg', nargs='+')
         args = parser.parse_args(args)
         if not stdin:
-            stdin = ''
-        result = self.client.spawn(args.arg, raw_tty=False, stdin=stdin, stdout=stdout)
+            stdin = sys.stdin
+        result = self.client.spawn(args.arg, raw_tty=True, stdin=stdin, stdout=stdout)
         return result.error
 
     def _rpc_run_async(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='execute a program in background')
         parser.add_argument('arg', nargs='+')
         args = parser.parse_args(args)
-        print(self.client.spawn(args.arg, raw_tty=False, background=True), file=stdout)
+        print(self.client.spawn(args.arg, raw_tty=False, background=True), file=stdout, flush=True)
 
     def _rpc_kill(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='kill a process')
@@ -214,21 +214,21 @@ class XonshRc:
         parser.add_argument('signal_number', nargs='?', type=int, default=SIGTERM)
         args = parser.parse_args(args)
         for p in self.client.processes.grep(args.expression):
-            print(f'killing {p}', file=stdout)
+            print(f'killing {p}', file=stdout, flush=True)
             p.kill(args.signal_number)
 
     def _rpc_ps(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='list processes')
         parser.parse_args(args)
         for p in self.client.processes.list():
-            print(f'{p.pid:5} {p.path}', file=stdout)
+            print(f'{p.pid:5} {p.path}', file=stdout, flush=True)
 
     def _rpc_ls(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='list files')
         parser.add_argument('path', nargs='?', default='.')
         args = parser.parse_args(args)
         for f in self.client.fs.scandir(args.path):
-            print(f.name, file=stdout)
+            print(f.name, file=stdout, flush=True)
 
     def _rpc_ln(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='create a link')
@@ -251,7 +251,7 @@ class XonshRc:
     def _rpc_pwd(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='get current working directory')
         parser.parse_args(args)
-        print(self.client.fs.pwd(), file=stdout)
+        print(self.client.fs.pwd(), file=stdout, flush=True)
 
     @contextual_completer
     def _rpc_cd(self, args, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr):
@@ -291,8 +291,8 @@ class XonshRc:
         args = parser.parse_args(args)
         for filename in args.filename:
             with self.client.fs.open(filename, 'r') as f:
-                print(f.readall(), file=stdout, end='')
-        print('', file=stdout)
+                print(f.readall(), file=stdout, end='', flush=True)
+        print('', file=stdout, flush=True)
 
     def _rpc_bat(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='"bat" (improved-cat) given file')
@@ -327,7 +327,7 @@ class XonshRc:
         parser.add_argument('filename')
         args = parser.parse_args(args)
         for filename in self._find(args.filename):
-            print(filename, file=stdout)
+            print(filename, file=stdout, flush=True)
 
     def _rpc_plshow(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='parse and show plist')
@@ -373,7 +373,7 @@ class XonshRc:
         parser.add_argument('new_date', nargs='?')
         args = parser.parse_args(args)
         if not args:
-            print(self.client.time.now(), file=stdout)
+            print(self.client.time.now(), file=stdout, flush=True)
             return
         self.client.time.set_current(datetime.fromisoformat(args.new_date))
 
@@ -385,7 +385,7 @@ class XonshRc:
         for p in self.client.getenv('PATH').split(':'):
             filename = (Path(p) / args.filename).absolute()
             if self.client.fs.accessible((Path(p) / args.filename).absolute()):
-                print(filename)
+                print(filename, flush=True)
                 return
 
     def _rpc_env(self, args, stdin, stdout, stderr):
@@ -393,7 +393,7 @@ class XonshRc:
         parser.parse_args(args)
 
         for e in self.client.environ:
-            print(e, file=stdout)
+            print(e, file=stdout, flush=True)
 
     def _rpc_file(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='show file type')
@@ -409,7 +409,7 @@ class XonshRc:
         parser.parse_args(args)
 
         for k, v in self._commands.items():
-            print(f'👾 {k}', file=stdout)
+            print(f'👾 {k}', file=stdout, flush=True)
 
     @contextlib.contextmanager
     def _remote_file(self, remote):
