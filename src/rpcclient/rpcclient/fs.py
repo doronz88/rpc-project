@@ -65,7 +65,7 @@ class DirEntry:
         else:
             st_mode = self.stat(follow_symlinks=follow_symlinks).st_mode
             if not st_mode:
-                raise BadReturnValueError(f'failed to stat(): {self.path}')
+                self._client.raise_errno_exception(f'failed to stat(): {self.path}')
             return (st_mode & S_IFMT) == mode
 
     def _get_lstat(self):
@@ -107,13 +107,13 @@ class File(Allocated):
         """ close(fd) at remote. read man for more details. """
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
-            raise BadReturnValueError(f'failed to close fd: {fd}')
+            self._client.raise_errno_exception(f'failed to close fd: {fd}')
 
     def seek(self, offset: int, whence: int) -> int:
         """ lseek(fd, offset, whence) at remote. read man for more details. """
         err = self._client.symbols.lseek(self.fd, offset, whence).c_int32
         if err < 0:
-            raise BadReturnValueError(f'failed to lseek fd: {self.fd}')
+            self._client.raise_errno_exception(f'failed to lseek fd: {self.fd}')
         return err
 
     def tell(self) -> int:
@@ -123,7 +123,7 @@ class File(Allocated):
         """ write(fd, buf, size) at remote. read man for more details. """
         n = self._client.symbols.write(self.fd, buf, len(buf)).c_int64
         if n < 0:
-            raise BadReturnValueError(f'failed to write on fd: {self.fd}')
+            self._client.raise_errno_exception(f'failed to write on fd: {self.fd}')
         return n
 
     def writeall(self, buf: bytes):
@@ -137,7 +137,7 @@ class File(Allocated):
         with self._client.safe_malloc(size) as chunk:
             err = self._client.symbols.read(self.fd, chunk, self.CHUNK_SIZE).c_int64
             if err < 0:
-                raise BadReturnValueError(f'read failed for fd: {self.fd}')
+                self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
             return chunk.peek(err)
 
     def readall(self, chunk_size: int = CHUNK_SIZE) -> bytes:
@@ -150,7 +150,7 @@ class File(Allocated):
                     # EOF
                     break
                 if err < 0:
-                    raise BadReturnValueError(f'read failed for fd: {self.fd}')
+                    self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
                 buf += chunk.peek(err)
         return buf
 
@@ -168,38 +168,38 @@ class Fs:
     def chown(self, path: str, uid: int, gid: int):
         """ chmod(path, mode) at remote. read man for more details. """
         if self._client.symbols.chown(path, uid, gid).c_int32 < 0:
-            raise BadReturnValueError(f'failed to chown: {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to chown: {path}')
 
     @path_to_str('path')
     def chmod(self, path: str, mode: int):
         """ chmod(path, mode) at remote. read man for more details. """
         if self._client.symbols.chmod(path, mode).c_int32 < 0:
-            raise BadReturnValueError(f'failed to chmod: {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to chmod: {path}')
 
     @path_to_str('path')
     def remove(self, path: str):
         """ remove(path) at remote. read man for more details. """
         if self._client.symbols.remove(path).c_int32 < 0:
-            raise BadReturnValueError(f'failed to remove: {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to remove: {path}')
 
     @path_to_str('old')
     @path_to_str('new')
     def rename(self, old: str, new: str):
         """ rename(old, new) at remote. read man for more details. """
         if self._client.symbols.rename(old, new).c_int32 < 0:
-            raise BadReturnValueError(f'failed to rename: {old} -> {new} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to rename: {old} -> {new}')
 
     @path_to_str('path')
     def mkdir(self, path: str, mode: int):
         """ mkdir(path, mode) at remote. read man for more details. """
         if self._client.symbols.mkdir(path, mode).c_int64 < 0:
-            raise BadReturnValueError(f'failed to mkdir: {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to mkdir: {path}')
 
     @path_to_str('path')
     def chdir(self, path: str):
         """ chdir(path) at remote. read man for more details. """
         if self._client.symbols.chdir(path).c_int64 < 0:
-            raise BadReturnValueError(f'failed to chdir: {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to chdir: {path}')
 
     @path_to_str('file')
     def open(self, file: str, mode: str, access: int = 0o777) -> File:
@@ -229,7 +229,7 @@ class Fs:
 
         fd = self._client.symbols.open(file, mode, access).c_int32
         if fd < 0:
-            raise BadReturnValueError(f'failed to open: {file} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to open: {file}')
         return File(self._client, fd)
 
     @path_to_str('src', 'dst')
@@ -237,8 +237,8 @@ class Fs:
         """ symlink(src, dst) at remote. read man for more details. """
         err = self._client.symbols.symlink(src, dst).c_int64
         if err < 0:
-            raise BadReturnValueError(
-                f'symlink failed to create link: {dst}->{src} ({self._client.last_error})')
+            self._client.raise_errno_exception(
+                f'symlink failed to create link: {dst}->{src}')
         return err
 
     @path_to_str('src', 'dst')
@@ -246,7 +246,7 @@ class Fs:
         """ link(src, dst) - hardlink at remote. read man for more details. """
         err = self._client.symbols.link(src, dst).c_int64
         if err < 0:
-            raise BadReturnValueError(f'link failed to create link: {dst}->{src} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'link failed to create link: {dst}->{src}')
         return err
 
     def pwd(self) -> str:
@@ -254,7 +254,7 @@ class Fs:
             with the special values NULL, 0 the buffer is allocated dynamically """
         chunk = self._client.symbols.getcwd(0, 0)
         if chunk == 0:
-            raise BadReturnValueError(f'pwd failed ({self._client.last_error})')
+            self._client.raise_errno_exception('getcwd() failed')
         buf = chunk.peek_str()
         self._client.symbols.free(chunk)
         return buf

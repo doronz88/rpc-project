@@ -20,7 +20,8 @@ from traitlets.config import Config
 import rpcclient
 from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
-    InvalidServerVersionMagicError
+    InvalidServerVersionMagicError, BadReturnValueError, RpcFileExistsError, RpcNotEmptyError, RpcFileNotFoundError, \
+    RpcBrokenPipeError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
@@ -28,6 +29,7 @@ from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
     reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
     protocol_handshake_t, call_response_t_size
+from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -551,6 +553,19 @@ class Client:
                         stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
                         return exitcode_t.parse(data)
+
+    def raise_errno_exception(self, message: str):
+        message += f' ({self.last_error})'
+        exceptions = {
+            ENOENT: RpcFileNotFoundError,
+            EEXIST: RpcFileExistsError,
+            EPIPE: RpcBrokenPipeError,
+            ENOTEMPTY: RpcNotEmptyError,
+        }
+        exception = exceptions.get(self.errno)
+        if exception:
+            raise exception(message)
+        raise BadReturnValueError(message)
 
     def __repr__(self):
         buf = f'<{self.__class__.__name__} '

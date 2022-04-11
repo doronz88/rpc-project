@@ -76,3 +76,23 @@ class NoEntitlementsError(RpcClientException):
 class ElementNotFoundError(RpcClientException):
     """ Failed to find element """
     pass
+
+
+class RpcFileExistsError(BadReturnValueError):
+    """ RPC version for FileExistsError (errno = EEXIST) """
+    pass
+
+
+class RpcFileNotFoundError(BadReturnValueError):
+    """ RPC version for FileNotFoundError (errno = ENOENTRY) """
+    pass
+
+
+class RpcBrokenPipeError(BadReturnValueError):
+    """ RPC version for BrokenPipeError (errno = EPIPE) """
+    pass
+
+
+class RpcNotEmptyError(BadReturnValueError):
+    """ raised when errno = ENOTEMPTY """
+    pass
