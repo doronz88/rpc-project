@@ -18,6 +18,7 @@ from xonsh.completers.tools import contextual_completer
 
 import rpcclient
 from rpcclient.client_factory import create_client
+from rpcclient.exceptions import RpcFileExistsError
 from rpcclient.protocol import DEFAULT_PORT
 from rpcclient.structs.consts import SIGTERM
 
@@ -109,6 +110,7 @@ class XonshRc:
         self._register_rpc_command('cd', self._rpc_cd)
         self._register_rpc_command('rm', self._rpc_rm)
         self._register_rpc_command('mv', self._rpc_mv)
+        self._register_rpc_command('cp', self._rpc_cp)
         self._register_rpc_command('mkdir', self._rpc_mkdir)
         self._register_rpc_command('cat', self._rpc_cat)
         self._register_rpc_command('bat', self._rpc_bat)
@@ -279,11 +281,31 @@ class XonshRc:
         args = parser.parse_args(args)
         self.client.fs.rename(args.src, args.dst)
 
+    def _rpc_cp(self, args, stdin, stdout, stderr):
+        parser = ArgumentParser(description='copy a file')
+        parser.add_argument('src')
+        parser.add_argument('dst')
+        args = parser.parse_args(args)
+        with self.client.fs.open(args.src, 'r') as src:
+            with self.client.fs.open(args.dst, 'w') as dst:
+                dst.writeall(src.readall())
+
     def _rpc_mkdir(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='create a directory')
         parser.add_argument('filename')
+        parser.add_argument('-p', '--create-all', action='store_true')
         args = parser.parse_args(args)
-        self.client.fs.mkdir(args.filename, mode=0o777)
+        dir_path = Path(self._rpc_cwd())
+
+        if args.create_all:
+            for part in Path(args.filename).parts:
+                dir_path = dir_path / part
+                try:
+                    self.client.fs.mkdir(dir_path, mode=0o777)
+                except RpcFileExistsError:
+                    pass
+        else:
+            self.client.fs.mkdir(args.filename, mode=0o777)
 
     def _rpc_cat(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='read a list of files')

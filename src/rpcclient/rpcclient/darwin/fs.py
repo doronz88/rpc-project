@@ -1,9 +1,8 @@
 from typing import List, Mapping
 
 from rpcclient.common import path_to_str
-from rpcclient.exceptions import BadReturnValueError
-from rpcclient.fs import Fs, DirEntry, ScandirIterator
 from rpcclient.darwin.structs import dirent32, dirent64, stat64, statfs64
+from rpcclient.fs import Fs, DirEntry, ScandirIterator
 
 
 def do_stat(client, stat_name, filename: str):
@@ -11,7 +10,7 @@ def do_stat(client, stat_name, filename: str):
     with client.safe_malloc(stat64.sizeof()) as buf:
         err = client.symbols[stat_name](filename, buf)
         if err != 0:
-            raise BadReturnValueError(f'failed to stat(): {filename}')
+            client.raise_errno_exception(f'failed to stat(): {filename}')
         return stat64.parse_stream(buf)
 
 
@@ -33,7 +32,7 @@ class DarwinScandirIterator(ScandirIterator):
             if not direntp:
                 self.deallocate()
                 if self._client.errno:
-                    raise BadReturnValueError(f'Failed scanning dir: {self._client.last_error}')
+                    self._client.raise_errno_exception('Failed scanning dir')
                 break
             entry = dirent.parse_stream(direntp)
             if entry.d_name in ('.', '..'):
@@ -54,7 +53,7 @@ class DarwinFs(Fs):
     def scandir(self, path: str = '.'):
         dp = self._client.symbols.opendir(path)
         if not dp:
-            raise BadReturnValueError(f'failed to opendir(): {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to opendir(): {path}')
         return DarwinScandirIterator(path, dp, self._client)
 
     @path_to_str('path')
@@ -62,14 +61,14 @@ class DarwinFs(Fs):
         """ set an extended attribute value """
         count = self._client.symbols.setxattr(path, name, value, len(value), 0, 0).c_int64
         if count == -1:
-            raise BadReturnValueError(f'failed to setxattr(): {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to setxattr(): {path}')
 
     @path_to_str('path')
     def removexattr(self, path: str, name: str):
         """ remove an extended attribute value """
         count = self._client.symbols.removexattr(path, name, 0).c_int64
         if count == -1:
-            raise BadReturnValueError(f'failed to removexattr(): {path} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to removexattr(): {path}')
 
     @path_to_str('path')
     def listxattr(self, path: str) -> List[str]:
@@ -78,7 +77,7 @@ class DarwinFs(Fs):
         with self._client.safe_malloc(max_buf_len) as xattributes_names:
             count = self._client.symbols.listxattr(path, xattributes_names, max_buf_len, 0).c_int64
             if count == -1:
-                raise BadReturnValueError(f'failed to listxattr(): {path} ({self._client.last_error})')
+                self._client.raise_errno_exception(f'failed to listxattr(): {path}')
             return [s.decode() for s in xattributes_names.peek(count).split(b'\x00')[:-1]]
 
     @path_to_str('path')
@@ -88,7 +87,7 @@ class DarwinFs(Fs):
         with self._client.safe_malloc(max_buf_len) as value:
             count = self._client.symbols.getxattr(path, name, value, max_buf_len, 0, 0).c_int64
             if count == -1:
-                raise BadReturnValueError(f'failed to getxattr(): {path} ({self._client.last_error})')
+                self._client.raise_errno_exception(f'failed to getxattr(): {path}')
             return value.peek(count)
 
     @path_to_str('path')
@@ -103,5 +102,5 @@ class DarwinFs(Fs):
     def statfs(self, path: str):
         with self._client.safe_malloc(statfs64.sizeof()) as buf:
             if 0 != self._client.symbols.statfs64(path, buf):
-                raise BadReturnValueError(f'statfs failed for: {path}')
+                self._client.raise_errno_exception(f'statfs failed for: {path}')
             return statfs64.parse_stream(buf)

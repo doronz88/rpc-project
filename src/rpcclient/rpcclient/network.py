@@ -46,7 +46,7 @@ class Socket(Allocated):
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
-            raise BadReturnValueError(f'failed to send on fd: {self.fd} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to send on fd: {self.fd}')
         return n
 
     def sendall(self, buf: bytes):
@@ -58,9 +58,9 @@ class Socket(Allocated):
     def _recv(self, chunk, size: int):
         err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
         if err < 0:
-            raise BadReturnValueError(f'recv() failed for fd: {self.fd} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'recv() failed for fd: {self.fd}')
         elif err == 0:
-            raise BadReturnValueError(f'recv() failed for fd: {self.fd} (peer closed)')
+            self._client.raise_errno_exception(f'recv() failed for fd: {self.fd} (peer closed)')
         return chunk.peek(size)
 
     def recv(self, size: int = CHUNK_SIZE) -> bytes:
@@ -83,7 +83,7 @@ class Socket(Allocated):
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
         if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)):
-            raise BadReturnValueError(f'setsockopt() failed: {self._client.last_error}')
+            self._client.raise_errno_exception(f'setsockopt() failed: {self._client.last_error}')
 
     def settimeout(self, seconds: int):
         self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
@@ -96,7 +96,7 @@ class Socket(Allocated):
         else:
             opts &= ~O_NONBLOCK
         if 0 != self._client.symbols.fcntl(self.fd, F_SETFL, opts):
-            raise BadReturnValueError(f'fcntl() failed: {self._client.last_error}')
+            self._client.raise_errno_exception(f'fcntl() failed: {self._client.last_error}')
         self._blocking = blocking
 
     def getblocking(self) -> bool:
@@ -120,7 +120,7 @@ class Network:
         """ socket(family, type, proto) at remote. read man for more details. """
         result = self._client.symbols.socket(family, type, proto).c_int64
         if 0 == result:
-            raise BadReturnValueError(f'failed to create socket: {result} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed to create socket: {result}')
         return result
 
     def tcp_connect(self, address: str, port: int) -> Socket:
@@ -131,7 +131,7 @@ class Network:
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if error == -1:
-            raise BadReturnValueError(f'failed connecting to: {address}:{port} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed connecting to: {address}:{port}')
         return Socket(self._client, sockfd)
 
     def unix_connect(self, filename: str) -> Socket:
@@ -141,7 +141,7 @@ class Network:
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if error == -1:
-            raise BadReturnValueError(f'failed connecting to: {filename} ({self._client.last_error})')
+            self._client.raise_errno_exception(f'failed connecting to: {filename}')
         return Socket(self._client, sockfd)
 
     def gethostbyname(self, name: str) -> Hostentry:
@@ -172,7 +172,7 @@ class Network:
         my_ifaddrs = ifaddrs(self._client)
         with self._client.safe_calloc(8) as addresses:
             if self._client.symbols.getifaddrs(addresses).c_int64 < 0:
-                raise BadReturnValueError('getifaddrs failed')
+                self._client.raise_errno_exception('getifaddrs failed')
 
             current = my_ifaddrs.parse_stream(addresses[0])
 
