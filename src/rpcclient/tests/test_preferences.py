@@ -1,3 +1,4 @@
+import plistlib
 from contextlib import suppress
 
 import pytest
@@ -6,220 +7,190 @@ from rpcclient.exceptions import NoSuchPreferenceError
 
 pytestmark = pytest.mark.darwin
 DOMAIN = 'rpcserver'
+USERNAME = 'kCFPreferencesAnyUser'
+PLIST_PATH = f'/Library/Preferences/{DOMAIN}.plist'
 
 
-def test_cf_get_keys(client):
+@pytest.fixture()
+def tmp_preference(client):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    assert 'uuid-mappings' in client.preferences.cf.get_keys('com.apple.networkextension.uuidcache',
-                                                             'kCFPreferencesAnyUser')
+    client.preferences.cf.set_dict({'key1': 'value1'}, DOMAIN, USERNAME)
+    client.preferences.cf.sync(DOMAIN, USERNAME)
+    client.fs.write_file(PLIST_PATH, plistlib.dumps({'key1': 'value1'}))
+    try:
+        yield
+    finally:
+        try:
+            client.preferences.cf.clear(DOMAIN, USERNAME)
+        except NoSuchPreferenceError:
+            pass
+        client.preferences.cf.sync(DOMAIN, USERNAME)
 
 
-def test_cf_get_keys_invalid_preference(client):
+def test_cf_get_keys(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    assert 'key1' in client.preferences.cf.get_keys(DOMAIN, USERNAME)
+
+
+def test_cf_get_keys_invalid_preference(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
     """
     with pytest.raises(NoSuchPreferenceError):
-        client.preferences.cf.get_keys('com.apple.invalid_preference_for_sure', 'kCFPreferencesAnyUser')
+        client.preferences.cf.get_keys('com.apple.invalid_preference_for_sure', USERNAME)
 
 
-def test_cf_get_value(client):
+def test_cf_get_value(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    assert 0 == client.preferences.cf.get_value('drop_all_level',
-                                                'com.apple.networkextension.necp',
-                                                'kCFPreferencesAnyUser')
+    assert 'value1' == client.preferences.cf.get_value('key1', DOMAIN, USERNAME)
 
 
-def test_cf_get_dict(client):
+def test_cf_get_dict(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    assert 0 == client.preferences.cf.get_dict('com.apple.networkextension.necp',
-                                               'kCFPreferencesAnyUser')['drop_all_level']
+    assert 'value1' == client.preferences.cf.get_dict(DOMAIN, USERNAME)['key1']
 
 
-def test_cf_set(client):
+def test_cf_set(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    uuid_mapping = client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                                   'kCFPreferencesAnyUser')
-    client.preferences.cf.set('uuid-mappings', {'hey': 'you'}, 'com.apple.networkextension.uuidcache',
-                              'kCFPreferencesAnyUser')
-    try:
-        assert client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                               'kCFPreferencesAnyUser') == {'hey': 'you'}
-    finally:
-        client.preferences.cf.set('uuid-mappings', uuid_mapping, 'com.apple.networkextension.uuidcache',
-                                  'kCFPreferencesAnyUser')
+    client.preferences.cf.set('key2', {'hey': 'you'}, DOMAIN, USERNAME)
+    assert client.preferences.cf.get_value('key2', DOMAIN, USERNAME) == {'hey': 'you'}
 
 
-def test_cf_remove(client):
-    uuid_mapping = client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                                   'kCFPreferencesAnyUser')
-    client.preferences.cf.remove('uuid-mappings', 'com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser')
-    try:
-        assert client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                               'kCFPreferencesAnyUser') is None
-    finally:
-        client.preferences.cf.set('uuid-mappings', uuid_mapping, 'com.apple.networkextension.uuidcache',
-                                  'kCFPreferencesAnyUser')
-
-
-def test_cf_set_dict(client):
-    uuid_mapping = client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                                   'kCFPreferencesAnyUser')
-    client.preferences.cf.set_dict({'a': 5}, 'com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser')
-    try:
-        client.preferences.cf.get_dict('com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser') == {'a': 5}
-    finally:
-        client.preferences.cf.set_dict({'uuid-mappings': uuid_mapping}, 'com.apple.networkextension.uuidcache',
-                                       'kCFPreferencesAnyUser')
-
-
-def test_cf_update_dict(client):
-    uuid_mapping = client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                                   'kCFPreferencesAnyUser')
-    client.preferences.cf.set_dict({'a': 5}, 'com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser')
-    try:
-        client.preferences.cf.get_dict('com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser') == {
-            'a': 5,
-            'uuid-mappings': uuid_mapping
-        }
-    finally:
-        client.preferences.cf.set_dict({'uuid-mappings': uuid_mapping}, 'com.apple.networkextension.uuidcache',
-                                       'kCFPreferencesAnyUser')
-
-
-def test_cf_clear(client):
-    uuid_mapping = client.preferences.cf.get_value('uuid-mappings', 'com.apple.networkextension.uuidcache',
-                                                   'kCFPreferencesAnyUser')
-    client.preferences.cf.clear('com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser')
-    try:
-        with pytest.raises(NoSuchPreferenceError):
-            assert not client.preferences.cf.get_dict('com.apple.networkextension.uuidcache', 'kCFPreferencesAnyUser')
-    finally:
-        client.preferences.cf.set('uuid-mappings', uuid_mapping, 'com.apple.networkextension.uuidcache',
-                                  'kCFPreferencesAnyUser')
-
-
-def test_sc_get_keys(client):
+def test_cf_remove(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    keys = client.preferences.sc.get_keys('preferences.plist')
-    assert '__VERSION__' in keys
-    assert 'Model' in keys
+    client.preferences.cf.remove('key1', DOMAIN, USERNAME)
+    assert client.preferences.cf.get_value('key1', DOMAIN, USERNAME) is None
 
 
-def test_sc_get_dict(client):
+def test_cf_set_dict(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    dict_ = client.preferences.sc.get_dict('preferences.plist')
-    assert '__VERSION__' in dict_ and dict_['__VERSION__']
-    assert 'Model' in dict_ and dict_['Model']
+    client.preferences.cf.get_value('key1', DOMAIN, USERNAME)
+    client.preferences.cf.set_dict({'b': 5}, DOMAIN, USERNAME)
+    assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == {'b': 5}
 
 
-def test_sc_object_keys(client):
+def test_cf_update_dict(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    with client.preferences.sc.open('preferences.plist') as pref:
+    update_contents = {'a': 5}
+    expected_dict = client.preferences.cf.get_dict(DOMAIN, USERNAME)
+    expected_dict.update(update_contents)
+    client.preferences.cf.update_dict(update_contents, DOMAIN, USERNAME)
+    assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == expected_dict
+
+
+def test_cf_clear(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    client.preferences.cf.clear(DOMAIN, USERNAME)
+    with pytest.raises(NoSuchPreferenceError):
+        assert not client.preferences.cf.get_dict(DOMAIN, USERNAME)
+
+
+def test_sc_get_keys(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    keys = client.preferences.sc.get_keys(PLIST_PATH)
+    assert 'key1' in keys
+
+
+def test_sc_get_dict(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    dict_ = client.preferences.sc.get_dict(PLIST_PATH)
+    assert 'key1' in dict_
+
+
+def test_sc_object_keys(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    with client.preferences.sc.open(PLIST_PATH) as pref:
         keys = pref.keys
-    assert '__VERSION__' in keys
-    assert 'Model' in keys
+    assert 'key1' in keys
 
 
-def test_sc_object_set(client):
+def test_sc_object_set(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    try:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set('test', 'MyModel')
-        assert client.preferences.sc.get_dict('preferences.plist')['test'] == 'MyModel'
-    finally:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.remove('test')
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        pref.set('key2', 'value2')
+    assert client.preferences.sc.get_dict(PLIST_PATH)['key2'] == 'value2'
 
 
-def test_sc_object_set_dict(client):
+def test_sc_object_set_dict(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    dict_ = client.preferences.sc.get_dict('preferences.plist')
-    try:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set_dict({'hey': 'you'})
-        assert client.preferences.sc.get_dict('preferences.plist') == {'hey': 'you'}
-    finally:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set_dict(dict_)
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        pref.set_dict({'hey': 'you'})
+    assert client.preferences.sc.get_dict(PLIST_PATH) == {'hey': 'you'}
 
 
-def test_sc_object_update_dict(client):
+def test_sc_object_update_dict(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    old_dict_ = client.preferences.sc.get_dict('preferences.plist')
-    try:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.update_dict({'hey': 'you'})
-        dict_ = client.preferences.sc.get_dict('preferences.plist')
-        assert '__VERSION__' in dict_ and dict_['__VERSION__']
-        assert 'Model' in dict_ and dict_['Model']
-        assert dict_['hey'] == 'you'
-    finally:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set_dict(old_dict_)
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        pref.update_dict({'hey': 'you'})
+    dict_ = client.preferences.sc.get_dict(PLIST_PATH)
+    assert dict_['key1'] == 'value1'
+    assert dict_['hey'] == 'you'
 
 
-def test_sc_object_remove(client):
-    model = client.preferences.sc.get_dict('preferences.plist')['Model']
-    try:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.remove('Model')
-        assert 'Model' not in client.preferences.sc.get_dict('preferences.plist')
-    finally:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set('Model', model)
-
-
-def test_sc_object_get(client):
+def test_sc_object_remove(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    with client.preferences.sc.open('preferences.plist') as pref:
-        model = pref.get('Model')
-    assert model
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        pref.remove('key1')
+    assert 'key1' not in client.preferences.sc.get_dict(PLIST_PATH)
 
 
-def test_sc_object_get_dict(client):
+def test_sc_object_get(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    with client.preferences.sc.open('preferences.plist') as pref:
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        val = pref.get('key1')
+    assert val == 'value1'
+
+
+def test_sc_object_get_dict(client, tmp_preference):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    with client.preferences.sc.open(PLIST_PATH) as pref:
         dict_ = pref.get_dict()
-    assert '__VERSION__' in dict_ and dict_['__VERSION__']
-    assert 'Model' in dict_ and dict_['Model']
+    assert dict_ == {'key1': 'value1'}
 
 
-def test_sc_object_clear(client):
+def test_sc_object_clear(client, tmp_preference):
     """
-    :param rpcclient.client.Client client:
+    :param rpcclient.darwin.client.DarwinClient client:
     """
-    old_dict_ = client.preferences.sc.get_dict('preferences.plist')
-    try:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.clear()
-        assert not client.preferences.sc.get_dict('preferences.plist')
-    finally:
-        with client.preferences.sc.open('preferences.plist') as pref:
-            pref.set_dict(old_dict_)
+    with client.preferences.sc.open(PLIST_PATH) as pref:
+        pref.clear()
+    assert not client.preferences.sc.get_dict(PLIST_PATH)
 
 
 class TestCustomDomain:
