@@ -449,12 +449,10 @@ class XonshRc:
         return self.client.fs.listdir(path)
 
     def _pull(self, remote_filename, local_filename):
-        with open(local_filename, 'wb') as f:
-            f.write(self.client.fs.read_file(remote_filename))
+        self.client.fs.pull(remote_filename, local_filename, onerror=lambda x: None)
 
     def _push(self, local_filename, remote_filename):
-        with open(local_filename, 'rb') as f:
-            self.client.fs.write_file(remote_filename, f.read())
+        self.client.fs.push(local_filename, remote_filename, onerror=lambda x: None)
 
 
 # actual RC contents

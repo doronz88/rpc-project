@@ -8,7 +8,7 @@ from rpcclient.common import path_to_str
 from rpcclient.darwin.structs import MAXPATHLEN
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
-    RpcIsADirectoryError
+    RpcIsADirectoryError, RpcClientException
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
 
@@ -167,6 +167,11 @@ class Fs:
         self._client = client
 
     @path_to_str('path')
+    def is_file(self, path: str) -> bool:
+        """ Return True if the entry is a file """
+        return bool(self.stat(path).st_mode & S_IFREG)
+
+    @path_to_str('path')
     def _chown(self, path: str, uid: int, gid: int):
         """ chmod(path, mode) at remote. read man for more details. """
         if self._client.symbols.chown(path, uid, gid).c_int32 < 0:
@@ -208,7 +213,7 @@ class Fs:
     @path_to_str('path')
     def remove(self, path: str, recursive=False, force=False):
         """ remove(path) at remote. read man for more details. """
-        if not recursive:
+        if not recursive or self.is_file(path):
             self._remove(path, force=force)
             return
 
@@ -232,10 +237,14 @@ class Fs:
         self.chmod(path, mode)
 
     @path_to_str('path')
-    def mkdir(self, path: str, mode: int = 0o777, parents=False):
+    def mkdir(self, path: str, mode: int = 0o777, parents=False, exist_ok=False):
         """ mkdir(path, mode) at remote. read man for more details. """
         if not parents:
-            self._mkdir(path, mode=mode)
+            try:
+                self._mkdir(path, mode=mode)
+            except RpcFileExistsError:
+                if not exist_ok:
+                    raise
             return
 
         dir_path = Path(self.pwd())
@@ -308,6 +317,78 @@ class Fs:
     def read_file(self, file: str) -> bytes:
         with self.open(file, 'r') as f:
             return f.read()
+
+    @path_to_str('remote')
+    @path_to_str('local')
+    def _pull_file(self, remote: str, local: str):
+        with open(local, 'wb') as f:
+            f.write(self.read_file(remote))
+
+    @path_to_str('remote')
+    @path_to_str('local')
+    def _push_file(self, local: str, remote: str):
+        with open(local, 'rb') as f:
+            self.write_file(remote, f.read())
+
+    @path_to_str('remote')
+    @path_to_str('local')
+    def pull(self, remote: str, local: str, onerror=None):
+        """ pull complete directory tree """
+        if self.is_file(remote):
+            self._pull_file(remote, local)
+            return
+
+        cwd = os.getcwd()
+        remote = Path(remote)
+        local = Path(local)
+
+        try:
+            for root, dirs, files in self.walk(remote, topdown=True, onerror=onerror):
+                local_root = local / Path(root).relative_to(remote)
+                local_root.mkdir(exist_ok=True)
+                os.chdir(str(local_root))
+                for name in dirs:
+                    Path(name).mkdir(exist_ok=True)
+                for name in files:
+                    try:
+                        self._pull_file(os.path.join(root, name), name)
+                    except RpcClientException as e:
+                        if onerror:
+                            onerror(e)
+                        else:
+                            raise
+        finally:
+            os.chdir(cwd)
+
+    @path_to_str('local')
+    @path_to_str('remote')
+    def push(self, local: str, remote: str, onerror=None):
+        """ push complete directory tree """
+        cwd = self.pwd()
+        remote = Path(remote)
+        local = Path(local)
+
+        if local.is_file():
+            self._push_file(local, remote)
+            return
+
+        try:
+            for root, dirs, files in os.walk(local, topdown=True, onerror=onerror):
+                remote_root = local / Path(root).relative_to(remote)
+                self.mkdir(remote_root, exist_ok=True)
+                self.chdir(remote_root)
+                for name in dirs:
+                    self.mkdir(name, exist_ok=True)
+                for name in files:
+                    try:
+                        self._push_file(os.path.join(root, name), name)
+                    except RpcClientException as e:
+                        if onerror:
+                            onerror(e)
+                        else:
+                            raise
+        finally:
+            self.chdir(cwd)
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = None):
