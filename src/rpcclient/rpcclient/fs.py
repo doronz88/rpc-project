@@ -1,9 +1,11 @@
 import os
 import posixpath
+from pathlib import Path
 from typing import Iterator, List
 
 from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
+from rpcclient.darwin.structs import MAXPATHLEN
 from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
@@ -202,16 +204,35 @@ class Fs:
             self._client.raise_errno_exception(f'failed to rename: {old} -> {new}')
 
     @path_to_str('path')
-    def mkdir(self, path: str, mode: int):
+    def mkdir(self, path: str, mode: int = 0o777):
         """ mkdir(path, mode) at remote. read man for more details. """
         if self._client.symbols.mkdir(path, mode).c_int64 < 0:
             self._client.raise_errno_exception(f'failed to mkdir: {path}')
+
+        # os may not always respect the permission given by the mode argument to mkdir
+        self.chmod(path, mode)
 
     @path_to_str('path')
     def chdir(self, path: str):
         """ chdir(path) at remote. read man for more details. """
         if self._client.symbols.chdir(path).c_int64 < 0:
             self._client.raise_errno_exception(f'failed to chdir: {path}')
+
+    @path_to_str('path')
+    def readlink(self, path: str) -> str:
+        """ readlink() at remote. read man for more details. """
+        with self._client.safe_calloc(MAXPATHLEN) as buf:
+            if self._client.symbols.readlink(path, buf, MAXPATHLEN).c_int64 < 0:
+                self._client.raise_errno_exception(f'readlink failed for: {path}')
+            return str(Path(path).parent / buf.peek_str())
+
+    @path_to_str('path')
+    def is_symlink(self, path: str) -> bool:
+        try:
+            self.readlink(path)
+            return True
+        except BadReturnValueError:
+            return False
 
     @path_to_str('file')
     def open(self, file: str, mode: str, access: int = 0o777) -> File:
