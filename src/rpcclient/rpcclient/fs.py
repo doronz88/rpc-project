@@ -96,7 +96,7 @@ class ScandirIterator(Allocated):
 
 
 class File(Allocated):
-    CHUNK_SIZE = 1024
+    CHUNK_SIZE = 1024 * 64
 
     def __init__(self, client, fd: int):
         """
