@@ -265,6 +265,24 @@ class Fs:
             self._client.raise_errno_exception(f'failed to open: {file}')
         return File(self._client, fd)
 
+    @path_to_str('file')
+    def write_file(self, file: str, buf: bytes, access: int = 0o777):
+        with self.open(file, 'w+', access=access) as f:
+            f.writeall(buf)
+
+    @path_to_str('file')
+    def read_file(self, file: str) -> bytes:
+        with self.open(file, 'r') as f:
+            return f.readall()
+
+    @path_to_str('file')
+    def touch(self, file: str, mode: int = None):
+        """ simulate unix touch command for given file """
+        with self.open(file, 'w+'):
+            pass
+        if mode is not None:
+            self.chmod(file, mode)
+
     @path_to_str('src', 'dst')
     def symlink(self, src: str, dst: str) -> int:
         """ symlink(src, dst) at remote. read man for more details. """
