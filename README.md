@@ -1,5 +1,6 @@
 [![Server application](https://img.shields.io/github/workflow/status/doronz88/rpc-project/Server%20application?label=python%20package&style=plastic)](https://github.com/doronz88/rpc-project/actions/workflows/server-app.yml "Server application action")
 [![Python application](https://img.shields.io/github/workflow/status/doronz88/rpc-project/Python%20application?label=server%20build&style=plastic)](https://github.com/doronz88/rpc-project/actions/workflows/python-app.yml "Python application action")
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/doronz88/rpc-project.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/doronz88/rpc-project/context:python)
 
 - [rpc-project](#rpc-project)
   - [Description](#description)

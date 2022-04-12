@@ -6,7 +6,8 @@ from typing import Iterator, List
 from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
 from rpcclient.darwin.structs import MAXPATHLEN
-from rpcclient.exceptions import BadReturnValueError, ArgumentError
+from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
+    RpcIsADirectoryError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
 
@@ -168,16 +169,36 @@ class Fs:
         self._client = client
 
     @path_to_str('path')
-    def chown(self, path: str, uid: int, gid: int):
+    def _chown(self, path: str, uid: int, gid: int):
         """ chmod(path, mode) at remote. read man for more details. """
         if self._client.symbols.chown(path, uid, gid).c_int32 < 0:
             self._client.raise_errno_exception(f'failed to chown: {path}')
 
     @path_to_str('path')
-    def chmod(self, path: str, mode: int):
+    def chown(self, path: str, uid: int, gid: int, recursive=False):
+        """ chmod(path, mode) at remote. read man for more details. """
+        if not recursive:
+            self._chown(path, uid, gid)
+            return
+
+        for file in self.find(path, topdown=False):
+            self._chown(file, uid, gid)
+
+    @path_to_str('path')
+    def _chmod(self, path: str, mode: int):
         """ chmod(path, mode) at remote. read man for more details. """
         if self._client.symbols.chmod(path, mode).c_int32 < 0:
             self._client.raise_errno_exception(f'failed to chmod: {path}')
+
+    @path_to_str('path')
+    def chmod(self, path: str, mode: int, recursive=False):
+        """ chmod(path, mode) at remote. read man for more details. """
+        if not recursive:
+            self._chmod(path, mode)
+            return
+
+        for file in self.find(path, topdown=False):
+            self._chmod(file, mode)
 
     @path_to_str('path')
     def _remove(self, path: str, force=False):
@@ -193,7 +214,7 @@ class Fs:
             self._remove(path, force=force)
             return
 
-        for filename in list(self.find(path))[::-1]:
+        for filename in self.find(path, topdown=False):
             self._remove(filename, force=force)
 
     @path_to_str('old')
@@ -204,13 +225,28 @@ class Fs:
             self._client.raise_errno_exception(f'failed to rename: {old} -> {new}')
 
     @path_to_str('path')
-    def mkdir(self, path: str, mode: int = 0o777):
+    def _mkdir(self, path: str, mode: int = 0o777):
         """ mkdir(path, mode) at remote. read man for more details. """
         if self._client.symbols.mkdir(path, mode).c_int64 < 0:
             self._client.raise_errno_exception(f'failed to mkdir: {path}')
 
         # os may not always respect the permission given by the mode argument to mkdir
         self.chmod(path, mode)
+
+    @path_to_str('path')
+    def mkdir(self, path: str, mode: int = 0o777, parents=False):
+        """ mkdir(path, mode) at remote. read man for more details. """
+        if not parents:
+            self._mkdir(path, mode=mode)
+            return
+
+        dir_path = Path(self.pwd())
+        for part in Path(path).parts:
+            dir_path = dir_path / part
+            try:
+                self._mkdir(dir_path, mode=mode)
+            except (RpcIsADirectoryError, RpcFileExistsError):
+                pass
 
     @path_to_str('path')
     def chdir(self, path: str):
@@ -336,17 +372,28 @@ class Fs:
             return False
 
     @path_to_str('top')
-    def find(self, top: str):
+    def find(self, top: str, topdown=True):
         """ traverse a file tree top to down """
-        yield top
-        for root, dirs, files in self.walk(top):
+        if topdown:
+            if self.accessible(top):
+                yield top
+            else:
+                raise RpcFileNotFoundError(f'cannot access: {top}')
+
+        for root, dirs, files in self.walk(top, topdown=topdown):
             for name in files:
                 yield os.path.join(root, name)
             for name in dirs:
                 yield os.path.join(root, name)
 
+        if not topdown:
+            if self.accessible(top):
+                yield top
+            else:
+                raise RpcFileNotFoundError(f'cannot access: {top}')
+
     @path_to_str('top')
-    def walk(self, top: str, onerror=None):
+    def walk(self, top: str, topdown=True, onerror=None):
         """ provides the same results as os.walk(top) """
         dirs = []
         files = []
@@ -366,9 +413,13 @@ class Fs:
                 raise e
             onerror(e)
 
-        yield top, dirs, files
+        if topdown:
+            yield top, dirs, files
 
         if dirs:
             for d in dirs:
-                for walk_result in self.walk(posixpath.join(top, d)):
+                for walk_result in self.walk(posixpath.join(top, d), topdown=topdown, onerror=onerror):
                     yield walk_result
+
+        if not topdown:
+            yield top, dirs, files

@@ -18,7 +18,6 @@ from xonsh.completers.tools import contextual_completer
 
 import rpcclient
 from rpcclient.client_factory import create_client
-from rpcclient.exceptions import RpcFileExistsError
 from rpcclient.protocol import DEFAULT_PORT
 from rpcclient.structs.consts import SIGTERM
 
@@ -76,15 +75,12 @@ class XonshRc:
             XSH.aliases[k] = v
 
     def _rpc_connect(self, args, stdin, stdout, stderr):
-        if '--help' in args:
-            print('rpc-connect <hostname> [port]', file=stdout)
-            return
+        parser = ArgumentParser(description='connect to remote rpcserver')
+        parser.add_argument('hostname')
+        parser.add_argument('port', nargs='?', type=int, default=DEFAULT_PORT)
+        args = parser.parse_args(args)
 
-        hostname = args[0]
-        port = DEFAULT_PORT
-        if len(args) > 1:
-            port = int(args[1])
-        self.client = create_client(hostname, port)
+        self.client = create_client(args.hostname, args.port)
 
         # -- rpc
         self._register_rpc_command('rpc-disconnect', self._rpc_disconnect)
@@ -117,6 +113,7 @@ class XonshRc:
         self._register_rpc_command('pull', self._rpc_pull)
         self._register_rpc_command('push', self._rpc_push)
         self._register_rpc_command('chmod', self._rpc_chmod)
+        self._register_rpc_command('chown', self._rpc_chown)
         self._register_rpc_command('find', self._rpc_find)
         self._register_rpc_command('xattr-get-dict', self._rpc_xattr_get_dict)
         self._register_rpc_command('vim', self._rpc_vim)
@@ -247,8 +244,7 @@ class XonshRc:
         parser = ArgumentParser(description='create an empty file')
         parser.add_argument('filename')
         args = parser.parse_args(args)
-        with self.client.fs.open(args.filename, 'w'):
-            pass
+        self.client.fs.write_file(args.filename, b'')
 
     def _rpc_pwd(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='get current working directory')
@@ -266,13 +262,10 @@ class XonshRc:
         parser = ArgumentParser(description='remove list of files')
         parser.add_argument('path', nargs='+')
         parser.add_argument('-r', '--recursive', action='store_true')
+        parser.add_argument('-f', '--force', action='store_true')
         args = parser.parse_args(args)
-
         for path in args.path:
-            if args.recursive:
-                for entry in self._find(path):
-                    self.client.fs.remove(entry)
-            self.client.fs.remove(path)
+            self.client.fs.remove(path, recursive=args.recursive, force=args.force)
 
     def _rpc_mv(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='move a file')
@@ -293,19 +286,10 @@ class XonshRc:
     def _rpc_mkdir(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='create a directory')
         parser.add_argument('filename')
-        parser.add_argument('-p', '--create-all', action='store_true')
+        parser.add_argument('-m', '--mode', nargs='?', default='777')
+        parser.add_argument('-p', '--parents', action='store_true')
         args = parser.parse_args(args)
-        dir_path = Path(self._rpc_cwd())
-
-        if args.create_all:
-            for part in Path(args.filename).parts:
-                dir_path = dir_path / part
-                try:
-                    self.client.fs.mkdir(dir_path, mode=0o777)
-                except RpcFileExistsError:
-                    pass
-        else:
-            self.client.fs.mkdir(args.filename, mode=0o777)
+        self.client.fs.mkdir(args.filename, mode=int(args.mode, 8), parents=args.parents)
 
     def _rpc_cat(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='read a list of files')
@@ -341,14 +325,25 @@ class XonshRc:
         parser = ArgumentParser(description='chmod at remote')
         parser.add_argument('mode')
         parser.add_argument('filename')
+        parser.add_argument('-R', '--recursive', action='store_true')
         args = parser.parse_args(args)
-        self.client.fs.chmod(args.filename, int(args.mode, 8))
+        self.client.fs.chmod(args.filename, int(args.mode, 8), recursive=args.recursive)
+
+    def _rpc_chown(self, args, stdin, stdout, stderr):
+        parser = ArgumentParser(description='chown at remote')
+        parser.add_argument('uid', type=int)
+        parser.add_argument('gid', type=int)
+        parser.add_argument('filename')
+        parser.add_argument('-r', '--recursive', action='store_true')
+        args = parser.parse_args(args)
+        self.client.fs.chown(args.filename, args.uid, args.gid, recursive=args.recursive)
 
     def _rpc_find(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='find file recursively')
         parser.add_argument('filename')
+        parser.add_argument('-d', '--depth', action='store_true')
         args = parser.parse_args(args)
-        for filename in self._find(args.filename):
+        for filename in self.client.fs.find(args.filename, topdown=not args.depth):
             print(filename, file=stdout, flush=True)
 
     def _rpc_plshow(self, args, stdin, stdout, stderr):
@@ -451,13 +446,6 @@ class XonshRc:
                 yield local
             finally:
                 self._push(local, remote)
-
-    def _find(self, path: str):
-        for root, dirs, files in self.client.fs.walk(path):
-            for name in files:
-                yield os.path.join(root, name)
-            for name in dirs:
-                yield os.path.join(root, name)
 
     def _listdir(self, path: str) -> List[str]:
         return self.client.fs.listdir(path)
