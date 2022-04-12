@@ -374,7 +374,7 @@ class Fs:
 
         try:
             for root, dirs, files in os.walk(local, topdown=True, onerror=onerror):
-                remote_root = local / Path(root).relative_to(remote)
+                remote_root = remote / Path(root).relative_to(local)
                 self.mkdir(remote_root, exist_ok=True)
                 self.chdir(remote_root)
                 for name in dirs:

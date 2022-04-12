@@ -12,6 +12,7 @@ from typing import Union, List
 from uuid import UUID
 
 import plumbum
+from humanfriendly.prompts import prompt_for_choice
 from pygments import highlight, formatters, lexers
 from xonsh.built_ins import XSH
 from xonsh.completers.tools import contextual_completer
@@ -152,6 +153,7 @@ class XonshRc:
         args = parser.parse_args(args)
         with self._edit_remotely(args.filename) as f:
             os.system(f'vim "{f}"')
+            self._push(f, args.filename)
 
     def _rpc_entitlements(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='view file entitlements')
@@ -380,8 +382,12 @@ class XonshRc:
         args = parser.parse_args(args)
 
         open_ = plumbum.local['open']
+        upload_changes = 'Upload changes'
+        discard_changes = 'Discard changes'
         with self._edit_remotely(args.filename) as f:
-            open_('-W', f)
+            open_(f)
+            if prompt_for_choice([upload_changes, discard_changes]) == upload_changes:
+                self._push(f, args.filename)
 
     def _rpc_date(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='get/set date')
@@ -440,10 +446,7 @@ class XonshRc:
     @contextlib.contextmanager
     def _edit_remotely(self, remote):
         with self._remote_file(remote) as local:
-            try:
-                yield local
-            finally:
-                self._push(local, remote)
+            yield local
 
     def _listdir(self, path: str) -> List[str]:
         return self.client.fs.listdir(path)
