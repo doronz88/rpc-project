@@ -1,35 +1,34 @@
-import os
 from stat import S_IMODE
 
 
 def test_chown(client, tmp_path):
     file = (tmp_path / 'temp.txt')
-    file.touch()
-    pre_chown_stat = file.stat()
+    client.fs.touch(file)
+    pre_chown_stat = client.fs.stat(file)
     client.fs.chown(file, 2, -1)
-    post_chown_stat = file.stat()
+    post_chown_stat = client.fs.stat(file)
     assert post_chown_stat.st_uid == 2
     assert pre_chown_stat.st_gid == post_chown_stat.st_gid
 
 
 def test_chmod(client, tmp_path):
     file = (tmp_path / 'temp.txt')
-    file.touch(mode=0o777)
+    client.fs.touch(file, mode=0o777)
     client.fs.chmod(file, 0o666)
-    assert S_IMODE(file.stat().st_mode) == 0o666
+    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
 
 
 def test_remove(client, tmp_path):
     file = (tmp_path / 'temp.txt')
-    file.touch()
+    client.fs.touch(file)
     client.fs.remove(file)
-    assert not file.exists()
+    assert not client.fs.accessible(file)
 
 
 def test_mkdir(client, tmp_path):
     dir_ = (tmp_path / 'test_dir')
     client.fs.mkdir(dir_, 0o666)
-    assert dir_.exists()
+    assert client.fs.accessible(dir_)
 
 
 def test_chdir_pwd(client, tmp_path):
@@ -40,30 +39,28 @@ def test_chdir_pwd(client, tmp_path):
 def test_symlink(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     symlink = (tmp_path / 'temp1.txt')
-    file.touch()
+    client.fs.touch(file)
     client.fs.symlink(file, symlink)
-    assert symlink.exists()
-    assert symlink.is_symlink()
-    # Change to when deprecating 3.8
-    assert os.readlink(symlink) == str(file)
+    assert client.fs.accessible(symlink)
+    assert client.fs.readlink(symlink) == str(file)
 
 
 def test_link(client, tmp_path):
-    (tmp_path / 'temp.txt').write_text('hello')
+    client.fs.write_file(tmp_path / 'temp.txt', b'hello')
     client.fs.link((tmp_path / 'temp.txt'), (tmp_path / 'temp1.txt'))
-    assert (tmp_path / 'temp1.txt').read_text() == 'hello'
+    assert client.fs.read_file(tmp_path / 'temp1.txt') == b'hello'
 
 
 def test_listdir(client, tmp_path):
     assert not client.fs.listdir(tmp_path)
-    (tmp_path / 'temp.txt').touch()
+    client.fs.touch(tmp_path / 'temp.txt')
     assert client.fs.listdir(tmp_path) == ['temp.txt']
 
 
 def test_scandir_sanity(client, tmp_path):
     entries = [e for e in client.fs.scandir(tmp_path)]
     assert not entries
-    (tmp_path / 'temp.txt').write_text('hello')
+    client.fs.write_file(tmp_path / 'temp.txt', b'hello')
     entries = [e for e in client.fs.scandir(tmp_path)]
     assert len(entries) == 1
     assert entries[0].name == 'temp.txt'
@@ -77,7 +74,7 @@ def test_scandir_context_manager(client, tmp_path):
     with client.fs.scandir(tmp_path) as it:
         entries = [e for e in it]
     assert not entries
-    (tmp_path / 'temp.txt').write_text('hello')
+    client.fs.write_file(tmp_path / 'temp.txt', b'hello')
     with client.fs.scandir(tmp_path) as it:
         entries = [e for e in it]
     assert len(entries) == 1
@@ -89,10 +86,10 @@ def test_scandir_context_manager(client, tmp_path):
 
 
 def test_stat_sanity(client, tmp_path):
-    file = (tmp_path / 'temp.txt')
-    file.write_text('h' * 0x10000)
+    file = tmp_path / 'temp.txt'
+    client.fs.write_file(file, 'h' * 0x10000)
     client_stat = client.fs.stat(file)
-    path_stat = file.stat()
+    path_stat = client.fs.stat(file)
     assert path_stat.st_dev == client_stat.st_dev
     assert path_stat.st_ino == client_stat.st_ino
     assert path_stat.st_mode == client_stat.st_mode
@@ -111,19 +108,23 @@ def test_stat_sanity(client, tmp_path):
 
 
 def test_walk(client, tmp_path):
-    (tmp_path / 'dir_a').mkdir()
-    (tmp_path / 'dir_a' / 'a1.txt').touch()
-    (tmp_path / 'dir_a' / 'a2.txt').touch()
-    (tmp_path / 'dir_b').mkdir()
-    (tmp_path / 'dir_b' / 'b1.txt').touch()
-    (tmp_path / 'dir_b' / 'b2.txt').touch()
-    assert list(os.walk(tmp_path)) == list(client.fs.walk(tmp_path))
+    client.fs.mkdir(tmp_path / 'dir_a')
+    client.fs.touch(tmp_path / 'dir_a' / 'a1.txt')
+    client.fs.touch(tmp_path / 'dir_a' / 'a2.txt')
+    client.fs.mkdir(tmp_path / 'dir_b')
+    client.fs.touch(tmp_path / 'dir_b' / 'b1.txt')
+    client.fs.touch(tmp_path / 'dir_b' / 'b2.txt')
 
+    assert list(client.fs.walk(tmp_path)) == [
+        (f'{tmp_path}', ['dir_b', 'dir_a'], []),
+        (f'{tmp_path}/dir_b', [], ['b2.txt', 'b1.txt']),
+        (f'{tmp_path}/dir_a', [], ['a1.txt', 'a2.txt'])
+    ]
 
-def test_xattr(client, tmp_path):
-    client.fs.setxattr(tmp_path, 'KEY', b'VALUE')
-    assert client.fs.getxattr(tmp_path, 'KEY') == b'VALUE'
-    assert client.fs.listxattr(tmp_path) == ['KEY']
-    assert client.fs.dictxattr(tmp_path) == {'KEY': b'VALUE'}
-    client.fs.removexattr(tmp_path, 'KEY')
-    assert client.fs.listxattr(tmp_path) == []
+    def test_xattr(client, tmp_path):
+        client.fs.setxattr(tmp_path, 'KEY', b'VALUE')
+        assert client.fs.getxattr(tmp_path, 'KEY') == b'VALUE'
+        assert client.fs.listxattr(tmp_path) == ['KEY']
+        assert client.fs.dictxattr(tmp_path) == {'KEY': b'VALUE'}
+        client.fs.removexattr(tmp_path, 'KEY')
+        assert client.fs.listxattr(tmp_path) == []

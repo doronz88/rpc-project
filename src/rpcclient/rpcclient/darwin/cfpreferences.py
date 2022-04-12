@@ -1,7 +1,7 @@
 from contextlib import suppress
 import typing
 
-from rpcclient.exceptions import RpcClientException, NoSuchPreferenceError
+from rpcclient.exceptions import RpcClientException, NoSuchPreferenceError, BadReturnValueError
 
 kCFPreferencesCurrentUser = 'kCFPreferencesCurrentUser'
 kCFPreferencesAnyUser = 'kCFPreferencesAnyUser'
@@ -84,3 +84,9 @@ class CFPreferences:
         """ remove all values from given preference """
         for k in self.get_keys(application_id, username, hostname):
             self.remove(k, application_id, username, hostname)
+
+    def sync(self, application_id: str, username: str = kCFPreferencesCurrentUser,
+             hostname: str = kCFPreferencesCurrentHost):
+        if not self._client.symbols.CFPreferencesSynchronize(self._client.cf(application_id), self._client.cf(username),
+                                                             self._client.cf(hostname)):
+            raise BadReturnValueError('CFPreferencesSynchronize() failed')

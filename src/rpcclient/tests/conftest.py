@@ -1,14 +1,32 @@
 from contextlib import closing
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
 from rpcclient.client_factory import create_client, DarwinClient
+from rpcclient.exceptions import BadReturnValueError
 
 
 @pytest.fixture
 def client():
     with closing(create_client('127.0.0.1')) as c:
         yield c
+
+
+@pytest.fixture
+def tmp_path(client):
+    tmp_path = '/tmp'
+    try:
+        tmp_path = client.fs.readlink(tmp_path)
+    except BadReturnValueError:
+        pass
+    filename = Path(tmp_path) / uuid4().hex
+    client.fs.mkdir(filename, mode=0o777)
+    try:
+        yield filename
+    finally:
+        client.fs.remove(filename, recursive=True)
 
 
 def pytest_addoption(parser):

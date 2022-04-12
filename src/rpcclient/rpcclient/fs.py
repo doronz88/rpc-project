@@ -1,8 +1,11 @@
+import os
 import posixpath
+from pathlib import Path
 from typing import Iterator, List
 
 from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
+from rpcclient.darwin.structs import MAXPATHLEN
 from rpcclient.exceptions import BadReturnValueError, ArgumentError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
     DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
@@ -177,10 +180,21 @@ class Fs:
             self._client.raise_errno_exception(f'failed to chmod: {path}')
 
     @path_to_str('path')
-    def remove(self, path: str):
+    def _remove(self, path: str, force=False):
         """ remove(path) at remote. read man for more details. """
         if self._client.symbols.remove(path).c_int32 < 0:
-            self._client.raise_errno_exception(f'failed to remove: {path}')
+            if not force:
+                self._client.raise_errno_exception(f'failed to remove: {path}')
+
+    @path_to_str('path')
+    def remove(self, path: str, recursive=False, force=False):
+        """ remove(path) at remote. read man for more details. """
+        if not recursive:
+            self._remove(path, force=force)
+            return
+
+        for filename in list(self.find(path))[::-1]:
+            self._remove(filename, force=force)
 
     @path_to_str('old')
     @path_to_str('new')
@@ -190,16 +204,35 @@ class Fs:
             self._client.raise_errno_exception(f'failed to rename: {old} -> {new}')
 
     @path_to_str('path')
-    def mkdir(self, path: str, mode: int):
+    def mkdir(self, path: str, mode: int = 0o777):
         """ mkdir(path, mode) at remote. read man for more details. """
         if self._client.symbols.mkdir(path, mode).c_int64 < 0:
             self._client.raise_errno_exception(f'failed to mkdir: {path}')
+
+        # os may not always respect the permission given by the mode argument to mkdir
+        self.chmod(path, mode)
 
     @path_to_str('path')
     def chdir(self, path: str):
         """ chdir(path) at remote. read man for more details. """
         if self._client.symbols.chdir(path).c_int64 < 0:
             self._client.raise_errno_exception(f'failed to chdir: {path}')
+
+    @path_to_str('path')
+    def readlink(self, path: str) -> str:
+        """ readlink() at remote. read man for more details. """
+        with self._client.safe_calloc(MAXPATHLEN) as buf:
+            if self._client.symbols.readlink(path, buf, MAXPATHLEN).c_int64 < 0:
+                self._client.raise_errno_exception(f'readlink failed for: {path}')
+            return str(Path(path).parent / buf.peek_str())
+
+    @path_to_str('path')
+    def is_symlink(self, path: str) -> bool:
+        try:
+            self.readlink(path)
+            return True
+        except BadReturnValueError:
+            return False
 
     @path_to_str('file')
     def open(self, file: str, mode: str, access: int = 0o777) -> File:
@@ -231,6 +264,24 @@ class Fs:
         if fd < 0:
             self._client.raise_errno_exception(f'failed to open: {file}')
         return File(self._client, fd)
+
+    @path_to_str('file')
+    def write_file(self, file: str, buf: bytes, access: int = 0o777):
+        with self.open(file, 'w+', access=access) as f:
+            f.writeall(buf)
+
+    @path_to_str('file')
+    def read_file(self, file: str) -> bytes:
+        with self.open(file, 'r') as f:
+            return f.readall()
+
+    @path_to_str('file')
+    def touch(self, file: str, mode: int = None):
+        """ simulate unix touch command for given file """
+        with self.open(file, 'w+'):
+            pass
+        if mode is not None:
+            self.chmod(file, mode)
 
     @path_to_str('src', 'dst')
     def symlink(self, src: str, dst: str) -> int:
@@ -283,6 +334,16 @@ class Fs:
             return True
         except BadReturnValueError:
             return False
+
+    @path_to_str('top')
+    def find(self, top: str):
+        """ traverse a file tree top to down """
+        yield top
+        for root, dirs, files in self.walk(top):
+            for name in files:
+                yield os.path.join(root, name)
+            for name in dirs:
+                yield os.path.join(root, name)
 
     @path_to_str('top')
     def walk(self, top: str, onerror=None):

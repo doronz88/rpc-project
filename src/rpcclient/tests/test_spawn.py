@@ -13,28 +13,30 @@ def test_spawn_fds(client):
 
 
 @pytest.mark.local_only
-@pytest.mark.parametrize('argv,expected_stdout,errorcode', [
-    [['/bin/sleep', '0'], '', 0],
-    [['/bin/echo', 'blat'], 'blat', 0],
-    [['/bin/ls', 'INVALID_PATH'], 'ls: INVALID_PATH: No such file or directory', 256],
+@pytest.mark.parametrize('argv,expected_stdout,success', [
+    [['/bin/sleep', '0'], '', True],
+    [['/bin/echo', 'blat'], 'blat', True],
+    [['/bin/ls', 'INVALID_PATH'], 'No such file or directory', False],
 ])
-def test_spawn_foreground_sanity(client, argv, expected_stdout, errorcode):
+def test_spawn_foreground_sanity(client, argv, expected_stdout, success):
     stdout = StringIO()
-    assert errorcode == client.spawn(argv, stdout=stdout, stdin='').error
-
+    if success:
+        assert 0 == client.spawn(argv, stdout=stdout, stdin='').error
+    else:
+        assert 0 != client.spawn(argv, stdout=stdout, stdin='').error
     stdout.seek(0)
-    assert expected_stdout == stdout.read().strip()
+    assert expected_stdout in stdout.read().strip()
 
 
 @pytest.mark.local_only
-@pytest.mark.parametrize('argv,expected_stdout,errorcode', [
-    [['/bin/sleep', '0'], '', 0],
-    [['/bin/echo', 'blat'], 'blat', 0],
-    [['/bin/ls', 'INVALID_PATH'], 'ls: INVALID_PATH: No such file or directory', 256],
+@pytest.mark.parametrize('argv,expected_stdout,success', [
+    [['/bin/sleep', '0'], '', True],
+    [['/bin/echo', 'blat'], 'blat', True],
+    [['/bin/ls', 'INVALID_PATH'], 'No such file or directory', False],
 ])
-def test_spawn_foreground_stress(client, argv, expected_stdout, errorcode):
-    for i in range(1000):
-        test_spawn_foreground_sanity(client, argv, expected_stdout, errorcode)
+def test_spawn_foreground_stress(client, argv, expected_stdout, success):
+    for i in range(100):
+        test_spawn_foreground_sanity(client, argv, expected_stdout, success)
 
 
 def test_spawn_background_sanity(client):
@@ -49,5 +51,5 @@ def test_spawn_background_sanity(client):
 
 
 def test_spawn_background_stress(client):
-    for i in range(1000):
+    for i in range(100):
         test_spawn_background_sanity(client)
