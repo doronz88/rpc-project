@@ -14,7 +14,7 @@ class DarwinLief(Lief):
     @path_to_str('path')
     def get_entitlements(self, path: str) -> Mapping:
         with self._client.fs.open(path, 'r') as f:
-            buf = f.readall()
+            buf = f.read()
         parsed = lief.parse(buf)
         code_signature = buf[parsed.code_signature.data_offset:
                              parsed.code_signature.data_offset + parsed.code_signature.data_size]

@@ -30,7 +30,7 @@ class CrashReports:
             for entry in self._client.fs.scandir(root):
                 if entry.is_file() and entry.name.endswith('.ips') and entry.name.startswith(prefixed):
                     with self._client.fs.open(entry.path, 'r') as f:
-                        result.append(CrashReport(f.readall().decode(), filename=entry.path))
+                        result.append(CrashReport(f.read().decode(), filename=entry.path))
         return result
 
     def clear(self, prefixed=''):

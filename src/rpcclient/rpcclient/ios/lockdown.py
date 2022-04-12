@@ -15,7 +15,7 @@ class Lockdown:
         result = []
         for entry in self._client.fs.scandir('/var/root/Library/Lockdown/pair_records'):
             with self._client.fs.open(entry.path, 'r') as f:
-                record = plistlib.loads(f.readall())
+                record = plistlib.loads(f.read())
             result.append(PairRecord(hostname=record['HostName'], host_id=record['HostID'],
                                      certificate=record['HostCertificate']))
 

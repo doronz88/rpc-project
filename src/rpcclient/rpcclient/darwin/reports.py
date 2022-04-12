@@ -32,4 +32,4 @@ class Reports:
     @property
     def system_log(self) -> str:
         with self._client.fs.open('/var/log/system.log', 'r') as f:
-            return f.readall().decode()
+            return f.read().decode()

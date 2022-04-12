@@ -21,7 +21,7 @@ import rpcclient
 from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
     InvalidServerVersionMagicError, BadReturnValueError, RpcFileExistsError, RpcNotEmptyError, RpcFileNotFoundError, \
-    RpcBrokenPipeError, RpcIsADirectoryError
+    RpcBrokenPipeError, RpcIsADirectoryError, RpcPermissionError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
@@ -29,7 +29,7 @@ from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
     reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
     protocol_handshake_t, call_response_t_size
-from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR
+from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR, EPERM
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -557,6 +557,7 @@ class Client:
     def raise_errno_exception(self, message: str):
         message += f' ({self.last_error})'
         exceptions = {
+            EPERM: RpcPermissionError,
             ENOENT: RpcFileNotFoundError,
             EEXIST: RpcFileExistsError,
             EISDIR: RpcIsADirectoryError,

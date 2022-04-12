@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Mapping, Optional
 
-from rpcclient.exceptions import MissingLibraryError, PermissionDeniedError
+from rpcclient.exceptions import MissingLibraryError, RpcPermissionError
 from rpcclient.structs.consts import RTLD_NOW
 
 
@@ -71,7 +71,7 @@ class Location:
     def start_updating_location(self):
         """ request location updates from CLLocationManager """
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
-            raise PermissionDeniedError()
+            raise RpcPermissionError()
         self._location_manager.objc_call('startUpdatingLocation')
 
     def stop_updating_location(self):
@@ -81,5 +81,5 @@ class Location:
     def request_oneshot_location(self):
         """ requests the one-time delivery of the user’s current location """
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
-            raise PermissionDeniedError()
+            raise RpcPermissionError()
         self._location_manager.objc_call('requestLocation')
