@@ -96,3 +96,8 @@ class RpcBrokenPipeError(BadReturnValueError):
 class RpcNotEmptyError(BadReturnValueError):
     """ raised when errno = ENOTEMPTY """
     pass
+
+
+class RpcIsADirectoryError(BadReturnValueError):
+    """ RPC version for IsADirectoryError (errno = ENOTEMPTY) """
+    pass
