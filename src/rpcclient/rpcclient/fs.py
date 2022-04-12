@@ -178,10 +178,21 @@ class Fs:
             self._client.raise_errno_exception(f'failed to chmod: {path}')
 
     @path_to_str('path')
-    def remove(self, path: str):
+    def _remove(self, path: str, force=False):
         """ remove(path) at remote. read man for more details. """
         if self._client.symbols.remove(path).c_int32 < 0:
-            self._client.raise_errno_exception(f'failed to remove: {path}')
+            if not force:
+                self._client.raise_errno_exception(f'failed to remove: {path}')
+
+    @path_to_str('path')
+    def remove(self, path: str, recursive=False, force=False):
+        """ remove(path) at remote. read man for more details. """
+        if not recursive:
+            self._remove(path, force=force)
+            return
+
+        for filename in list(self.find(path))[::-1]:
+            self._remove(filename, force=force)
 
     @path_to_str('old')
     @path_to_str('new')
