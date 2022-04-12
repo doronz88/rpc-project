@@ -1,3 +1,4 @@
+import os
 import posixpath
 from typing import Iterator, List
 
@@ -283,6 +284,16 @@ class Fs:
             return True
         except BadReturnValueError:
             return False
+
+    @path_to_str('top')
+    def find(self, top: str):
+        """ traverse a file tree top to down """
+        yield top
+        for root, dirs, files in self.walk(top):
+            for name in files:
+                yield os.path.join(root, name)
+            for name in dirs:
+                yield os.path.join(root, name)
 
     @path_to_str('top')
     def walk(self, top: str, onerror=None):
