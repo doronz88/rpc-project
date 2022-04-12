@@ -63,11 +63,6 @@ class MissingLibraryError(RpcClientException):
     pass
 
 
-class PermissionDeniedError(RpcClientException):
-    """ failed to access a certain something """
-    pass
-
-
 class NoEntitlementsError(RpcClientException):
     """ binary contains no entitlements """
     pass
@@ -100,4 +95,9 @@ class RpcNotEmptyError(BadReturnValueError):
 
 class RpcIsADirectoryError(BadReturnValueError):
     """ RPC version for IsADirectoryError (errno = ENOTEMPTY) """
+    pass
+
+
+class RpcPermissionError(BadReturnValueError):
+    """ RPC version for PermissionError (errno = EPERM) """
     pass
