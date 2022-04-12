@@ -279,9 +279,7 @@ class XonshRc:
         parser.add_argument('src')
         parser.add_argument('dst')
         args = parser.parse_args(args)
-        with self.client.fs.open(args.src, 'r') as src:
-            with self.client.fs.open(args.dst, 'w') as dst:
-                dst.writeall(src.readall())
+        self.client.fs.write_file(args.dst, self.client.fs.read_file(args.src))
 
     def _rpc_mkdir(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='create a directory')
@@ -297,7 +295,7 @@ class XonshRc:
         args = parser.parse_args(args)
         for filename in args.filename:
             with self.client.fs.open(filename, 'r') as f:
-                print(f.readall(), file=stdout, end='', flush=True)
+                print(f.read(), file=stdout, end='', flush=True)
         print('', file=stdout, flush=True)
 
     def _rpc_bat(self, args, stdin, stdout, stderr):
@@ -351,7 +349,7 @@ class XonshRc:
         parser.add_argument('filename')
         args = parser.parse_args(args)
         with self.client.fs.open(args.filename, 'r') as f:
-            _print_json(plistlib.loads(f.readall()), file=stdout)
+            _print_json(plistlib.loads(f.read()), file=stdout)
 
     def _rpc_record(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(description='start recording for specified duration')
@@ -451,14 +449,12 @@ class XonshRc:
         return self.client.fs.listdir(path)
 
     def _pull(self, remote_filename, local_filename):
-        with self.client.fs.open(remote_filename, 'r') as remote_fd:
-            with open(local_filename, 'wb') as local_fd:
-                local_fd.write(remote_fd.readall())
+        with open(local_filename, 'wb') as f:
+            f.write(self.client.fs.read_file(remote_filename))
 
     def _push(self, local_filename, remote_filename):
-        with open(local_filename, 'rb') as from_fd:
-            with self.client.fs.open(remote_filename, 'w') as to_fd:
-                to_fd.write(from_fd.read())
+        with open(local_filename, 'rb') as f:
+            self.client.fs.write_file(remote_filename, f.read())
 
 
 # actual RC contents

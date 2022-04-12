@@ -6,6 +6,7 @@ from typing import Iterator, List
 from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
 from rpcclient.darwin.structs import MAXPATHLEN
+from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
     RpcIsADirectoryError
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
@@ -123,39 +124,36 @@ class File(Allocated):
     def tell(self) -> int:
         return self.seek(0, SEEK_CUR)
 
-    def write(self, buf: bytes) -> int:
+    def _write(self, buf: bytes) -> int:
         """ write(fd, buf, size) at remote. read man for more details. """
         n = self._client.symbols.write(self.fd, buf, len(buf)).c_int64
         if n < 0:
             self._client.raise_errno_exception(f'failed to write on fd: {self.fd}')
         return n
 
-    def writeall(self, buf: bytes):
+    def write(self, buf: bytes):
         """ continue call write() until """
         while buf:
-            err = self.write(buf)
+            err = self._write(buf)
             buf = buf[err:]
 
-    def read(self, size: int = CHUNK_SIZE) -> bytes:
+    def _read(self, buf: DarwinSymbol, size: int) -> bytes:
         """ read file at remote """
-        with self._client.safe_malloc(size) as chunk:
-            err = self._client.symbols.read(self.fd, chunk, self.CHUNK_SIZE).c_int64
-            if err < 0:
-                self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
-            return chunk.peek(err)
+        err = self._client.symbols.read(self.fd, buf, size).c_int64
+        if err < 0:
+            self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
+        return buf.peek(err)
 
-    def readall(self, chunk_size: int = CHUNK_SIZE) -> bytes:
+    def read(self, size: int = -1, chunk_size: int = CHUNK_SIZE) -> bytes:
         """ read file at remote """
         buf = b''
         with self._client.safe_malloc(chunk_size) as chunk:
-            while True:
-                err = self._client.symbols.read(self.fd, chunk, chunk_size).c_int64
-                if err == 0:
+            while size == -1 or len(buf) < size:
+                read_chunk = self._read(chunk, chunk_size)
+                if not read_chunk:
                     # EOF
                     break
-                if err < 0:
-                    self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
-                buf += chunk.peek(err)
+                buf += read_chunk
         return buf
 
     def __repr__(self):
@@ -304,12 +302,12 @@ class Fs:
     @path_to_str('file')
     def write_file(self, file: str, buf: bytes, access: int = 0o777):
         with self.open(file, 'w+', access=access) as f:
-            f.writeall(buf)
+            f.write(buf)
 
     @path_to_str('file')
     def read_file(self, file: str) -> bytes:
         with self.open(file, 'r') as f:
-            return f.readall()
+            return f.read()
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = None):

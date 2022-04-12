@@ -17,7 +17,7 @@ class Lief:
     @path_to_str('path')
     def parse(self, path: str):
         with self._client.fs.open(path, 'r') as f:
-            return lief.parse(f.readall())
+            return lief.parse(f.read())
 
     @path_to_str('path')
     def get_symbols(self, path: str) -> Mapping[str, Symbol]:
