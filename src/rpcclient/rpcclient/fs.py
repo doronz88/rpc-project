@@ -10,7 +10,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
     RpcIsADirectoryError, RpcClientException
 from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
-    DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR
+    DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR, R_OK
 
 
 class DirEntry:
@@ -141,7 +141,7 @@ class File(Allocated):
         """ read file at remote """
         err = self._client.symbols.read(self.fd, buf, size).c_int64
         if err < 0:
-            self._client.raise_errno_exception(f'read failed for fd: {self.fd}')
+            self._client.raise_errno_exception(f'read() failed for fd: {self.fd}')
         return buf.peek(err)
 
     def read(self, size: int = -1, chunk_size: int = CHUNK_SIZE) -> bytes:
@@ -155,6 +155,36 @@ class File(Allocated):
                     break
                 buf += read_chunk
         return buf
+
+    def pread(self, length: int, offset: int) -> bytes:
+        """ call pread() at remote """
+        with self._client.safe_malloc(length) as buf:
+            err = self._client.symbols.pread(self.fd, buf, length, offset).c_int64
+            if err < 0:
+                self._client.raise_errno_exception(f'pread() failed for fd: {self.fd}')
+            return buf.peek(err)
+
+    def pwrite(self, buf: bytes, offset: int):
+        """ call pwrite() at remote """
+        err = self._client.symbols.pwrite(self.fd, buf, len(buf), offset).c_int64
+        if err < 0:
+            self._client.raise_errno_exception(f'pwrite() failed for fd: {self.fd}')
+
+    def fdatasync(self):
+        err = self._client.symbols.fdatasync(self.fd).c_int64
+        if err < 0:
+            self._client.raise_errno_exception(f'fdatasync() failed for fd: {self.fd}')
+
+    def fsync(self):
+        err = self._client.symbols.fsync(self.fd).c_int64
+        if err < 0:
+            self._client.raise_errno_exception(f'fsync() failed for fd: {self.fd}')
+
+    def dup(self) -> int:
+        err = self._client.symbols.dup(self.fd).c_int64
+        if err < 0:
+            self._client.raise_errno_exception(f'dup() failed for fd: {self.fd}')
+        return err
 
     def __repr__(self):
         return f'<{self.__class__.__name__} FD:{self.fd}>'
@@ -262,12 +292,14 @@ class Fs:
             self._client.raise_errno_exception(f'failed to chdir: {path}')
 
     @path_to_str('path')
-    def readlink(self, path: str) -> str:
+    def readlink(self, path: str, absolute=True) -> str:
         """ readlink() at remote. read man for more details. """
         with self._client.safe_calloc(MAXPATHLEN) as buf:
             if self._client.symbols.readlink(path, buf, MAXPATHLEN).c_int64 < 0:
                 self._client.raise_errno_exception(f'readlink failed for: {path}')
-            return str(Path(path).parent / buf.peek_str())
+            if absolute:
+                return str(Path(path).parent / buf.peek_str())
+            return buf.peek_str()
 
     @path_to_str('path')
     def is_symlink(self, path: str) -> bool:
@@ -442,13 +474,15 @@ class Fs:
         raise NotImplementedError()
 
     @path_to_str('path')
-    def accessible(self, path: str):
+    def lstat(self, path: str):
+        """ lstat(filename) at remote. read man for more details. """
+        raise NotImplementedError()
+
+    @path_to_str('path')
+    def accessible(self, path: str, mode: int = R_OK):
         """ check if a given path can be accessed. """
-        try:
-            self.stat(path)
-            return True
-        except BadReturnValueError:
-            return False
+        err = self._client.symbols.access(path, mode)
+        return err == 0
 
     @path_to_str('top')
     def find(self, top: str, topdown=True):
