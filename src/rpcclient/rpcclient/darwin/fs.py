@@ -50,6 +50,11 @@ class DarwinFs(Fs):
         return do_stat(self._client, 'stat64', path)
 
     @path_to_str('path')
+    def lstat(self, path: str):
+        """ lstat(filename) at remote. read man for more details. """
+        return do_stat(self._client, 'lstat64', path)
+
+    @path_to_str('path')
     def scandir(self, path: str = '.'):
         dp = self._client.symbols.opendir(path)
         if not dp:
