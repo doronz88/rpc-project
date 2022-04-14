@@ -1,6 +1,7 @@
 import ast
 import builtins
 import contextlib
+import dataclasses
 import logging
 import os
 import sys
@@ -14,7 +15,7 @@ from socket import socket
 
 import IPython
 import xonsh
-from construct import Int64sl, Float64l, Float32l, Float16l
+from construct import Int64sl, Float64l, Float32l, Float16l, Int64ul
 from traitlets.config import Config
 
 import rpcclient
@@ -28,7 +29,7 @@ from rpcclient.network import Network
 from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
     reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
-    protocol_handshake_t, call_response_t_size
+    protocol_handshake_t, call_response_t_size, listdir_entry_t, MAGIC
 from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR, EPERM
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
@@ -60,6 +61,13 @@ Feel free to use the following globals:
 Have a nice flight ✈️!
 Starting an IPython shell... 🐍
 '''
+
+
+@dataclasses.dataclass
+class ProtocolDirent:
+    d_inode: int
+    d_type: int
+    d_name: str
 
 
 class Client:
@@ -262,6 +270,26 @@ class Client:
             result = dummy_block_t.parse(self._recvall(dummy_block_t.sizeof()))
 
         return self.symbol(result)
+
+    def listdir(self, filename: str):
+        """ get an address for a stub block containing nothing """
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_LISTDIR,
+            'data': {'filename': filename},
+        })
+
+        entries = []
+        with self._protocol_lock:
+            self._sock.sendall(message)
+            while True:
+                magic = Int64ul.parse(self._recvall(Int64ul.sizeof()))
+                if magic != MAGIC:
+                    break
+                entry = listdir_entry_t.parse(self._recvall(listdir_entry_t.sizeof()))
+                name = self._recvall(entry.d_namlen).decode()
+                entries.append(ProtocolDirent(d_inode=entry.d_inode, d_type=entry.d_type, d_name=name))
+
+        return entries
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
               stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:

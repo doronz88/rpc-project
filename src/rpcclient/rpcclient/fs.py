@@ -1,7 +1,7 @@
 import os
 import posixpath
 from pathlib import Path
-from typing import Iterator, List
+from typing import List
 
 from rpcclient.allocated import Allocated
 from rpcclient.common import path_to_str
@@ -43,7 +43,7 @@ class DirEntry:
 
     def is_symlink(self):
         """ Return True if the entry is a symbolic link; cached per entry. """
-        if self._entry.get('d_type', DT_UNKNOWN) != DT_UNKNOWN:
+        if self._entry.d_type != DT_UNKNOWN:
             return self._entry.d_type == DT_LNK
         else:
             return self._test_mode(False, S_IFLNK)
@@ -60,10 +60,8 @@ class DirEntry:
         return self._stat
 
     def _test_mode(self, follow_symlinks, mode):
-        need_stat = True
-        if 'd_type' in self._entry:
-            is_symlink = self._entry.d_type == DT_LNK
-            need_stat = self._entry.d_type == DT_UNKNOWN or (follow_symlinks and is_symlink)
+        is_symlink = self._entry.d_type == DT_LNK
+        need_stat = self._entry.d_type == DT_UNKNOWN or (follow_symlinks and is_symlink)
         if not need_stat:
             d_types = {S_IFLNK: DT_LNK, S_IFDIR: DT_DIR, S_IFREG: DT_REG}
             return self._entry.d_type == d_types[mode]
@@ -80,20 +78,6 @@ class DirEntry:
 
     def _fetch_stat(self, follow_symlinks):
         raise NotImplementedError()
-
-
-class ScandirIterator(Allocated):
-    def __init__(self, path, dirp, client):
-        super().__init__()
-        self.path = path
-        self._client = client
-        self._dirp = dirp
-
-    def __iter__(self) -> Iterator[DirEntry]:
-        raise NotImplementedError()
-
-    def __repr__(self):
-        return f'<{self.__class__.__name__} PATH:{self.path} DIRP:{self._dirp}>'
 
 
 class File(Allocated):
@@ -460,13 +444,15 @@ class Fs:
     @path_to_str('path')
     def listdir(self, path: str = '.') -> List[str]:
         """ get directory listing for a given dirname """
-        with self.scandir(path) as it:
-            return [e.name for e in it]
+        return [e.name for e in self.scandir(path)]
 
     @path_to_str('path')
-    def scandir(self, path: str = '.') -> ScandirIterator:
+    def scandir(self, path: str = '.') -> List[DirEntry]:
         """ get directory listing for a given dirname """
-        raise NotImplementedError()
+        result = []
+        for entry in self._client.listdir(path)[2:]:
+            result.append(DirEntry(path, entry, self._client))
+        return result
 
     @path_to_str('path')
     def stat(self, path: str):
