@@ -14,6 +14,7 @@ cmd_type_t = Enum(Int32ul,
                   CMD_GET_DUMMY_BLOCK=9,
                   CMD_CLOSE=10,
                   CMD_REPLY_POKE=11,
+                  CMD_LISTDIR=12,
                   )
 
 arch_t = Enum(Int32ul,
@@ -21,9 +22,8 @@ arch_t = Enum(Int32ul,
               ARCH_ARM64=1,
               )
 
-
 DEFAULT_PORT = 5910
-SERVER_MAGIC_VERSION = 0x88888801
+SERVER_MAGIC_VERSION = 0x88888802
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 
@@ -78,6 +78,16 @@ cmd_poke_t = Struct(
     'data' / Bytes(this.size),
 )
 
+cmd_dirlist_t = Struct(
+    'filename' / PaddedString(MAX_PATH_LEN, 'utf8'),
+)
+
+listdir_entry_t = Struct(
+    'd_inode' / Int64ul,
+    'd_type' / Int64ul,
+    'd_namlen' / Int64ul,
+)
+
 protocol_message_t = Struct(
     'magic' / Const(MAGIC, Hex(Int32ul)),
     'cmd_type' / cmd_type_t,
@@ -89,6 +99,7 @@ protocol_message_t = Struct(
         cmd_type_t.CMD_CALL: cmd_call_t,
         cmd_type_t.CMD_PEEK: cmd_peek_t,
         cmd_type_t.CMD_POKE: cmd_poke_t,
+        cmd_type_t.CMD_LISTDIR: cmd_dirlist_t,
     })
 )
 

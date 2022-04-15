@@ -70,21 +70,6 @@ def test_scandir_sanity(client, tmp_path):
     assert not entries[0].is_symlink()
 
 
-def test_scandir_context_manager(client, tmp_path):
-    with client.fs.scandir(tmp_path) as it:
-        entries = [e for e in it]
-    assert not entries
-    client.fs.write_file(tmp_path / 'temp.txt', b'hello')
-    with client.fs.scandir(tmp_path) as it:
-        entries = [e for e in it]
-    assert len(entries) == 1
-    assert entries[0].name == 'temp.txt'
-    assert entries[0].path == str(tmp_path / 'temp.txt')
-    assert entries[0].is_file()
-    assert not entries[0].is_dir()
-    assert not entries[0].is_symlink()
-
-
 def test_stat_sanity(client, tmp_path):
     file = tmp_path / 'temp.txt'
     client.fs.write_file(file, 'h' * 0x10000)

@@ -1,8 +1,8 @@
 from typing import List, Mapping
 
 from rpcclient.common import path_to_str
-from rpcclient.darwin.structs import dirent32, dirent64, stat64, statfs64
-from rpcclient.fs import Fs, DirEntry, ScandirIterator
+from rpcclient.darwin.structs import stat64, statfs64
+from rpcclient.fs import Fs, DirEntry
 
 
 def do_stat(client, stat_name, filename: str):
@@ -20,30 +20,15 @@ class DarwinDirEntry(DirEntry):
         return do_stat(self._client, stat_name, self.path)
 
 
-class DarwinScandirIterator(ScandirIterator):
-    def __iter__(self):
-        dirent = dirent32
-        if self._client.inode64:
-            dirent = dirent64
-
-        while True:
-            self._client.errno = 0
-            direntp = self._client.symbols.readdir(self._dirp)
-            if not direntp:
-                self.deallocate()
-                if self._client.errno:
-                    self._client.raise_errno_exception('Failed scanning dir')
-                break
-            entry = dirent.parse_stream(direntp)
-            if entry.d_name in ('.', '..'):
-                continue
-            yield DarwinDirEntry(self.path, entry, self._client)
-
-    def _deallocate(self):
-        self._client.symbols.closedir(self._dirp)
-
-
 class DarwinFs(Fs):
+    @path_to_str('path')
+    def scandir(self, path: str = '.') -> List[DarwinDirEntry]:
+        """ get directory listing for a given dirname """
+        result = []
+        for entry in self._client.listdir(path)[2:]:
+            result.append(DarwinDirEntry(path, entry, self._client))
+        return result
+
     @path_to_str('path')
     def stat(self, path: str):
         """ stat(filename) at remote. read man for more details. """
@@ -53,13 +38,6 @@ class DarwinFs(Fs):
     def lstat(self, path: str):
         """ lstat(filename) at remote. read man for more details. """
         return do_stat(self._client, 'lstat64', path)
-
-    @path_to_str('path')
-    def scandir(self, path: str = '.'):
-        dp = self._client.symbols.opendir(path)
-        if not dp:
-            self._client.raise_errno_exception(f'failed to opendir(): {path}')
-        return DarwinScandirIterator(path, dp, self._client)
 
     @path_to_str('path')
     def setxattr(self, path: str, name: str, value: bytes):

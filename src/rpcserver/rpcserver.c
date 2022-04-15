@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
+#include <dirent.h>
 
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
@@ -41,7 +42,7 @@
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define SERVER_MAGIC_VERSION (0x88888801)
+#define SERVER_MAGIC_VERSION (0x88888802)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
@@ -67,6 +68,7 @@ typedef enum
     CMD_GET_DUMMY_BLOCK = 9,
     CMD_CLOSE = 10,
     CMD_REPLY_POKE = 11,
+    CMD_listdir = 12,
 } cmd_type_t;
 
 typedef enum
@@ -157,6 +159,20 @@ typedef struct
         u64 return_value;
     } return_values;
 } call_response_t;
+
+typedef struct
+{
+    char filename[MAX_PATH_LEN];
+} cmd_listdir_t;
+
+typedef struct
+{
+    u64 magic;
+    u64 inode;
+    u64 type;
+    u64 namelen;
+    char name[0];
+} listdir_entry_t;
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
@@ -986,6 +1002,59 @@ bool handle_get_dummy_block(int sockfd)
 
 #endif // __APPLE__
 
+bool handle_listdir(int sockfd)
+{
+    TRACE("enter");
+    bool result = false;
+    DIR *dirp = NULL;
+    struct dirent *direntp = NULL;
+
+    cmd_listdir_t cmd;
+    CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
+    
+    dirp = opendir(cmd.filename);
+    CHECK(dirp != NULL);
+
+    while (1)
+    {
+        errno = 0;
+        direntp = readdir(dirp);
+        if (!direntp)
+        {
+            CHECK(errno == 0);
+            break;
+        }
+
+        listdir_entry_t entry = {
+            .magic = MAGIC,
+            .inode = direntp->d_ino,
+            .type = direntp->d_type,
+#ifdef __APPLE__
+            .namelen = direntp->d_namlen,
+#else
+            .namelen = strlen(direntp->d_name),
+#endif
+        };
+        CHECK(sendall(sockfd, (const char *)&entry, sizeof(entry)));
+        CHECK(sendall(sockfd, direntp->d_name, entry.namelen));
+    }
+
+    u64 wrong_magic = 0;
+    CHECK(sendall(sockfd, (const char *)&wrong_magic, sizeof(wrong_magic)));
+
+    TRACE("sent magic");
+
+    result = true;
+
+error:
+    if (dirp)
+    {
+        closedir(dirp);
+    }
+
+    return result;
+}
+
 void handle_client(int sockfd)
 {
     bool disconnected = false;
@@ -1060,6 +1129,10 @@ void handle_client(int sockfd)
         {
             // client requested to close connection
             goto error;
+        }
+        case CMD_listdir:
+        {
+            handle_listdir(sockfd);
         }
         default:
         {
