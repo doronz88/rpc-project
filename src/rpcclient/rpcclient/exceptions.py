@@ -98,6 +98,11 @@ class RpcIsADirectoryError(BadReturnValueError):
     pass
 
 
+class RpcNotADirectoryError(BadReturnValueError):
+    """ RPC version for NotADirectoryError (errno = ENOTDIR) """
+    pass
+
+
 class RpcPermissionError(BadReturnValueError):
     """ RPC version for PermissionError (errno = EPERM) """
     pass

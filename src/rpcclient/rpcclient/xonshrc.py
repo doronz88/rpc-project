@@ -8,17 +8,18 @@ import time
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Union, List
+from typing import Union, List, Annotated, Callable
 from uuid import UUID
 
 import plumbum
 from humanfriendly.prompts import prompt_for_choice
 from pygments import highlight, formatters, lexers
 from xonsh.built_ins import XSH
-from xonsh.completers.tools import contextual_completer
+from xonsh.cli_utils import ArgParserAlias, Arg
 
 import rpcclient
 from rpcclient.client_factory import create_client
+from rpcclient.exceptions import RpcClientException
 from rpcclient.protocol import DEFAULT_PORT
 from rpcclient.structs.consts import SIGTERM
 
@@ -33,14 +34,60 @@ def _default_json_encoder(obj):
     raise TypeError()
 
 
-def _print_json(buf, colored=True, default=_default_json_encoder, file=None):
+def _pretty_json(buf, colored=True, default=_default_json_encoder):
     formatted_json = json.dumps(buf, sort_keys=True, indent=4, default=default)
     if colored:
         colorful_json = highlight(formatted_json, lexers.JsonLexer(),
                                   formatters.TerminalTrueColorFormatter(style='stata-dark'))
-        print(colorful_json, file=file, flush=True)
+        return colorful_json
     else:
-        print(formatted_json, file=file, flush=True)
+        return formatted_json
+
+
+def path_completer(xsh, action, completer, alias, command):
+    client = XSH.env['rpc']
+    pwd = client.fs.pwd()
+    is_absolute = command.prefix.startswith('/')
+    dirpath = Path(pwd) / command.prefix
+    if not client.fs.accessible(dirpath):
+        dirpath = dirpath.parent
+    result = []
+    for f in client.fs.scandir(dirpath):
+        if is_absolute:
+            completion_option = str((dirpath / f.name))
+        else:
+            completion_option = str((dirpath / f.name).relative_to(pwd))
+        try:
+            if f.is_dir():
+                result.append(f'{completion_option}/')
+            else:
+                result.append(completion_option)
+        except RpcClientException:
+            result.append(completion_option)
+
+    return result
+
+
+def dir_completer(xsh, action, completer, alias, command):
+    client = XSH.env['rpc']
+    pwd = client.fs.pwd()
+    is_absolute = command.prefix.startswith('/')
+    dirpath = Path(pwd) / command.prefix
+    if not client.fs.accessible(dirpath):
+        dirpath = dirpath.parent
+    result = []
+    for f in client.fs.scandir(dirpath):
+        if is_absolute:
+            completion_option = str((dirpath / f.name))
+        else:
+            completion_option = str((dirpath / f.name).relative_to(pwd))
+        try:
+            if f.is_dir():
+                result.append(f'{completion_option}/')
+        except RpcClientException:
+            result.append(completion_option)
+
+    return result
 
 
 class XonshRc:
@@ -53,8 +100,7 @@ class XonshRc:
         self._register_rpc_command('rpc-list-commands', self._rpc_list_commands)
 
         if '_RPC_AUTO_CONNECT_HOSTNAME' in XSH.env:
-            self._rpc_connect([XSH.env['_RPC_AUTO_CONNECT_HOSTNAME'], XSH.env['_RPC_AUTO_CONNECT_PORT']],
-                              stdin=None, stdout=sys.stdout, stderr=None)
+            self._rpc_connect(XSH.env['_RPC_AUTO_CONNECT_HOSTNAME'], XSH.env['_RPC_AUTO_CONNECT_PORT'])
 
         print('''
         Welcome to xonsh-rpc shell! 👋
@@ -62,7 +108,14 @@ class XonshRc:
         Below is list of commands that have been remapped to work over the target device *instead* of the
         default machine behavior:
         ''')
-        self._rpc_list_commands([], None, sys.stdout, None)
+        self._rpc_list_commands()
+
+    def _register_arg_parse_alias(self, name: str, handler: Callable):
+        handler = ArgParserAlias(func=handler, has_args=True, prog=name)
+        self._commands[name] = handler
+        if XSH.aliases.get(name):
+            self._orig_aliases[name] = XSH.aliases[name]
+        XSH.aliases[name] = handler
 
     def _register_rpc_command(self, name, handler):
         self._commands[name] = handler
@@ -75,120 +128,122 @@ class XonshRc:
         for k, v in self._orig_aliases.items():
             XSH.aliases[k] = v
 
-    def _rpc_connect(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='connect to remote rpcserver')
-        parser.add_argument('hostname')
-        parser.add_argument('port', nargs='?', type=int, default=DEFAULT_PORT)
-        args = parser.parse_args(args)
-
-        self.client = create_client(args.hostname, args.port)
+    def _rpc_connect(self, hostname: str, port: Annotated[int, Arg(nargs='?', default=DEFAULT_PORT)] = DEFAULT_PORT):
+        """
+        connect to remote rpcserver
+        """
+        port = int(port)
+        self.client = create_client(hostname, port)
 
         # -- rpc
-        self._register_rpc_command('rpc-disconnect', self._rpc_disconnect)
-        self._register_rpc_command('rpc-which', self._rpc_which)
+        self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
+        self._register_arg_parse_alias('rpc-which', self._rpc_which)
 
         # -- automation
-        self._register_rpc_command('list-labels', self._rpc_list_labels)
-        self._register_rpc_command('press-labels', self._rpc_press_labels)
-        self._register_rpc_command('press-keys', self._rpc_press_keys)
+        self._register_arg_parse_alias('list-labels', self._rpc_list_labels)
+        self._register_arg_parse_alias('press-labels', self._rpc_press_labels)
+        self._register_arg_parse_alias('press-keys', self._rpc_press_keys)
 
         # -- processes
         self._register_rpc_command('run', self._rpc_run)
         self._register_rpc_command('run-async', self._rpc_run_async)
         self._register_rpc_command('ps', self._rpc_ps)
-        self._register_rpc_command('kill', self._rpc_kill)
-        self._register_rpc_command('killall', self._rpc_killall)
+        self._register_arg_parse_alias('kill', self._rpc_kill)
+        self._register_arg_parse_alias('killall', self._rpc_killall)
 
         # -- fs
-        self._register_rpc_command('ls', self._rpc_ls)
-        self._register_rpc_command('ln', self._rpc_ln)
-        self._register_rpc_command('touch', self._rpc_touch)
-        self._register_rpc_command('pwd', self._rpc_pwd)
-        self._register_rpc_command('cd', self._rpc_cd)
-        self._register_rpc_command('rm', self._rpc_rm)
-        self._register_rpc_command('mv', self._rpc_mv)
-        self._register_rpc_command('cp', self._rpc_cp)
-        self._register_rpc_command('mkdir', self._rpc_mkdir)
-        self._register_rpc_command('cat', self._rpc_cat)
-        self._register_rpc_command('bat', self._rpc_bat)
-        self._register_rpc_command('pull', self._rpc_pull)
-        self._register_rpc_command('push', self._rpc_push)
-        self._register_rpc_command('chmod', self._rpc_chmod)
-        self._register_rpc_command('chown', self._rpc_chown)
+        self._register_arg_parse_alias('ls', self._rpc_ls)
+        self._register_arg_parse_alias('ln', self._rpc_ln)
+        self._register_arg_parse_alias('touch', self._rpc_touch)
+        self._register_arg_parse_alias('pwd', self._rpc_pwd)
+        self._register_arg_parse_alias('cd', self._rpc_cd)
+        self._register_arg_parse_alias('rm', self._rpc_rm)
+        self._register_arg_parse_alias('mv', self._rpc_mv)
+        self._register_arg_parse_alias('cp', self._rpc_cp)
+        self._register_arg_parse_alias('mkdir', self._rpc_mkdir)
+        self._register_arg_parse_alias('cat', self._rpc_cat)
+        self._register_arg_parse_alias('bat', self._rpc_bat)
+        self._register_arg_parse_alias('pull', self._rpc_pull)
+        self._register_arg_parse_alias('push', self._rpc_push)
+        self._register_arg_parse_alias('chmod', self._rpc_chmod)
+        self._register_arg_parse_alias('chown', self._rpc_chown)
         self._register_rpc_command('find', self._rpc_find)
-        self._register_rpc_command('xattr-get-dict', self._rpc_xattr_get_dict)
-        self._register_rpc_command('vim', self._rpc_vim)
-        self._register_rpc_command('entitlements', self._rpc_entitlements)
+        self._register_arg_parse_alias('xattr-get-dict', self._rpc_xattr_get_dict)
+        self._register_arg_parse_alias('vim', self._rpc_vim)
+        self._register_arg_parse_alias('entitlements', self._rpc_entitlements)
 
         # -- plist
-        self._register_rpc_command('plshow', self._rpc_plshow)
+        self._register_arg_parse_alias('plshow', self._rpc_plshow)
 
         # -- media
-        self._register_rpc_command('record', self._rpc_record)
-        self._register_rpc_command('play', self._rpc_play)
+        self._register_arg_parse_alias('record', self._rpc_record)
+        self._register_arg_parse_alias('play', self._rpc_play)
 
         # -- misc
-        self._register_rpc_command('open', self._rpc_open)
-        self._register_rpc_command('date', self._rpc_date)
-        self._register_rpc_command('env', self._rpc_env)
-        self._register_rpc_command('file', self._rpc_file)
+        self._register_arg_parse_alias('open', self._rpc_open)
+        self._register_arg_parse_alias('date', self._rpc_date)
+        self._register_arg_parse_alias('env', self._rpc_env)
+        self._register_arg_parse_alias('rpc-file', self._rpc_file)
 
         XSH.env['PROMPT'] = f'[{{BOLD_GREEN}}{self.client.uname.nodename}{{RESET}} ' \
-                            f'{{BOLD_YELLOW}}{{cwd}}{{RESET}}]$ '
-        XSH.env['PROMPT_FIELDS']['cwd'] = self._rpc_cwd
+                            f'{{BOLD_YELLOW}}{{rpc_cwd}}{{RESET}}]$ '
+        XSH.env['PROMPT_FIELDS']['rpc_cwd'] = self._rpc_cwd
 
-    def _rpc_cwd(self, ) -> str:
+    def _rpc_cwd(self) -> str:
         with self.client.reconnect_lock:
             return self.client.fs.pwd()
 
-    def _rpc_xattr_get_dict(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='view file xattributes')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        _print_json(self.client.fs.dictxattr(args.filename), file=stdout)
+    def _rpc_xattr_get_dict(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+        """
+        view file xattributes
+        """
+        return _pretty_json(self.client.fs.dictxattr(filename))
 
-    def _rpc_vim(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='use "vim" to edit the given file')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        with self._edit_remotely(args.filename) as f:
+    def _rpc_vim(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+        """
+        use "vim" to edit the given file
+        """
+        with self._edit_remotely(filename) as f:
             os.system(f'vim "{f}"')
-            self._push(f, args.filename)
+            self._push(f, filename)
 
-    def _rpc_entitlements(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='view file entitlements')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        _print_json(self.client.lief.get_entitlements(args.filename), file=stdout)
+    def _rpc_entitlements(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+        """
+        view file entitlements
+        """
+        return _pretty_json(self.client.lief.get_entitlements(filename))
 
     def _rpc_list_labels(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='list all labels in current main application')
-        parser.parse_args(args)
+        """
+        list all labels in current main application')
+        """
+        buf = ''
         for element in self.client.accessibility.primary_app:
-            print(element.label, file=stdout, flush=True)
+            buf += f'{element.label}\n'
+        return buf
 
-    def _rpc_press_labels(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='press labels list by given order')
-        parser.add_argument('label', nargs='+')
-        args = parser.parse_args(args)
-        self.client.accessibility.press_labels(args.label)
+    def _rpc_press_labels(self, label: Annotated[List[str], Arg(nargs='+')]):
+        """
+        press labels list by given order
+        """
+        self.client.accessibility.press_labels(label)
 
-    def _rpc_press_keys(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='press key list by given order')
-        parser.add_argument('key', nargs='+')
-        args = parser.parse_args(args)
-        keys = {
+    def _rpc_press_keys(self, key: Annotated[List[str], Arg(nargs='+')]):
+        """
+        press key list by given order
+        """
+        keys_map = {
             'power': self.client.hid.send_power_button_press,
             'home': self.client.hid.send_home_button_press,
             'volup': self.client.hid.send_volume_up_button_press,
             'voldown': self.client.hid.send_volume_down_button_press,
             'mute': self.client.hid.send_mute_button_press,
         }
-        for k in args.key:
-            keys[k]()
+        for k in key:
+            keys_map[k]()
 
     def _rpc_run(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='execute a program')
+        parser = ArgumentParser(prog='run', description='execute a program')
         parser.add_argument('arg', nargs='+')
         args = parser.parse_args(args)
         if not stdin:
@@ -197,240 +252,259 @@ class XonshRc:
         return result.error
 
     def _rpc_run_async(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='execute a program in background')
+        parser = ArgumentParser(prog='run-async', description='execute a program in background')
         parser.add_argument('arg', nargs='+')
         args = parser.parse_args(args)
         print(self.client.spawn(args.arg, raw_tty=False, background=True), file=stdout, flush=True)
 
-    def _rpc_kill(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='kill a process')
-        parser.add_argument('pid', type=int)
-        parser.add_argument('signal_number', nargs='?', type=int, default=SIGTERM)
-        args = parser.parse_args(args)
-        self.client.processes.kill(args.pid, args.signal_number)
+    def _rpc_kill(self, pid: int, signal_number: Annotated[int, Arg(nargs='?', default=SIGTERM)]):
+        """
+        kill a process
+        """
+        signal_number = int(signal_number)
+        self.client.processes.kill(pid, signal_number)
 
-    def _rpc_killall(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='killall processes with given basename given as a "contain" expression')
-        parser.add_argument('expression')
-        parser.add_argument('signal_number', nargs='?', type=int, default=SIGTERM)
-        args = parser.parse_args(args)
-        for p in self.client.processes.grep(args.expression):
-            print(f'killing {p}', file=stdout, flush=True)
-            p.kill(args.signal_number)
+    def _rpc_killall(self, expression: str, signal_number: Annotated[int, Arg(nargs='?', default=SIGTERM)]):
+        """
+        killall processes with given basename given as a "contain" expression
+        """
+        signal_number = int(signal_number)
+        for p in self.client.processes.grep(expression):
+            p.kill(signal_number)
 
     def _rpc_ps(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='list processes')
+        parser = ArgumentParser(prog='ps', description='list processes')
         parser.parse_args(args)
         for p in self.client.processes.list():
             print(f'{p.pid:5} {p.path}', file=stdout, flush=True)
 
-    def _rpc_ls(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='list files')
-        parser.add_argument('path', nargs='?', default='.')
-        args = parser.parse_args(args)
-        for f in self.client.fs.scandir(args.path):
-            print(f.name, file=stdout, flush=True)
+    def _rpc_ls(self, path: Annotated[str, Arg(nargs='?', completer=path_completer)] = '.'):
+        """ list files """
+        buf = ''
+        for f in self.client.fs.scandir(path):
+            if f.is_dir():
+                buf += f'{f.name}/\n'
+            else:
+                buf += f'{f.name}\n'
+        return buf
 
-    def _rpc_ln(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='create a link')
-        parser.add_argument('-s', '--symlink', action='store_true')
-        parser.add_argument('src')
-        parser.add_argument('dst')
-        args = parser.parse_args(args)
-        if args.symlink:
-            self.client.fs.symlink(args.src, args.dst)
+    def _rpc_ln(self, src: Annotated[str, Arg(completer=path_completer)],
+                dst: Annotated[str, Arg(completer=path_completer)], symlink=False):
+        """
+        create a link
+
+        Parameters
+        ----------
+        symlink : -s, --symlink
+            create a symlink instead of a hard link
+        """
+        if symlink:
+            self.client.fs.symlink(src, dst)
         else:
-            self.client.fs.link(args.src, args.dst)
+            self.client.fs.link(src, dst)
 
-    def _rpc_touch(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='create an empty file')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        self.client.fs.write_file(args.filename, b'')
+    def _rpc_touch(self, filename: Annotated[str, Arg(completer=path_completer)]):
+        """
+        create an empty file
+        """
+        self.client.fs.write_file(filename, b'')
 
-    def _rpc_pwd(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='get current working directory')
-        parser.parse_args(args)
-        print(self.client.fs.pwd(), file=stdout, flush=True)
+    def _rpc_pwd(self):
+        """
+        get current working directory
+        """
+        return self.client.fs.pwd()
 
-    @contextual_completer
-    def _rpc_cd(self, args, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr):
-        parser = ArgumentParser(description='change directory')
-        parser.add_argument('path')
-        args = parser.parse_args(args)
-        self.client.fs.chdir(args.path)
+    def _rpc_cd(self, path: Annotated[str, Arg(completer=dir_completer)]):
+        """
+        change directory
+        """
+        self.client.fs.chdir(path)
 
-    def _rpc_rm(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='remove list of files')
-        parser.add_argument('path', nargs='+')
-        parser.add_argument('-r', '--recursive', action='store_true')
-        parser.add_argument('-f', '--force', action='store_true')
-        args = parser.parse_args(args)
-        for path in args.path:
-            self.client.fs.remove(path, recursive=args.recursive, force=args.force)
+    def _rpc_rm(self, path: Annotated[List[str], Arg(nargs='+', completer=path_completer)], recursive=False,
+                force=False):
+        """
+        remove files
 
-    def _rpc_mv(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='move a file')
-        parser.add_argument('src')
-        parser.add_argument('dst')
-        args = parser.parse_args(args)
-        self.client.fs.rename(args.src, args.dst)
+        Parameters
+        ----------
+        recursive : -r, --recursive
+            remove recursively
+        force : -f, --force
+            ignore errors
+        """
+        for p in path:
+            self.client.fs.remove(p, recursive=recursive, force=force)
 
-    def _rpc_cp(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='copy a file')
-        parser.add_argument('src')
-        parser.add_argument('dst')
-        args = parser.parse_args(args)
-        self.client.fs.write_file(args.dst, self.client.fs.read_file(args.src))
+    def _rpc_mv(self, src: Annotated[str, Arg(completer=path_completer)],
+                dst: Annotated[str, Arg(completer=path_completer)]):
+        """
+        move a file
+        """
+        self.client.fs.rename(src, dst)
 
-    def _rpc_mkdir(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='create a directory')
-        parser.add_argument('filename')
-        parser.add_argument('-m', '--mode', nargs='?', default='777')
-        parser.add_argument('-p', '--parents', action='store_true')
-        args = parser.parse_args(args)
-        self.client.fs.mkdir(args.filename, mode=int(args.mode, 8), parents=args.parents)
+    def _rpc_cp(self, src: Annotated[str, Arg(completer=path_completer)],
+                dst: Annotated[str, Arg(completer=path_completer)]):
+        """
+        copy a file
+        """
+        self.client.fs.write_file(dst, self.client.fs.read_file(src))
 
-    def _rpc_cat(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='read a list of files')
-        parser.add_argument('filename', nargs='+')
-        args = parser.parse_args(args)
-        for filename in args.filename:
-            with self.client.fs.open(filename, 'r') as f:
-                print(f.read(), file=stdout, end='', flush=True)
-        print('', file=stdout, flush=True)
+    def _rpc_mkdir(self, filename: Annotated[str, Arg(completer=path_completer)], parents: bool = False,
+                   mode: Annotated[str, Arg(nargs='?')] = '777'):
+        """
+        create a directory
 
-    def _rpc_bat(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='"bat" (improved-cat) given file')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        with self._remote_file(args.filename) as f:
+        Parameters
+        ----------
+        parents : -p, --parents
+            Create intermediate directories as required.
+        """
+        self.client.fs.mkdir(filename, mode=int(mode, 8), parents=parents)
+
+    def _rpc_cat(self, filename: Annotated[List[str], Arg(nargs='+', completer=path_completer)]):
+        """
+        read a list of files
+        """
+        buf = b''
+        for current in filename:
+            with self.client.fs.open(current, 'r') as f:
+                buf += f.read()
+        buf += b'\n'
+        try:
+            return buf.decode()
+        except UnicodeDecodeError:
+            return str(buf)
+
+    def _rpc_bat(self, filename: Annotated[List[str], Arg(completer=path_completer)]):
+        """
+        "bat" (improved-cat) given file
+        """
+        with self._remote_file(filename) as f:
             os.system(f'bat "{f}"')
 
-    def _rpc_pull(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='pull a file from remote')
-        parser.add_argument('remote')
-        parser.add_argument('local')
-        args = parser.parse_args(args)
-        return self._pull(args.remote, args.local)
+    def _rpc_pull(self, remote: Annotated[str, Arg(completer=path_completer)], local: str):
+        """
+        pull a file from remote
+        """
+        return self._pull(remote, local)
 
-    def _rpc_push(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='push a file into remote')
-        parser.add_argument('local')
-        parser.add_argument('remote')
-        args = parser.parse_args(args)
-        return self._push(args.local, args.remote)
+    def _rpc_push(self, local: str, remote: Annotated[str, Arg(completer=path_completer)]):
+        """
+        push a file into remote
+        """
+        return self._push(local, remote)
 
-    def _rpc_chmod(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='chmod at remote')
-        parser.add_argument('mode')
-        parser.add_argument('filename')
-        parser.add_argument('-R', '--recursive', action='store_true')
-        args = parser.parse_args(args)
-        self.client.fs.chmod(args.filename, int(args.mode, 8), recursive=args.recursive)
+    def _rpc_chmod(self, mode: str, filename: Annotated[str, Arg(completer=path_completer)], recursive=False):
+        """
+        chmod at remote
 
-    def _rpc_chown(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='chown at remote')
-        parser.add_argument('uid', type=int)
-        parser.add_argument('gid', type=int)
-        parser.add_argument('filename')
-        parser.add_argument('-r', '--recursive', action='store_true')
-        args = parser.parse_args(args)
-        self.client.fs.chown(args.filename, args.uid, args.gid, recursive=args.recursive)
+        Parameters
+        ----------
+        recursive : -R, --recursive
+            remove recursively
+        """
+        self.client.fs.chmod(filename, int(mode, 8), recursive=recursive)
+
+    def _rpc_chown(self, uid: int, gid: int, filename: Annotated[str, Arg(completer=path_completer)], recursive=False):
+        """
+        chown at remote
+
+        Parameters
+        ----------
+        recursive : -r, --recursive
+            remove recursively
+        """
+        self.client.fs.chown(filename, uid, gid, recursive=recursive)
 
     def _rpc_find(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='find file recursively')
+        parser = ArgumentParser(prog='find', description='find file recursively')
         parser.add_argument('filename')
         parser.add_argument('-d', '--depth', action='store_true')
         args = parser.parse_args(args)
         for filename in self.client.fs.find(args.filename, topdown=not args.depth):
             print(filename, file=stdout, flush=True)
 
-    def _rpc_plshow(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='parse and show plist')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-        with self.client.fs.open(args.filename, 'r') as f:
-            _print_json(plistlib.loads(f.read()), file=stdout)
+    def _rpc_plshow(self, filename: Annotated[str, Arg(completer=path_completer)]):
+        """
+        parse and show plist
+        """
+        with self.client.fs.open(filename, 'r') as f:
+            return _pretty_json(plistlib.loads(f.read()))
 
-    def _rpc_record(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='start recording for specified duration')
-        parser.add_argument('filename')
-        parser.add_argument('duration', type=int)
-        args = parser.parse_args(args)
-        with self.client.media.get_recorder(args.filename) as r:
+    def _rpc_record(self, filename: Annotated[str, Arg(completer=path_completer)], duration: int):
+        """
+        start recording for specified duration
+        """
+        duration = int(duration)
+        with self.client.media.get_recorder(filename) as r:
             r.record()
-            time.sleep(args.duration)
+            time.sleep(duration)
             r.stop()
 
-    def _rpc_play(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='play file')
-        parser.add_argument('filename')
-        parser.add_argument('duration', type=int, nargs='?')
-        args = parser.parse_args(args)
-        with self.client.media.get_player(args.filename) as r:
+    def _rpc_play(self, filename: Annotated[str, Arg(completer=path_completer)],
+                  duration: Annotated[int, Arg(nargs='?')] = None):
+        """
+        play file
+        """
+        with self.client.media.get_player(filename) as r:
             r.play()
-            if args.duration:
-                time.sleep(args.duration)
+            if duration:
+                duration = int(duration)
+                time.sleep(duration)
             else:
                 while r.playing:
                     time.sleep(.1)
 
-    def _rpc_open(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='open a file from remote using default program')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-
+    def _rpc_open(self, filename: Annotated[str, Arg(completer=path_completer)]):
+        """
+        open a file from remote using default program')
+        """
         open_ = plumbum.local['open']
         upload_changes = 'Upload changes'
         discard_changes = 'Discard changes'
-        with self._edit_remotely(args.filename) as f:
+        with self._edit_remotely(filename) as f:
             open_(f)
             if prompt_for_choice([upload_changes, discard_changes]) == upload_changes:
-                self._push(f, args.filename)
+                self._push(f, filename)
 
-    def _rpc_date(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='get/set date')
-        parser.add_argument('new_date', nargs='?')
-        args = parser.parse_args(args)
-        if not args:
-            print(self.client.time.now(), file=stdout, flush=True)
-            return
-        self.client.time.set_current(datetime.fromisoformat(args.new_date))
+    def _rpc_date(self, new_date: Annotated[str, Arg(nargs='?')] = None):
+        """
+        get/set date
+        """
+        if not new_date:
+            return self.client.time.now()
+        self.client.time.set_current(datetime.fromisoformat(new_date))
 
-    def _rpc_which(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='traverse $PATH to find the first matching executable')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-
+    def _rpc_which(self, filename: str):
+        """ traverse $PATH to find the first matching executable """
         for p in self.client.getenv('PATH').split(':'):
-            filename = (Path(p) / args.filename).absolute()
-            if self.client.fs.accessible((Path(p) / args.filename).absolute()):
-                print(filename, flush=True)
-                return
+            abs_filename = (Path(p) / filename).absolute()
+            if self.client.fs.accessible((Path(p) / filename).absolute()):
+                return abs_filename
 
-    def _rpc_env(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='view all environment variables')
-        parser.parse_args(args)
+    def _rpc_env(self):
+        """
+        view all environment variables
+        """
+        return '\n'.join(self.client.environ)
 
-        for e in self.client.environ:
-            print(e, file=stdout, flush=True)
-
-    def _rpc_file(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='show file type')
-        parser.add_argument('filename')
-        args = parser.parse_args(args)
-
+    def _rpc_file(self, filename: str):
+        """
+        show file type
+        """
         file = plumbum.local['file']
-        with self._remote_file(args.filename) as f:
-            file(f, stdout=stdout)
+        with self._remote_file(filename) as f:
+            return file(f)
 
-    def _rpc_list_commands(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(description='list all rpc commands')
-        parser.parse_args(args)
-
+    def _rpc_list_commands(self):
+        """
+        list all rpc commands
+        """
+        buf = ''
         for k, v in self._commands.items():
-            print(f'👾 {k}', file=stdout, flush=True)
+            buf += f'👾 {k}\n'
+        print(buf)
 
     @contextlib.contextmanager
     def _remote_file(self, remote):
@@ -459,11 +533,11 @@ class XonshRc:
 
 
 # actual RC contents
-rc = XonshRc()
-XSH.env['rpc'] = rc.client
-
 XSH.aliases['xontrib']('load z argcomplete coreutils fzf-widgets jedi'.split())
 XSH.env['fzf_history_binding'] = "c-r"  # Ctrl+R
 XSH.env['fzf_ssh_binding'] = "c-s"  # Ctrl+S
 XSH.env['fzf_file_binding'] = "c-t"  # Ctrl+T
 XSH.env['fzf_dir_binding'] = "c-g"  # Ctrl+G
+
+rc = XonshRc()
+XSH.env['rpc'] = rc.client
