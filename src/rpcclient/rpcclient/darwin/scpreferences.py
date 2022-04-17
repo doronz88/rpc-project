@@ -1,7 +1,30 @@
 import typing
+from collections import UserDict
+
+import IPython
+from pygments import highlight, lexers, formatters
 
 from rpcclient.allocated import Allocated
 from rpcclient.exceptions import RpcClientException
+
+SHELL_USAGE = """
+# Welcome to SCPreference plist interactive editor!
+# Please use the `d` global in order to make changes to the current plist.
+# Use: `d.commit()` to save your changes when done.
+#
+# For example, consider the following:
+
+# view current plist
+print(d)
+
+# modify an item
+d['item1'] = 5
+
+# update
+d.commit()
+
+# That's it! hope you had a pleasant ride! 👋
+"""
 
 
 class SCPreference(Allocated):
@@ -63,6 +86,15 @@ class SCPreference(Allocated):
             result[k] = self.get(k)
         return result
 
+    def interactive(self):
+        """ open an interactive IPython shell for viewing and editing """
+        plist = Plist(self)
+        IPython.embed(
+            header=highlight(SHELL_USAGE, lexers.PythonLexer(), formatters.TerminalTrueColorFormatter(style='native')),
+            user_ns={
+                'd': plist,
+            })
+
     def _clear(self):
         """ clear dictionary """
         for k in self.keys:
@@ -85,6 +117,15 @@ class SCPreference(Allocated):
 
     def __repr__(self):
         return f'<{self.__class__.__name__} NAME:{self._preferences_id}>'
+
+
+class Plist(UserDict):
+    def __init__(self, preference: SCPreference):
+        super().__init__(preference.get_dict())
+        self._preference = preference
+
+    def commit(self):
+        self._preference.set_dict(self)
 
 
 class SCPreferences:
