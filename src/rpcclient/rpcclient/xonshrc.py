@@ -186,8 +186,14 @@ class XonshRc:
         self._register_arg_parse_alias('rpc-file', self._rpc_file)
 
         XSH.env['PROMPT'] = f'[{{BOLD_GREEN}}{self.client.uname.nodename}{{RESET}} ' \
-                            f'{{BOLD_YELLOW}}{{rpc_cwd}}{{RESET}}]$ '
+                            f'{{BOLD_YELLOW}}{{rpc_cwd}}{{RESET}}]{{prompt_end}} '
         XSH.env['PROMPT_FIELDS']['rpc_cwd'] = self._rpc_cwd
+        XSH.env['PROMPT_FIELDS']['prompt_end'] = self._prompt
+
+    def _prompt(self) -> str:
+        if len(XSH.history) == 0 or XSH.history[-1].rtn == 0:
+            return '{BOLD_GREEN}${RESET}'
+        return '{BOLD_RED}${RESET}'
 
     def _rpc_cwd(self) -> str:
         with self.client.reconnect_lock:
