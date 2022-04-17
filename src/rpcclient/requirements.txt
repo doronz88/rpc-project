@@ -12,3 +12,4 @@ lief
 capstone
 xonsh
 plumbum
+pygnuutils
