@@ -1013,7 +1013,13 @@ bool handle_listdir(int sockfd)
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
     
     dirp = opendir(cmd.filename);
-    CHECK(dirp != NULL);
+    CHECK(sendall(sockfd, (const char *)&dirp, sizeof(dirp)));
+    
+    if (!dirp)
+    {
+        TRACE("invalid dir");
+        goto error;
+    }
 
     while (1)
     {
