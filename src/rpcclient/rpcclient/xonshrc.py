@@ -8,14 +8,14 @@ import time
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Union, List, Annotated, Callable
+from typing import Union, List, Callable
 from uuid import UUID
 
 import plumbum
 from humanfriendly.prompts import prompt_for_choice
 from pygments import highlight, formatters, lexers
 from xonsh.built_ins import XSH
-from xonsh.cli_utils import ArgParserAlias, Arg
+from xonsh.cli_utils import ArgParserAlias, Annotated, Arg
 
 import rpcclient
 from rpcclient.client_factory import create_client
