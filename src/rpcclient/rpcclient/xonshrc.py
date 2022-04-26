@@ -2,6 +2,7 @@ import contextlib
 import json
 import os
 import plistlib
+import posixpath
 import sys
 import tempfile
 import time
@@ -12,8 +13,11 @@ from typing import Union, List, Callable
 from uuid import UUID
 
 import plumbum
+from click.exceptions import Exit
 from humanfriendly.prompts import prompt_for_choice
 from pygments import highlight, formatters, lexers
+from pygnuutils.cli.ls import ls as ls_cli
+from pygnuutils.ls import LsStub, Ls
 from xonsh.built_ins import XSH
 from xonsh.cli_utils import ArgParserAlias, Annotated, Arg
 
@@ -90,6 +94,63 @@ def dir_completer(xsh, action, completer, alias, command):
     return result
 
 
+class RpcLsStub(LsStub):
+    def __init__(self, client, stdout):
+        self._client = client
+        self._stdout = stdout
+
+    @property
+    def sep(self):
+        return posixpath.sep
+
+    def join(self, path, *paths):
+        return posixpath.join(path, *paths)
+
+    def abspath(self, path):
+        return posixpath.normpath(path)
+
+    def stat(self, path, dir_fd=None, follow_symlinks=True):
+        if follow_symlinks:
+            return self._client.fs.stat(path)
+        return self._client.fs.lstat(path)
+
+    def readlink(self, path, dir_fd=None):
+        return self._client.fs.readlink(path)
+
+    def isabs(self, path):
+        return posixpath.isabs(path)
+
+    def dirname(self, path):
+        return posixpath.dirname(path)
+
+    def basename(self, path):
+        return posixpath.basename(path)
+
+    def getgroup(self, st_gid):
+        return str(st_gid)
+
+    def getuser(self, st_uid):
+        return str(st_uid)
+
+    def now(self):
+        return self._client.time.now()
+
+    def listdir(self, path='.'):
+        return self._client.fs.listdir(path)
+
+    def system(self):
+        return 'Darwin'
+
+    def getenv(self, key, default=None):
+        return self._client.getenv(key)
+
+    def get_tty_width(self):
+        return os.get_terminal_size().columns
+
+    def print(self, *objects, sep=' ', end='\n', file=sys.stdout, flush=False):
+        print(objects[0], end=end, file=self._stdout, flush=flush)
+
+
 class XonshRc:
     def __init__(self):
         self.client = None  # type: Union[None, rpcclient.client.Client, rpcclient.darwin.client.DarwinClient]
@@ -152,7 +213,7 @@ class XonshRc:
         self._register_arg_parse_alias('killall', self._rpc_killall)
 
         # -- fs
-        self._register_arg_parse_alias('ls', self._rpc_ls)
+        self._register_rpc_command('ls', self._rpc_ls)
         self._register_arg_parse_alias('ln', self._rpc_ln)
         self._register_arg_parse_alias('touch', self._rpc_touch)
         self._register_arg_parse_alias('pwd', self._rpc_pwd)
@@ -284,15 +345,15 @@ class XonshRc:
         for p in self.client.processes.list():
             print(f'{p.pid:5} {p.path}', file=stdout, flush=True)
 
-    def _rpc_ls(self, path: Annotated[str, Arg(nargs='?', completer=path_completer)] = '.'):
+    def _rpc_ls(self, args, stdin, stdout, stderr):
         """ list files """
-        buf = ''
-        for f in self.client.fs.scandir(path):
-            if f.is_dir():
-                buf += f'{f.name}/\n'
-            else:
-                buf += f'{f.name}\n'
-        return buf
+        try:
+            with ls_cli.make_context('ls', args) as ctx:
+                files = list(map(self._relative_path, ctx.params.pop('files')))
+                files = files if files else [self._rpc_pwd()]
+                Ls(RpcLsStub(self.client, stdout))(*files, **ctx.params)
+        except Exit:
+            pass
 
     def _rpc_ln(self, src: Annotated[str, Arg(completer=path_completer)],
                 dst: Annotated[str, Arg(completer=path_completer)], symlink=False):
@@ -527,6 +588,9 @@ class XonshRc:
     def _edit_remotely(self, remote):
         with self._remote_file(remote) as local:
             yield local
+
+    def _relative_path(self, filename):
+        return posixpath.join(self._rpc_pwd(), filename)
 
     def _listdir(self, path: str) -> List[str]:
         return self.client.fs.listdir(path)
