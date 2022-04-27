@@ -77,7 +77,17 @@ class DirEntry:
         return self._lstat
 
     def _fetch_stat(self, follow_symlinks):
-        raise NotImplementedError()
+        result = self._entry.stat
+        if not follow_symlinks:
+            result = self._entry.lstat
+
+        if result.errno != 0:
+            self._client.errno = result.errno
+            self._client.raise_errno_exception(f'failed to stat: {self._entry.name}')
+        return result
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} NAME:{self.name}{"/" if self.is_dir() else ""}>'
 
 
 class File(Allocated):
