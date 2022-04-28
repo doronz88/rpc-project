@@ -98,6 +98,7 @@ class RpcLsStub(LsStub):
     def __init__(self, client, stdout):
         self._client = client
         self._stdout = stdout
+        self._paths_entries = {}
 
     @property
     def sep(self):
@@ -110,8 +111,22 @@ class RpcLsStub(LsStub):
         return posixpath.normpath(path)
 
     def stat(self, path, dir_fd=None, follow_symlinks=True):
-        if follow_symlinks:
-            return self._client.fs.stat(path)
+        path = Path(path)
+
+        for parent, entries in self._paths_entries.items():
+            try:
+                Path(path).relative_to(parent)
+            except ValueError:
+                # if not relative then use stat()
+                if follow_symlinks:
+                    return self._client.fs.stat(path)
+                return self._client.fs.lstat(path)
+
+            # otherwise, search for a cached entry
+            for e in entries:
+                if e.name == path.parts[-1]:
+                    return e.stat(follow_symlinks=follow_symlinks)
+
         return self._client.fs.lstat(path)
 
     def readlink(self, path, dir_fd=None):
@@ -136,7 +151,8 @@ class RpcLsStub(LsStub):
         return self._client.time.now()
 
     def listdir(self, path='.'):
-        return self._client.fs.listdir(path)
+        self._paths_entries[path] = self._client.fs.scandir(path)
+        return [e.name for e in self._paths_entries[path]]
 
     def system(self):
         return 'Darwin'

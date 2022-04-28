@@ -42,7 +42,7 @@
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define SERVER_MAGIC_VERSION (0x88888802)
+#define SERVER_MAGIC_VERSION (0x88888803)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
@@ -167,10 +167,31 @@ typedef struct
 
 typedef struct
 {
+    u64 errno1;
+    u64 st_dev;     /* [XSI] ID of device containing file */
+    u64 st_mode;    /* [XSI] Mode of file (see below) */
+    u64 st_nlink;   /* [XSI] Number of hard links */
+    u64 st_ino;     /* [XSI] File serial number */
+    u64 st_uid;     /* [XSI] User ID of the file */
+    u64 st_gid;     /* [XSI] Group ID of the file */
+    u64 st_rdev;    /* [XSI] Device ID */
+    u64 st_size;    /* [XSI] file size, in bytes */
+    u64 st_blocks;  /* [XSI] blocks allocated for file */
+    u64 st_blksize; /* [XSI] optimal blocksize for I/O */
+    u64 st_atime1;  /* time of last access */
+    u64 st_mtime1;  /* time of last data modification */
+    u64 st_ctime1;  /* time of last file status change */
+} listdir_entry_stat_t;
+
+typedef struct
+{
     u64 magic;
-    u64 inode;
     u64 type;
     u64 namelen;
+
+    listdir_entry_stat_t lstat;
+    listdir_entry_stat_t stat;
+
     char name[0];
 } listdir_entry_t;
 
@@ -1011,10 +1032,10 @@ bool handle_listdir(int sockfd)
 
     cmd_listdir_t cmd;
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-    
+
     dirp = opendir(cmd.filename);
     CHECK(sendall(sockfd, (const char *)&dirp, sizeof(dirp)));
-    
+
     if (!dirp)
     {
         TRACE("invalid dir");
@@ -1031,16 +1052,63 @@ bool handle_listdir(int sockfd)
             break;
         }
 
+        struct stat system_lstat = {0};
+        struct stat system_stat = {0};
+
+        char fullpath[FILENAME_MAX];
+        CHECK(0 < sprintf(fullpath, "%s/%s", cmd.filename, direntp->d_name));
+
+        u64 lstat_error = 0;
+        u64 stat_error = 0;
+
+        if (!lstat(fullpath, &system_lstat)) {
+            lstat_error = errno;
+        }
+        if (!stat(fullpath, &system_stat)) {
+            stat_error = errno;
+        }
+
         listdir_entry_t entry = {
             .magic = MAGIC,
-            .inode = direntp->d_ino,
             .type = direntp->d_type,
+
 #ifdef __APPLE__
             .namelen = direntp->d_namlen,
 #else
             .namelen = strlen(direntp->d_name),
 #endif
+
+            .lstat.errno1 = lstat_error,
+            .lstat.st_dev = system_lstat.st_dev,
+            .lstat.st_mode = system_lstat.st_mode,
+            .lstat.st_nlink = system_lstat.st_nlink,
+            .lstat.st_ino = system_lstat.st_ino,
+            .lstat.st_uid = system_lstat.st_uid,
+            .lstat.st_gid = system_lstat.st_gid,
+            .lstat.st_rdev = system_lstat.st_rdev,
+            .lstat.st_size = system_lstat.st_size,
+            .lstat.st_blocks = system_lstat.st_blocks,
+            .lstat.st_blksize = system_lstat.st_blksize,
+            .lstat.st_atime1 = system_lstat.st_atime,
+            .lstat.st_mtime1 = system_lstat.st_mtime,
+            .lstat.st_ctime1 = system_lstat.st_ctime,
+
+            .stat.errno1 = stat_error,
+            .stat.st_dev = system_stat.st_dev,
+            .stat.st_mode = system_stat.st_mode,
+            .stat.st_nlink = system_stat.st_nlink,
+            .stat.st_ino = system_stat.st_ino,
+            .stat.st_uid = system_stat.st_uid,
+            .stat.st_gid = system_stat.st_gid,
+            .stat.st_rdev = system_stat.st_rdev,
+            .stat.st_size = system_stat.st_size,
+            .stat.st_blocks = system_stat.st_blocks,
+            .stat.st_blksize = system_stat.st_blksize,
+            .stat.st_atime1 = system_stat.st_atime,
+            .stat.st_mtime1 = system_stat.st_mtime,
+            .stat.st_ctime1 = system_stat.st_ctime,
         };
+
         CHECK(sendall(sockfd, (const char *)&entry, sizeof(entry)));
         CHECK(sendall(sockfd, direntp->d_name, entry.namelen));
     }

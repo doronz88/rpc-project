@@ -64,10 +64,30 @@ Starting an IPython shell... 🐍
 
 
 @dataclasses.dataclass
+class ProtocolDitentStat:
+    errno: int
+    st_dev: int  # device inode resides on
+    st_mode: int  # inode protection mode
+    st_nlink: int  # number of hard links to the file
+    st_ino: int  # inode's number
+    st_uid: int  # user-id of owner
+    st_gid: int  # group-id of owner
+    st_rdev: int  # device type, for special file inode
+    st_size: int  # file size, in bytes
+    st_blocks: int  # blocks allocated for file
+    st_blksize: int  # optimal blocksize for I/O
+    st_atime: int
+    st_mtime: int
+    st_ctime: int
+
+
+@dataclasses.dataclass
 class ProtocolDirent:
     d_inode: int
     d_type: int
     d_name: str
+    lstat: ProtocolDitentStat
+    stat: ProtocolDitentStat
 
 
 class Client:
@@ -288,12 +308,25 @@ class Client:
                     break
                 entry = listdir_entry_t.parse(self._recvall(listdir_entry_t.sizeof()))
                 name = self._recvall(entry.d_namlen).decode()
-                entries.append(ProtocolDirent(d_inode=entry.d_inode, d_type=entry.d_type, d_name=name))
+                lstat = ProtocolDitentStat(
+                    errno=entry.lstat.errno, st_blocks=entry.lstat.st_blocks, st_blksize=entry.lstat.st_blksize,
+                    st_atime=entry.lstat.st_atime, st_ctime=entry.lstat.st_ctime, st_mtime=entry.lstat.st_mtime,
+                    st_nlink=entry.lstat.st_nlink, st_mode=entry.lstat.st_mode, st_rdev=entry.lstat.st_rdev,
+                    st_size=entry.lstat.st_size, st_dev=entry.lstat.st_dev, st_gid=entry.lstat.st_gid,
+                    st_ino=entry.lstat.st_ino, st_uid=entry.lstat.st_uid)
+                stat = ProtocolDitentStat(
+                    errno=entry.stat.errno, st_blocks=entry.stat.st_blocks, st_blksize=entry.stat.st_blksize,
+                    st_atime=entry.stat.st_atime, st_ctime=entry.stat.st_ctime, st_mtime=entry.stat.st_mtime,
+                    st_nlink=entry.stat.st_nlink, st_mode=entry.stat.st_mode, st_rdev=entry.stat.st_rdev,
+                    st_size=entry.stat.st_size, st_dev=entry.stat.st_dev, st_gid=entry.stat.st_gid,
+                    st_ino=entry.stat.st_ino, st_uid=entry.stat.st_uid)
+                entries.append(ProtocolDirent(d_inode=entry.lstat.st_ino, d_type=entry.d_type, d_name=name, lstat=lstat,
+                                              stat=stat))
 
-        if not dirp:
-            self.raise_errno_exception(f'failed to listdir: {filename}')
+            if not dirp:
+                self.raise_errno_exception(f'failed to listdir: {filename}')
 
-        return entries
+            return entries
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
               stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:
@@ -484,7 +517,7 @@ class Client:
         self._ipython_run_cell_hook_enabled = False
 
         args = ['--rc']
-        home_rc = Path('~/.xonshrc')
+        home_rc = Path('~/.xonshrc').expanduser()
         if home_rc.exists():
             args.append(str(home_rc.expanduser().absolute()))
         args.append(str((Path(rpcclient.__file__).parent / 'xonshrc.py').absolute()))

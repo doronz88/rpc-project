@@ -23,7 +23,7 @@ arch_t = Enum(Int32ul,
               )
 
 DEFAULT_PORT = 5910
-SERVER_MAGIC_VERSION = 0x88888802
+SERVER_MAGIC_VERSION = 0x88888803
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 
@@ -82,10 +82,28 @@ cmd_dirlist_t = Struct(
     'filename' / PaddedString(MAX_PATH_LEN, 'utf8'),
 )
 
+listdir_entry_stat_t = Struct(
+    'errno' / Int64ul,
+    'st_dev' / Int64ul,  # device inode resides on
+    'st_mode' / Int64ul,  # inode protection mode
+    'st_nlink' / Int64ul,  # number of hard links to the file
+    'st_ino' / Int64ul,  # inode's number
+    'st_uid' / Int64ul,  # user-id of owner
+    'st_gid' / Int64ul,  # group-id of owner
+    'st_rdev' / Int64ul,  # device type, for special file inode
+    'st_size' / Int64ul,  # file size, in bytes
+    'st_blocks' / Int64ul,  # blocks allocated for file
+    'st_blksize' / Int64ul,  # optimal blocksize for I/O
+    'st_atime' / Int64ul,
+    'st_mtime' / Int64ul,
+    'st_ctime' / Int64ul,
+)
+
 listdir_entry_t = Struct(
-    'd_inode' / Int64ul,
     'd_type' / Int64ul,
     'd_namlen' / Int64ul,
+    'lstat' / listdir_entry_stat_t,
+    'stat' / listdir_entry_stat_t,
 )
 
 protocol_message_t = Struct(

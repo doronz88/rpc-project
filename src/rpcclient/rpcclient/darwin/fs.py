@@ -2,7 +2,7 @@ from typing import List, Mapping
 
 from rpcclient.common import path_to_str
 from rpcclient.darwin.structs import stat64, statfs64
-from rpcclient.fs import Fs, DirEntry
+from rpcclient.fs import Fs
 
 
 def do_stat(client, stat_name, filename: str):
@@ -14,21 +14,7 @@ def do_stat(client, stat_name, filename: str):
         return stat64.parse_stream(buf)
 
 
-class DarwinDirEntry(DirEntry):
-    def _fetch_stat(self, follow_symlinks):
-        stat_name = 'stat64' if follow_symlinks else 'lstat64'
-        return do_stat(self._client, stat_name, self.path)
-
-
 class DarwinFs(Fs):
-    @path_to_str('path')
-    def scandir(self, path: str = '.') -> List[DarwinDirEntry]:
-        """ get directory listing for a given dirname """
-        result = []
-        for entry in self._client.listdir(path)[2:]:
-            result.append(DarwinDirEntry(path, entry, self._client))
-        return result
-
     @path_to_str('path')
     def stat(self, path: str):
         """ stat(filename) at remote. read man for more details. """
