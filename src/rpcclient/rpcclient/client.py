@@ -323,10 +323,10 @@ class Client:
                 entries.append(ProtocolDirent(d_inode=entry.lstat.st_ino, d_type=entry.d_type, d_name=name, lstat=lstat,
                                               stat=stat))
 
-            if not dirp:
-                self.raise_errno_exception(f'failed to listdir: {filename}')
+        if not dirp:
+            self.raise_errno_exception(f'failed to listdir: {filename}')
 
-            return entries
+        return entries
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
               stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:

@@ -68,7 +68,7 @@ typedef enum
     CMD_GET_DUMMY_BLOCK = 9,
     CMD_CLOSE = 10,
     CMD_REPLY_POKE = 11,
-    CMD_listdir = 12,
+    CMD_LISTDIR = 12,
 } cmd_type_t;
 
 typedef enum
@@ -1204,13 +1204,14 @@ void handle_client(int sockfd)
             // client requested to close connection
             goto error;
         }
-        case CMD_listdir:
+        case CMD_LISTDIR:
         {
             handle_listdir(sockfd);
+            break;
         }
         default:
         {
-            TRACE("unknown cmd");
+            TRACE("unknown cmd: %d", cmd.cmd_type);
         }
         }
     }
