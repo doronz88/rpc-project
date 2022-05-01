@@ -2,7 +2,7 @@ import time
 from typing import List
 
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError
+from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcAccessibilityTurnedOff
 from rpcclient.structs.consts import RTLD_NOW
 
 DIRECTION_NEXT = 1
@@ -187,7 +187,18 @@ class Accessibility:
 
     @property
     def primary_app(self):
+        if not self.enabled:
+            raise RpcAccessibilityTurnedOff()
         return self._axelement(self._client.symbols.objc_getClass('AXElement').objc_call('primaryApp'))
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self._client.symbols._AXSApplicationAccessibilityEnabled() or
+                    self._client.symbols._AXSAutomationEnabled())
+
+    @enabled.setter
+    def enabled(self, value: bool):
+        self._client.symbols._AXSSetAutomationEnabled(int(value))
 
     def get_element_by_label(self, label: str) -> AXElement:
         """ get an AXElement by given label """
