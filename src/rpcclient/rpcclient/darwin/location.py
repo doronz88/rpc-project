@@ -66,7 +66,7 @@ class Location:
         location = self._location_manager.objc_call('location')
         if not location:
             return None
-        return location.objc_call('jsonObject').py
+        return location.objc_call('jsonObject').py()
 
     def start_updating_location(self):
         """ request location updates from CLLocationManager """

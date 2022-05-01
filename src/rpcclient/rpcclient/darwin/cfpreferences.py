@@ -27,7 +27,7 @@ class CFPreferences:
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
-        keys = self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py
+        keys = self._client.symbols.CFPreferencesCopyKeyList(application_id, username, hostname).py()
         if keys is None:
             raise NoSuchPreferenceError()
         return keys
@@ -39,7 +39,7 @@ class CFPreferences:
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
         hostname = self._client.cf(hostname)
-        return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py
+        return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py()
 
     def get_dict(self, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:

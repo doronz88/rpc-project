@@ -22,7 +22,7 @@ class Xpc:
         """
         Convert XPC object to python object.
         """
-        return self._client.symbols._CFXPCCreateCFObjectFromXPCObject(address).py
+        return self._client.symbols._CFXPCCreateCFObjectFromXPCObject(address).py()
 
     def to_xpc_object(self, obj):
         """

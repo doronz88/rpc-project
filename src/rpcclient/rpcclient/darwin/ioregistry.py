@@ -27,7 +27,7 @@ class IOService(Allocated):
             if self._client.symbols.IORegistryEntryCreateCFProperties(self._service, p_properties,
                                                                       kCFAllocatorDefault, 0):
                 raise BadReturnValueError('IORegistryEntryCreateCFProperties failed')
-            return p_properties[0].py
+            return p_properties[0].py()
 
     def __iter__(self):
         with self._client.safe_malloc(io_object_t.sizeof()) as p_child_iter:
@@ -47,7 +47,7 @@ class IOService(Allocated):
 
     def get(self, key: str):
         return self._client.symbols.IORegistryEntryCreateCFProperty(self._service, self._client.cf(key),
-                                                                    kCFAllocatorDefault, 0).py
+                                                                    kCFAllocatorDefault, 0).py()
 
     def _deallocate(self):
         self._client.symbols.IOObjectRelease(self._service)

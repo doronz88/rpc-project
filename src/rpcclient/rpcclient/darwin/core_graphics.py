@@ -17,7 +17,7 @@ class CoreGraphics:
         get a list of all opened windows
         https://developer.apple.com/documentation/coregraphics/1455137-cgwindowlistcopywindowinfo?language=objc
         """
-        return self._client.symbols.CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID).py
+        return self._client.symbols.CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID).py()
 
     def send_key_press(self, key_code: int, interval: Union[float, int] = 0):
         """

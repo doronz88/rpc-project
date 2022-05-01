@@ -204,7 +204,7 @@ class Backtrace:
     frames: List[Frame]
 
     def __init__(self, vmu_backtrace: DarwinSymbol):
-        backtrace = vmu_backtrace.objc_call('description').py
+        backtrace = vmu_backtrace.objc_call('description').py()
         match = re.match(r'VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time_start>.+?) - (?P<time_end>.+?) '
                          r'Process: (?P<pid>\d+) Thread: (?P<thread_id>.+?)  Dispatch queue serial num: '
                          r'(?P<dispatch_queue_serial_num>\d+)\)', backtrace)
@@ -292,9 +292,9 @@ class Process:
 
         for i in range(1, realized_classes.objc_call('count') + 1):
             class_info = realized_classes.objc_call('classInfoForIndex:', i)
-            name = class_info.objc_call('className').py
-            type_name = class_info.objc_call('typeName').py
-            binary_path = class_info.objc_call('binaryPath').py
+            name = class_info.objc_call('className').py()
+            type_name = class_info.objc_call('typeName').py()
+            binary_path = class_info.objc_call('binaryPath').py()
             yield LoadedClass(name=name, type_name=type_name, binary_path=binary_path)
 
     @property
@@ -446,7 +446,7 @@ class Process:
     @property
     def backtraces(self) -> List[Backtrace]:
         result = []
-        for bt in self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task).py:
+        for bt in self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task).py():
             result.append(Backtrace(bt))
         return result
 
@@ -523,11 +523,11 @@ class Process:
 
     @property
     def environ(self) -> List[str]:
-        return self.vmu_proc_info.objc_call('envVars').py
+        return self.vmu_proc_info.objc_call('envVars').py()
 
     @property
     def arguments(self) -> List[str]:
-        return self.vmu_proc_info.objc_call('arguments').py
+        return self.vmu_proc_info.objc_call('arguments').py()
 
     @property
     def regions(self) -> List[Region]:

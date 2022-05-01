@@ -15,7 +15,7 @@ class Backlight:
     @property
     def brighness(self) -> float:
         """ get brightness value in range: 0.0 - 1.0 """
-        return self._brightness.objc_call('copyPropertyForKey:', self._client.cf('DisplayBrightness')).py['Brightness']
+        return self._brightness.objc_call('copyPropertyForKey:', self._client.cf('DisplayBrightness')).py()['Brightness']
 
     @brighness.setter
     def brighness(self, value: float):

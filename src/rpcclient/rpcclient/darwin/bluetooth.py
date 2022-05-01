@@ -33,7 +33,7 @@ class Bluetooth:
 
     @property
     def address(self) -> Optional[str]:
-        return self._bluetooth_manager.objc_call('localAddress').py
+        return self._bluetooth_manager.objc_call('localAddress').py()
 
     @property
     def connected(self) -> bool:

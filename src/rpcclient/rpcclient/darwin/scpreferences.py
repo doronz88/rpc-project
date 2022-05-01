@@ -37,7 +37,7 @@ class SCPreference(Allocated):
     @property
     def keys(self) -> typing.List[str]:
         """ wrapper for SCPreferencesCopyKeyList """
-        return self._client.symbols.SCPreferencesCopyKeyList(self._ref).py
+        return self._client.symbols.SCPreferencesCopyKeyList(self._ref).py()
 
     def _set(self, key: str, value):
         """ wrapper for SCPreferencesSetValue """
@@ -77,7 +77,7 @@ class SCPreference(Allocated):
 
     def get(self, key: str):
         """ wrapper for SCPreferencesGetValue """
-        return self._client.symbols.SCPreferencesGetValue(self._ref, self._client.cf(key)).py
+        return self._client.symbols.SCPreferencesGetValue(self._ref, self._client.cf(key)).py()
 
     def get_dict(self) -> typing.Mapping:
         """ get a dictionary representation """
