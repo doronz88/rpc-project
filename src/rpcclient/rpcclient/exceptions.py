@@ -106,3 +106,8 @@ class RpcNotADirectoryError(BadReturnValueError):
 class RpcPermissionError(BadReturnValueError):
     """ RPC version for PermissionError (errno = EPERM) """
     pass
+
+
+class RpcAccessibilityTurnedOff(BadReturnValueError):
+    """ Application AX and Automation is turned off """
+    pass
