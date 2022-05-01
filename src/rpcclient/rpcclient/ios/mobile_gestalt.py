@@ -490,7 +490,7 @@ class MobileGestalt:
 
     def get_answer(self, key: str):
         """ get a string answer from MobileGestalt """
-        return self._client.symbols.MGCopyAnswer(self._client.cf(key)).py
+        return self._client.symbols.MGCopyAnswer(self._client.cf(key)).py()
 
     def set_answer(self, key: str, value):
         """ set an answer into MobileGestalt """

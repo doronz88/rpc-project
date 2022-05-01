@@ -22,4 +22,4 @@ class ScreenCapture:
 
     @property
     def screenshot(self) -> bytes:
-        return self._client.symbols.UIImagePNGRepresentation(self._client.symbols._UICreateScreenUIImage()).py
+        return self._client.symbols.UIImagePNGRepresentation(self._client.symbols._UICreateScreenUIImage()).py()

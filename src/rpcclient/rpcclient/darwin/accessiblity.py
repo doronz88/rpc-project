@@ -40,12 +40,12 @@ class AXElement(DarwinSymbol):
     @property
     def label(self) -> str:
         """ get element's label (actual displayed text) """
-        return self.objc_call('label').py
+        return self.objc_call('label').py(encoding='utf8')
 
     @property
     def value(self) -> str:
         """ get element's value (actual set value) """
-        return self.objc_call('value').py
+        return self.objc_call('value').py(encoding='utf8')
 
     @property
     def is_accessibility_opaque_element_provider(self) -> bool:
@@ -117,10 +117,10 @@ class AXElement(DarwinSymbol):
         return element
 
     def _next_elements_with_count(self, count: int):
-        return [AXElement.create(e, self._client) for e in self.objc_call('nextElementsWithCount:', count).py]
+        return [AXElement.create(e, self._client) for e in self.objc_call('nextElementsWithCount:', count).py()]
 
     def _previous_elements_with_count(self, count: int):
-        return [AXElement.create(e, self._client) for e in self.objc_call('previousElementsWithCount:', count).py]
+        return [AXElement.create(e, self._client) for e in self.objc_call('previousElementsWithCount:', count).py()]
 
     def _set_assistive_focus(self, focused: bool):
         self.ui_element.objc_call('setAXAttribute:withObject:synchronous:', 2018, self._client.cf({

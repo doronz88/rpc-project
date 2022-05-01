@@ -20,4 +20,4 @@ def test_calling_property(client):
     # call method
     d.setObject_forKey_(client.cf('value'), client.cf('key'))
     # call property
-    assert '{\n    key = value;\n}' == d.description.py
+    assert '{\n    key = value;\n}' == d.description.py()

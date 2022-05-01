@@ -296,13 +296,13 @@ class XonshRc:
         """
         return _pretty_json(self.client.lief.get_entitlements(filename))
 
-    def _rpc_list_labels(self, args, stdin, stdout, stderr):
+    def _rpc_list_labels(self):
         """
         list all labels in current main application')
         """
         buf = ''
         for element in self.client.accessibility.primary_app:
-            buf += f'{element.label}\n'
+            buf += f'Label: {element.label} Value: {element.value}\n'
         return buf
 
     def _rpc_press_labels(self, label: Annotated[List[str], Arg(nargs='+')]):

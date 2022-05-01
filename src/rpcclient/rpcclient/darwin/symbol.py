@@ -11,6 +11,17 @@ class DarwinSymbol(Symbol):
 
         return self._client.symbols.objc_msgSend(self, sel, *params, **kwargs)
 
+    def py(self, *args, **kwargs):
+        """ get a python object from a core foundation one """
+        if self == 0:
+            return None
+
+        cf_type = self._client.symbols.CFGetTypeID(self)
+        if cf_type not in self._client.type_decoders:
+            return self
+
+        return self._client.type_decoders[cf_type](self, *args, **kwargs)
+
     @property
     def region(self):
         """ get corresponding region """
@@ -26,19 +37,7 @@ class DarwinSymbol(Symbol):
         """
         if self == 0:
             return None
-        return self._client.symbols.CFCopyDescription(self).py
-
-    @property
-    def py(self):
-        """ get a python object from a core foundation one """
-        if self == 0:
-            return None
-
-        cf_type = self._client.symbols.CFGetTypeID(self)
-        if cf_type not in self._client.type_decoders:
-            return self
-
-        return self._client.type_decoders[cf_type](self)
+        return self._client.symbols.CFCopyDescription(self).py()
 
     @property
     def objc_symbol(self):

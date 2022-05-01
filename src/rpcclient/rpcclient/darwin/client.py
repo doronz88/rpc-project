@@ -27,7 +27,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError
+from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError, ArgumentError
 from rpcclient.protocol import arch_t
 from rpcclient.structs.consts import RTLD_NOW
 
@@ -243,15 +243,22 @@ class DarwinClient(Client):
     def _decode_cfnull(self, symbol) -> None:
         return None
 
-    def _decode_cfstr(self, symbol) -> str:
-        ptr = self.symbols.CFStringGetCStringPtr(symbol, CFStringEncoding.kCFStringEncodingMacRoman)
+    def _decode_cfstr(self, symbol, encoding='mac_roman') -> str:
+        supported_encodings = {
+            'mac_roman': CFStringEncoding.kCFStringEncodingMacRoman,
+            'utf8': CFStringEncoding.kCFStringEncodingUTF8,
+        }
+        if encoding not in supported_encodings:
+            raise ArgumentError(f'given encoding: {encoding} is not supported. must be one of: '
+                                f'{supported_encodings.keys()}')
+        ptr = self.symbols.CFStringGetCStringPtr(symbol, supported_encodings[encoding])
         if ptr:
-            return ptr.peek_str('mac_roman')
+            return ptr.peek_str(encoding)
 
         with self.safe_malloc(4096) as buf:
-            if not self.symbols.CFStringGetCString(symbol, buf, 4096, CFStringEncoding.kCFStringEncodingMacRoman):
+            if not self.symbols.CFStringGetCString(symbol, buf, 4096, supported_encodings[encoding]):
                 raise CfSerializationError('CFStringGetCString failed')
-            return buf.peek_str('mac_roman')
+            return buf.peek_str(encoding)
 
     def _decode_cfbool(self, symbol) -> bool:
         return bool(self.symbols.CFBooleanGetValue(symbol))
@@ -277,7 +284,7 @@ class DarwinClient(Client):
         result = []
         count = self.symbols.CFArrayGetCount(symbol)
         for i in range(count):
-            result.append(self.symbols.CFArrayGetValueAtIndex(symbol, i).py)
+            result.append(self.symbols.CFArrayGetValueAtIndex(symbol, i).py())
         return result
 
     def _decode_cfdict(self, symbol) -> typing.Mapping:
@@ -287,5 +294,5 @@ class DarwinClient(Client):
             with self.safe_malloc(8 * count) as values:
                 self.symbols.CFDictionaryGetKeysAndValues(symbol, keys, values)
                 for i in range(count):
-                    result[keys[i].py] = values[i].py
+                    result[keys[i].py()] = values[i].py()
                 return result

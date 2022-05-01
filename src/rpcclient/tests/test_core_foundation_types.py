@@ -18,4 +18,4 @@ pytestmark = pytest.mark.darwin
     {'key': 'value'},
     [{'key': 'value'}, [1, 2]]])
 def test_serialization(client, data):
-    assert client.cf(data).py == data
+    assert client.cf(data).py() == data

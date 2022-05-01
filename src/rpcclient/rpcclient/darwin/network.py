@@ -63,7 +63,7 @@ class WifiInterface(Allocated):
             if self._client.symbols.Apple80211Scan(self._interface, p_found_networks, self._client.cf({})):
                 self._client.raise_errno_exception('Apple80211Scan failed')
 
-            for network in p_found_networks[0].py:
+            for network in p_found_networks[0].py():
                 result.append(WifiNetwork(self._client, self, network))
 
         return result
@@ -137,7 +137,7 @@ class DarwinNetwork(Network):
                 if self._client.symbols.Apple80211GetIfListCopy(p_interface[0], p_interface_names):
                     self._client.raise_errno_exception('Apple80211GetIfListCopy failed')
 
-                return p_interface_names[0].py
+                return p_interface_names[0].py()
 
     def get_wifi_interface(self, interface_name: str = None) -> WifiInterface:
         """ get a specific wifi interface object for remote controlling """
