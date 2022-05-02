@@ -15,11 +15,13 @@ from uuid import UUID
 import plumbum
 from click.exceptions import Exit
 from humanfriendly.prompts import prompt_for_choice
+from prompt_toolkit.keys import Keys
 from pygments import highlight, formatters, lexers
 from pygnuutils.cli.ls import ls as ls_cli
 from pygnuutils.ls import LsStub, Ls
 from xonsh.built_ins import XSH
 from xonsh.cli_utils import ArgParserAlias, Annotated, Arg
+from xonsh.events import events
 from xonsh.tools import print_color
 
 import rpcclient
@@ -192,13 +194,20 @@ class XonshRc:
         if '_RPC_AUTO_CONNECT_HOSTNAME' in XSH.env:
             self._rpc_connect(XSH.env['_RPC_AUTO_CONNECT_HOSTNAME'], XSH.env['_RPC_AUTO_CONNECT_PORT'])
 
-        print('''
-        Welcome to xonsh-rpc shell! 👋
+        print_color('''
+        {BOLD_WHITE}Welcome to xonsh-rpc shell! 👋{RESET}
         Use `$rpc` to access current client.
         Below is list of commands that have been remapped to work over the target device *instead* of the
         default machine behavior:
         ''')
         self._rpc_list_commands()
+        print_color('''
+        {BOLD_WHITE}Use the following keyboard shortcuts:{RESET}
+        * Home: ControlHome
+        * Power: ControlEnd
+        * VolUp: ControlShiftUp
+        * VolDown: ControlShiftDown
+        ''')
 
     def _register_arg_parse_alias(self, name: str, handler: Callable):
         handler = ArgParserAlias(func=handler, has_args=True, prog=name)
@@ -683,3 +692,22 @@ XSH.env['fzf_dir_binding'] = "c-g"  # Ctrl+G
 
 rc = XonshRc()
 XSH.env['rpc'] = rc.client
+
+
+@events.on_ptk_create
+def custom_keybindings(bindings, **kw):
+    @bindings.add(Keys.ControlHome)
+    def press_home(event):
+        XSH.env['rpc'].hid.send_home_button_press()
+
+    @bindings.add(Keys.ControlEnd)
+    def press_power(event):
+        XSH.env['rpc'].hid.send_power_button_press()
+
+    @bindings.add(Keys.ControlShiftUp)
+    def press_volume_up(event):
+        XSH.env['rpc'].hid.send_volume_down_button_press()
+
+    @bindings.add(Keys.ControlShiftDown)
+    def press_volume_down(event):
+        XSH.env['rpc'].hid.send_volume_up_button_press()
