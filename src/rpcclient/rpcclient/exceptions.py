@@ -108,6 +108,6 @@ class RpcPermissionError(BadReturnValueError):
     pass
 
 
-class RpcAccessibilityTurnedOff(BadReturnValueError):
+class RpcAccessibilityTurnedOffError(BadReturnValueError):
     """ Application AX and Automation is turned off """
     pass
