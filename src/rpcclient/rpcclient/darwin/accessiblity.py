@@ -38,6 +38,21 @@ class AXElement(DarwinSymbol):
         return result
 
     @property
+    def identifier(self) -> str:
+        """ get element's identifier """
+        return self.objc_call('label').py(encoding='utf8')
+
+    @property
+    def url(self) -> str:
+        """ get element's url """
+        return self.objc_call('url').py(encoding='utf8')
+
+    @property
+    def path(self) -> DarwinSymbol:
+        """ get element's path """
+        return self.objc_call('path')
+
+    @property
     def label(self) -> str:
         """ get element's label (actual displayed text) """
         return self.objc_call('label').py(encoding='utf8')
@@ -200,14 +215,16 @@ class Accessibility:
     def enabled(self, value: bool):
         self._client.symbols._AXSSetAutomationEnabled(int(value))
 
-    def get_element_by_label(self, label: str) -> AXElement:
+    def get_element_by_label(self, label: str, auto_scroll=True) -> AXElement:
         """ get an AXElement by given label """
         for element in self.primary_app:
+            if auto_scroll:
+                element.scroll_to_visible()
             if element.label == label:
                 return element
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_labels(self, labels: List[str], interval=1):
+    def press_elements_by_labels(self, labels: List[str], interval=1):
         """
         press a sequence of labels
         :param labels: label list to press
