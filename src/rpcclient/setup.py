@@ -5,7 +5,6 @@ from setuptools import setup, find_packages
 BASE_DIR = Path(__file__).parent.resolve(strict=True)
 VERSION = '2.11.7'
 PACKAGE_NAME = 'rpcclient'
-DATA_FILES_EXTENSIONS = ['*.txt', '*.json', '*.js']
 PACKAGES = [p for p in find_packages() if not p.startswith('tests')]
 
 
@@ -24,15 +23,6 @@ def get_description():
     return (BASE_DIR / 'README.md').read_text(errors='ignore')
 
 
-def get_data_files():
-    data_files = ['requirements.txt']
-    package_dir = Path(__file__).parent
-    for extension in DATA_FILES_EXTENSIONS:
-        for file in (package_dir / PACKAGE_NAME).glob(f'**/{extension}'):
-            data_files.append(str(file.relative_to(package_dir)))
-    return data_files
-
-
 if __name__ == '__main__':
     setup(
         version=VERSION,
@@ -43,7 +33,6 @@ if __name__ == '__main__':
         cmdclass={},
         packages=PACKAGES,
         include_package_data=True,
-        data_files=[('.', get_data_files())],
         author='DoronZ',
         author_email='doron88@gmail.com',
         license='GNU GENERAL PUBLIC LICENSE - Version 3, 29 June 2007',
