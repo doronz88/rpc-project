@@ -20,6 +20,7 @@ from pygnuutils.cli.ls import ls as ls_cli
 from pygnuutils.ls import LsStub, Ls
 from xonsh.built_ins import XSH
 from xonsh.cli_utils import ArgParserAlias, Annotated, Arg
+from xonsh.tools import print_color
 
 import rpcclient
 from rpcclient.client_factory import create_client
@@ -46,6 +47,18 @@ def _pretty_json(buf, colored=True, default=_default_json_encoder):
         return colorful_json
     else:
         return formatted_json
+
+
+def element_completer(xsh, action, completer, alias, command):
+    client = XSH.env['rpc']
+    result = []
+    if not client.accessibility.enabled:
+        return result
+
+    for f in client.accessibility.primary_app:
+        result.append(f'"{f.label}"')
+
+    return result
 
 
 def path_completer(xsh, action, completer, alias, command):
@@ -217,14 +230,20 @@ class XonshRc:
         self._register_arg_parse_alias('rpc-which', self._rpc_which)
 
         # -- automation
-        self._register_arg_parse_alias('list-labels', self._rpc_list_labels)
-        self._register_arg_parse_alias('press-labels', self._rpc_press_labels)
+        self._register_arg_parse_alias('list-elements', self._rpc_list_elements)
+        self._register_arg_parse_alias('press-elements', self._rpc_press_elements)
+        self._register_arg_parse_alias('enable-accessibility', self._rpc_enable_accessibility)
+        self._register_arg_parse_alias('disable-accessibility', self._rpc_disable_accessibility)
         self._register_arg_parse_alias('press-keys', self._rpc_press_keys)
+        self._register_arg_parse_alias('swipe-up', self._rpc_swipe_up)
+        self._register_arg_parse_alias('swipe-down', self._rpc_swipe_down)
+        self._register_arg_parse_alias('swipe-left', self._rpc_swipe_left)
+        self._register_arg_parse_alias('swipe-right', self._rpc_swipe_right)
 
         # -- processes
         self._register_rpc_command('run', self._rpc_run)
         self._register_rpc_command('run-async', self._rpc_run_async)
-        self._register_rpc_command('ps', self._rpc_ps)
+        self._register_arg_parse_alias('ps', self._rpc_ps)
         self._register_arg_parse_alias('kill', self._rpc_kill)
         self._register_arg_parse_alias('killall', self._rpc_killall)
 
@@ -244,7 +263,7 @@ class XonshRc:
         self._register_arg_parse_alias('push', self._rpc_push)
         self._register_arg_parse_alias('chmod', self._rpc_chmod)
         self._register_arg_parse_alias('chown', self._rpc_chown)
-        self._register_rpc_command('find', self._rpc_find)
+        self._register_arg_parse_alias('find', self._rpc_find)
         self._register_arg_parse_alias('xattr-get-dict', self._rpc_xattr_get_dict)
         self._register_arg_parse_alias('vim', self._rpc_vim)
         self._register_arg_parse_alias('entitlements', self._rpc_entitlements)
@@ -296,22 +315,39 @@ class XonshRc:
         """
         return _pretty_json(self.client.lief.get_entitlements(filename))
 
-    def _rpc_list_labels(self):
+    def _rpc_list_elements(self):
         """
         list all labels in current main application')
         """
-        buf = ''
         for element in self.client.accessibility.primary_app:
-            buf += f'Label: {element.label} Value: {element.value}\n'
-        return buf
+            print_color(f'🏷  '
+                        f'{{BOLD_WHITE}}Label:{{RESET}} {element.label} '
+                        f'{{BOLD_WHITE}}Value:{{RESET}} {element.value} '
+                        f'{{RESET}}',
+                        file=sys.stdout)
 
-    def _rpc_press_labels(self, label: Annotated[List[str], Arg(nargs='+')]):
+    def _rpc_press_elements(self, label: Annotated[List[str], Arg(nargs='+', completer=element_completer)]):
         """
         press labels list by given order
         """
-        self.client.accessibility.press_labels(label)
+        self.client.accessibility.press_elements_by_labels(label)
 
-    def _rpc_press_keys(self, key: Annotated[List[str], Arg(nargs='+')]):
+    def _rpc_enable_accessibility(self):
+        """
+        enable accessibility features
+        """
+        self.client.accessibility.enabled = True
+
+    def _rpc_disable_accessibility(self):
+        """
+        disable accessibility features
+        """
+        self.client.accessibility.enabled = False
+
+    def _rpc_press_keys(self, key: Annotated[
+        List[str], Arg(nargs='+',
+                       completer=lambda xsh, action, completer, alias, command: ['power', 'home', 'volup', 'voldown',
+                                                                                 'mute'])]):
         """
         press key list by given order
         """
@@ -324,6 +360,30 @@ class XonshRc:
         }
         for k in key:
             keys_map[k]()
+
+    def _rpc_swipe_up(self):
+        """
+        swipe up
+        """
+        self.client.hid.send_swipe_up()
+
+    def _rpc_swipe_down(self):
+        """
+        swipe down
+        """
+        self.client.hid.send_swipe_down()
+
+    def _rpc_swipe_left(self):
+        """
+        swipe left
+        """
+        self.client.hid.send_swipe_left()
+
+    def _rpc_swipe_right(self):
+        """
+        swipe right
+        """
+        self.client.hid.send_swipe_right()
 
     def _rpc_run(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(prog='run', description='execute a program')
@@ -355,11 +415,10 @@ class XonshRc:
         for p in self.client.processes.grep(expression):
             p.kill(signal_number)
 
-    def _rpc_ps(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(prog='ps', description='list processes')
-        parser.parse_args(args)
+    def _rpc_ps(self):
+        """ list processes """
         for p in self.client.processes.list():
-            print(f'{p.pid:5} {p.path}', file=stdout, flush=True)
+            print_color(f'{p.pid:5} {p.path}', file=sys.stdout, flush=True)
 
     def _rpc_ls(self, args, stdin, stdout, stderr):
         """ list files """
@@ -500,13 +559,10 @@ class XonshRc:
         """
         self.client.fs.chown(filename, uid, gid, recursive=recursive)
 
-    def _rpc_find(self, args, stdin, stdout, stderr):
-        parser = ArgumentParser(prog='find', description='find file recursively')
-        parser.add_argument('filename')
-        parser.add_argument('-d', '--depth', action='store_true')
-        args = parser.parse_args(args)
-        for filename in self.client.fs.find(args.filename, topdown=not args.depth):
-            print(filename, file=stdout, flush=True)
+    def _rpc_find(self, filename: Annotated[str, Arg(completer=path_completer)], depth=True):
+        """ find file recursively """
+        for f in self.client.fs.find(filename, topdown=not depth):
+            print_color(f, file=sys.stdout, flush=True)
 
     def _rpc_plshow(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
