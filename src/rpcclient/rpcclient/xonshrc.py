@@ -196,12 +196,10 @@ class XonshRc:
 
         print_color('''
         {BOLD_WHITE}Welcome to xonsh-rpc shell! 👋{RESET}
-        Use `$rpc` to access current client.
-        Below is list of commands that have been remapped to work over the target device *instead* of the
-        default machine behavior:
-        ''')
-        self._rpc_list_commands()
-        print_color('''
+        Use {CYAN}$rpc{RESET} to access current client.
+        Use {CYAN}rpc-list-commands{RESET} to view a list of all available special commands.
+            These special commands will replace all already existing commands.
+
         {BOLD_WHITE}Use the following keyboard shortcuts:{RESET}
         * Home: ControlHome
         * Power: ControlEnd
