@@ -304,13 +304,13 @@ class XonshRc:
         with self.client.reconnect_lock:
             return self.client.fs.pwd()
 
-    def _rpc_xattr_get_dict(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+    def _rpc_xattr_get_dict(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         view file xattributes
         """
         return _pretty_json(self.client.fs.dictxattr(filename))
 
-    def _rpc_vim(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+    def _rpc_vim(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         use "vim" to edit the given file
         """
@@ -318,7 +318,7 @@ class XonshRc:
             os.system(f'vim "{f}"')
             self._push(f, filename)
 
-    def _rpc_entitlements(self, filename: Annotated[str, Arg(nargs='?', completer=path_completer)]):
+    def _rpc_entitlements(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         view file entitlements
         """
