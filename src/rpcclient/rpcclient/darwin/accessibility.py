@@ -6,7 +6,7 @@ from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcA
 from rpcclient.structs.consts import RTLD_NOW
 
 DIRECTION_NEXT = 1
-DIRECTION_PREV = 1
+DIRECTION_PREV = 2
 
 
 class AXElement(DarwinSymbol):
