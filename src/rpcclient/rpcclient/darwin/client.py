@@ -43,8 +43,8 @@ OBJC_TAG_MASK = (1 << 63)
 
 
 class DarwinClient(Client):
-    def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
-        super().__init__(sock, sysname, arch, hostname, port)
+    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+        super().__init__(sock, sysname, arch, create_socket_cb)
         self._dlsym_global_handle = -2  # RTLD_GLOBAL
         self._init_process_specific()
 

@@ -10,13 +10,13 @@ import typing
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
-from select import select
-from socket import socket
 
 import IPython
 import xonsh
 from construct import Int64sl, Float64l, Float32l, Float16l, Int64ul
+from select import select
 from traitlets.config import Config
+from xonsh.built_ins import XSH
 
 import rpcclient
 from rpcclient.darwin.structs import pid_t, exitcode_t
@@ -96,10 +96,9 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
+    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
         self._arch = arch
-        self._hostname = hostname
-        self._port = port
+        self._create_socket_cb = create_socket_cb
         self._sock = sock
         self._old_settings = None
         self._endianness = '<'
@@ -511,8 +510,6 @@ class Client:
             self._close()
 
     def shell(self):
-        os.environ['_RPC_AUTO_CONNECT_HOSTNAME'] = self._hostname
-        os.environ['_RPC_AUTO_CONNECT_PORT'] = str(self._port)
         self._logger.disabled = True
         self._ipython_run_cell_hook_enabled = False
 
@@ -521,6 +518,7 @@ class Client:
         if home_rc.exists():
             args.append(str(home_rc.expanduser().absolute()))
         args.append(str((Path(rpcclient.__file__).parent / 'xonshrc.py').absolute()))
+        XSH.ctx['_create_socket_cb'] = self._create_socket_cb
 
         try:
             xonsh.main.main(args)
@@ -533,8 +531,7 @@ class Client:
         with self.reconnect_lock:
             with self._protocol_lock:
                 self._close()
-                self._sock = socket()
-                self._sock.connect((self._hostname, self._port))
+                self._sock = self._create_socket_cb()
                 handshake = protocol_handshake_t.parse(self._recvall(protocol_handshake_t.sizeof()))
 
             if handshake.magic != SERVER_MAGIC_VERSION:

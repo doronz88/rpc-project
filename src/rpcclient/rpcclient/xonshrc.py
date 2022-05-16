@@ -27,7 +27,6 @@ from xonsh.tools import print_color
 import rpcclient
 from rpcclient.client_factory import create_client
 from rpcclient.exceptions import RpcClientException
-from rpcclient.protocol import DEFAULT_PORT
 from rpcclient.structs.consts import SIGTERM
 
 
@@ -190,9 +189,7 @@ class XonshRc:
         self._orig_prompt = XSH.env['PROMPT']
         self._register_rpc_command('rpc-connect', self._rpc_connect)
         self._register_rpc_command('rpc-list-commands', self._rpc_list_commands)
-
-        if '_RPC_AUTO_CONNECT_HOSTNAME' in XSH.env:
-            self._rpc_connect(XSH.env['_RPC_AUTO_CONNECT_HOSTNAME'], XSH.env['_RPC_AUTO_CONNECT_PORT'])
+        self._rpc_connect()
 
         print_color('''
         {BOLD_WHITE}Welcome to xonsh-rpc shell! 👋{RESET}
@@ -225,12 +222,11 @@ class XonshRc:
         for k, v in self._orig_aliases.items():
             XSH.aliases[k] = v
 
-    def _rpc_connect(self, hostname: str, port: Annotated[int, Arg(nargs='?', default=DEFAULT_PORT)] = DEFAULT_PORT):
+    def _rpc_connect(self):
         """
         connect to remote rpcserver
         """
-        port = int(port)
-        self.client = create_client(hostname, port)
+        self.client = create_client(XSH.ctx['_create_socket_cb'])
 
         # -- rpc
         self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
