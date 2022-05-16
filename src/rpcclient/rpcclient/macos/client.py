@@ -9,8 +9,8 @@ CRASH_REPORTS_DIR = 'Library/Logs/DiagnosticReports'
 
 class MacosClient(DarwinClient):
 
-    def __init__(self, sock, sysname: str, arch: arch_t, hostname: str, port: int = None):
-        super().__init__(sock, sysname, arch, hostname, port)
+    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+        super().__init__(sock, sysname, arch, create_socket_cb)
         self.reports = Reports(self, CRASH_REPORTS_DIR)
 
     @property

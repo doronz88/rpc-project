@@ -1,4 +1,5 @@
 import logging
+import typing
 from socket import socket
 
 from rpcclient.client import Client
@@ -21,14 +22,21 @@ def recvall(sock, size: int) -> bytes:
     return buf
 
 
-def create_client(hostname: str, port: int = DEFAULT_PORT):
-    sock = socket()
-    try:
-        sock.connect((hostname, port))
-    except ConnectionRefusedError as e:
-        # wrap in our own exception
-        raise FailedToConnectError() from e
+def create_tcp_client(hostname: str, port: int = DEFAULT_PORT):
+    def tcp_connect() -> socket:
+        sock = socket()
+        try:
+            sock.connect((hostname, port))
+        except ConnectionRefusedError as e:
+            # wrap in our own exception
+            raise FailedToConnectError() from e
+        return sock
 
+    return create_client(tcp_connect)
+
+
+def create_client(create_socket_cb: typing.Callable):
+    sock = create_socket_cb()
     handshake = protocol_handshake_t.parse(recvall(sock, protocol_handshake_t.sizeof()))
 
     if handshake.magic != SERVER_MAGIC_VERSION:
@@ -40,13 +48,13 @@ def create_client(hostname: str, port: int = DEFAULT_PORT):
     logging.info(f'connection uname.sysname: {handshake.sysname}')
 
     if sysname == 'darwin':
-        client = DarwinClient(sock, sysname, arch, hostname, port)
+        client = DarwinClient(sock, sysname, arch, create_socket_cb)
 
         if client.uname.machine.startswith('iPhone'):
-            return IosClient(sock, sysname, arch, hostname, port)
+            return IosClient(sock, sysname, arch, create_socket_cb)
         else:
-            return MacosClient(sock, sysname, arch, hostname, port)
+            return MacosClient(sock, sysname, arch, create_socket_cb)
     elif sysname == 'linux':
-        return LinuxClient(sock, sysname, arch, hostname, port)
+        return LinuxClient(sock, sysname, arch, create_socket_cb)
 
-    return Client(sock, sysname, arch, hostname, port)
+    return Client(sock, sysname, arch, create_socket_cb)

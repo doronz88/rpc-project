@@ -3,7 +3,7 @@ import logging
 import click
 import coloredlogs
 
-from rpcclient.client_factory import create_client
+from rpcclient.client_factory import create_tcp_client
 from rpcclient.protocol import DEFAULT_PORT
 
 coloredlogs.install(level=logging.DEBUG)
@@ -20,7 +20,7 @@ logging.getLogger('humanfriendly.prompts').disabled = True
 @click.argument('hostname')
 @click.option('-p', '--port', type=click.INT, default=DEFAULT_PORT)
 def cli(hostname, port):
-    create_client(hostname, port=port).interactive()
+    create_tcp_client(hostname, port=port).interactive()
 
 
 if __name__ == '__main__':

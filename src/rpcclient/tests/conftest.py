@@ -4,13 +4,13 @@ from uuid import uuid4
 
 import pytest
 
-from rpcclient.client_factory import create_client, DarwinClient
+from rpcclient.client_factory import DarwinClient, create_tcp_client
 from rpcclient.exceptions import BadReturnValueError
 
 
 @pytest.fixture
 def client():
-    with closing(create_client('127.0.0.1')) as c:
+    with closing(create_tcp_client('127.0.0.1')) as c:
         yield c
 
 
@@ -45,7 +45,7 @@ def pytest_collection_modifyitems(config, items):
     skip_local_only = pytest.mark.skip(reason='remove --ci option to run')
     skip_not_darwin = pytest.mark.skip(reason='Darwin system is required for this test')
 
-    with closing(create_client('127.0.0.1')) as c:
+    with closing(create_tcp_client('127.0.0.1')) as c:
         is_darwin = isinstance(c, DarwinClient)
 
     for item in items:
