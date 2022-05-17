@@ -37,6 +37,7 @@ class Telephony:
         self._client = client
         self.cx_call_controller = self._client.symbols.objc_getClass('CXCallController').objc_call('new')
         self.cx_call_observer = self.cx_call_controller.objc_call('callObserver')
+        self.ct_message_center = self._client.symbols.objc_getClass('CTMessageCenter').objc_call('sharedMessageCenter')
 
     def dial(self, number: str):
         """
@@ -44,6 +45,18 @@ class Telephony:
         :param number: Phone address to call to.
         """
         self._client.symbols.CTCallDial(self._client.cf(number))
+
+    def send_sms(self, to_address: str, text: str, smsc: str = '1111'):
+        """
+        Send a SMS.
+        :param to_address: Phone address to send to.
+        :param text: Message text.
+        :param smsc: Originator's short message service center address.
+        """
+        self.ct_message_center.objc_call(
+            'sendSMSWithText:serviceCenter:toAddress:', self._client.cf(text), self._client.cf(smsc),
+            self._client.cf(to_address)
+        )
 
     @property
     def current_call(self) -> Call:
