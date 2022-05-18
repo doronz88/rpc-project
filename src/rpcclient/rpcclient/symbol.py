@@ -147,6 +147,11 @@ class Symbol(int):
         """ cast to c_int16 """
         return ctypes.c_int16(self).value
 
+    @property
+    def c_uint16(self) -> int:
+        """ cast to c_uint16 """
+        return ctypes.c_uint16(self).value
+
     def __add__(self, other):
         try:
             return self._client.symbol(int(self) + other)
