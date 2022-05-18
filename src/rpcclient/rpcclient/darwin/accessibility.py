@@ -63,6 +63,21 @@ class AXElement(DarwinSymbol):
         return self.objc_call('value').py(encoding='utf8')
 
     @property
+    def bundle_identifier(self) -> str:
+        """ get element's bundle identifier """
+        return self.objc_call('bundleId').py(encoding='utf8')
+
+    @property
+    def pid(self) -> int:
+        """ get element's pid """
+        return self.objc_call('pid').c_uint16
+
+    @property
+    def screen_locked(self) -> bool:
+        """ get screen lock state """
+        return self.objc_call('isScreenLocked') == 1
+
+    @property
     def is_accessibility_opaque_element_provider(self) -> bool:
         return self.objc_call('isAccessibilityOpaqueElementProvider') != 0
 
