@@ -10,17 +10,19 @@ from cached_property import cached_property
 from construct import Array, Int32ul
 
 from rpcclient.common import path_to_str
-from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors
+from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors, VM_FLAGS_ANYWHERE
 from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
     arm_thread_state64_t, PROX_FDTYPE_KQUEUE
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError
+from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError, \
+    RpcClientException
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
 from rpcclient.structs.consts import SIGTERM, RTLD_NOW
+from rpcclient.symbol import Symbol
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
@@ -228,6 +230,27 @@ class Backtrace:
         return buf
 
 
+class ProcessSymbol(Symbol):
+    @classmethod
+    def create(cls, value: int, client, process):
+        symbol = super(ProcessSymbol, cls).create(value, client)
+        symbol.process = process
+        return symbol
+
+    def peek(self, count: int) -> bytes:
+        return self.process.peek(self, count)
+
+    def poke(self, buf: bytes) -> None:
+        return self.process.poke(self, buf)
+
+    def peek_str(self, encoding='utf-8') -> str:
+        """ peek string at given address """
+        return self.process.peek_str(self, encoding)
+
+    def __call__(self, *args, **kwargs):
+        raise RpcClientException('ProcessSymbol is not callable')
+
+
 class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
@@ -256,7 +279,7 @@ class Process:
                     raise BadReturnValueError('vm_read() failed')
                 return p_buf[0].peek(size)
 
-    def peek_str(self, address: int) -> str:
+    def peek_str(self, address: int, encoding='utf-8') -> str:
         """ peek string at memory address """
         size = self.PEEK_STR_CHUNK_SIZE
         buf = b''
@@ -265,7 +288,7 @@ class Process:
             try:
                 buf += self.peek(address, size)
                 if b'\x00' in buf:
-                    return buf.split(b'\x00', 1)[0].decode()
+                    return buf.split(b'\x00', 1)[0].decode(encoding)
                 address += size
             except BadReturnValueError:
                 size = size // 2
@@ -570,6 +593,12 @@ class Process:
                                  protection_max=protection[1], region_detail=region_detail))
 
         return result
+
+    def vm_allocate(self, size: int) -> ProcessSymbol:
+        with self._client.safe_malloc(8) as out_address:
+            if self._client.symbols.vm_allocate(self.task, out_address, size, VM_FLAGS_ANYWHERE):
+                raise BadReturnValueError('vm_allocate() failed')
+            return ProcessSymbol.create(out_address[0], self._client, self)
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
