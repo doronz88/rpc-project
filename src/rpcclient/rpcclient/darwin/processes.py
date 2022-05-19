@@ -211,9 +211,9 @@ class Backtrace:
         self.flavor = match.group('flavor')
         self.time_start = float(match.group('time_start'))
         self.time_end = float(match.group('time_end'))
-        self.pid = match.group('pid')
+        self.pid = int(match.group('pid'))
         self.thread_id = int(match.group('thread_id'), 16)
-        self.dispatch_queue_serial_num = match.group('dispatch_queue_serial_num')
+        self.dispatch_queue_serial_num = int(match.group('dispatch_queue_serial_num'))
 
         self.frames = []
         for frame in re.findall(_BACKTRACE_FRAME_REGEX, backtrace):
