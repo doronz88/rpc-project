@@ -1,12 +1,52 @@
+import dataclasses
 import time
+from enum import IntEnum
 from typing import List
 
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcAccessibilityTurnedOffError
 from rpcclient.structs.consts import RTLD_NOW
 
-DIRECTION_NEXT = 1
-DIRECTION_PREV = 2
+
+class Direction(IntEnum):
+    Next = 1
+    Prev = 2
+
+
+class FrameStyle(IntEnum):
+    Default = 0
+    Blue = 0
+    Green = 1
+    Yellow = 4
+    LightGreen = 5
+    Invisible = 6
+
+
+@dataclasses.dataclass
+class CGPoint:
+    x: float
+    y: float
+
+    def __str__(self) -> str:
+        return f'{{{self.x}, {self.y}}}'
+
+
+@dataclasses.dataclass
+class CGSize:
+    width: float
+    height: float
+
+    def __str__(self) -> str:
+        return f'{{{self.width}, {self.height}}}'
+
+
+@dataclasses.dataclass
+class CGRect:
+    origin: CGPoint
+    size: CGSize
+
+    def __str__(self) -> str:
+        return f'{{{self.origin}, {self.size}}}'
 
 
 class AXElement(DarwinSymbol):
@@ -51,6 +91,12 @@ class AXElement(DarwinSymbol):
     def path(self) -> DarwinSymbol:
         """ get element's path """
         return self.objc_call('path')
+
+    @property
+    def frame(self) -> CGRect:
+        """ get element's frame """
+        d = self.objc_call('frame', return_raw=True).d
+        return CGRect(origin=CGPoint(x=d[0], y=d[1]), size=CGSize(width=d[2], height=d[3]))
 
     @property
     def label(self) -> str:
@@ -98,6 +144,10 @@ class AXElement(DarwinSymbol):
         """ get encapsulated AXUIElement """
         return self.objc_call('uiElement')
 
+    def highlight(self):
+        frame = self.frame
+        self._client.accessibility.draw_frame(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)
+
     def scroll_to_visible(self):
         """ scroll until element becomes fully visible """
         self.objc_call('scrollToVisible')
@@ -114,7 +164,7 @@ class AXElement(DarwinSymbol):
         current = self.first_element
         while current:
             yield current
-            current = current._next()
+            current = current.next()
 
     def _element_for_attribute(self, axattribute: int, parameter=None):
         if parameter is None:
@@ -123,7 +173,7 @@ class AXElement(DarwinSymbol):
             result = self.objc_call('elementForAttribute:parameter:', axattribute, parameter)
         return AXElement.create(result, self._client)
 
-    def _next_opaque(self, direction=DIRECTION_NEXT):
+    def _next_opaque(self, direction=Direction.Next):
         element = self
 
         if not element.is_accessibility_opaque_element_provider:
@@ -159,7 +209,7 @@ class AXElement(DarwinSymbol):
         if parent:
             parent._set_assistive_focus(focused)
 
-    def _next(self, direction=DIRECTION_NEXT, cyclic=False):
+    def next(self, direction=Direction.Next, cyclic=False):
         """
         Will get and scroll to the next element in the current view.
 
@@ -171,7 +221,7 @@ class AXElement(DarwinSymbol):
         if not self.is_accessibility_opaque_element_provider and next_opaque:
             return next_opaque
 
-        if direction == DIRECTION_NEXT:
+        if direction == Direction.Next:
             next_or_prev_list = self._next_elements_with_count(1)
         else:
             next_or_prev_list = self._previous_elements_with_count(1)
@@ -195,10 +245,10 @@ class AXElement(DarwinSymbol):
         if not self.is_accessibility_opaque_element_provider:
             parent = self.parent
             if parent:
-                return parent._next(direction)
+                return parent.next(direction)
 
         if cyclic:
-            if direction == DIRECTION_NEXT:
+            if direction == Direction.Next:
                 return self.first_element
             return self.last_element
 
@@ -214,6 +264,11 @@ class Accessibility:
         """
         self._client = client
         self._load_ax_runtime()
+        self._load_accessibility_ui()
+        self._ui_client = client.symbols.objc_getClass('AXUIClient').objc_call('alloc').objc_call(
+            'initWithIdentifier:serviceBundleName:',
+            client.cf('AXAuditAXUIClientIdentifier'),
+            client.cf('AXAuditAXUIService'))
 
     @property
     def primary_app(self):
@@ -230,23 +285,46 @@ class Accessibility:
     def enabled(self, value: bool):
         self._client.symbols._AXSSetAutomationEnabled(int(value))
 
-    def get_element_by_label(self, label: str, auto_scroll=True) -> AXElement:
+    def hide_frame(self):
+        self.draw_frame(0, 0, 0, 0)
+
+    def set_frame_style(self, value: int):
+        self._ui_client.objc_call('sendSynchronousMessage:withIdentifier:error:',
+                                  self._client.cf({'frameStyle': value}), 2, 0)
+
+    def draw_frame(self, x: float, y: float, width: float, height: float):
+        rect = {'frame': f' {{{{{x},{y}}}, {{{width},{height}}}}}'}
+        self._ui_client.objc_call('sendSynchronousMessage:withIdentifier:error:', self._client.cf(rect), 1, 0)
+
+    def get_element_by_label(self, label: str, auto_scroll=True, draw_frame=True) -> AXElement:
         """ get an AXElement by given label """
         for element in self.primary_app:
             if auto_scroll:
                 element.scroll_to_visible()
+
             if element.label == label:
                 return element
+
+            if draw_frame:
+                element.highlight()
+
+        if draw_frame:
+            self.hide_frame()
+
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_elements_by_labels(self, labels: List[str], interval=1):
+    def press_elements_by_labels(self, labels: List[str], interval=2, draw_frame=True):
         """
         press a sequence of labels
         :param labels: label list to press
         :param interval: interval in seconds to sleep between each press
+        :param draw_frame: draw a frame over the current element
         """
         for label in labels:
-            self.get_element_by_label(label).press()
+            self.get_element_by_label(label, draw_frame=draw_frame).press()
+
+            if draw_frame:
+                self.hide_frame()
 
             # wait before next interation
             time.sleep(interval)
@@ -259,6 +337,15 @@ class Accessibility:
             if self._client.dlopen(option, RTLD_NOW):
                 return
         raise MissingLibraryError('failed to load AXRuntime')
+
+    def _load_accessibility_ui(self):
+        options = [
+            '/System/Library/PrivateFrameworks/AccessibilityUI.framework/AccessibilityUI',
+        ]
+        for option in options:
+            if self._client.dlopen(option, RTLD_NOW):
+                return
+        raise MissingLibraryError('failed to load AccessibilityUI')
 
     def _axelement(self, symbol: DarwinSymbol):
         return AXElement.create(symbol, self._client)
