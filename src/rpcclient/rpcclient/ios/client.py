@@ -2,6 +2,7 @@ import typing
 
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.darwin.reports import Reports
+from rpcclient.ios.accessibility import Accessibility
 from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
@@ -21,6 +22,7 @@ class IosClient(DarwinClient):
         self.lockdown = Lockdown(self)
         self.telephony = Telephony(self)
         self.screen_capture = ScreenCapture(self)
+        self.accessibility = Accessibility(self)
 
     @property
     def roots(self) -> typing.List[str]:
