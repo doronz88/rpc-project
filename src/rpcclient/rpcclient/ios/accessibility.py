@@ -1,6 +1,6 @@
 import dataclasses
 import time
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from typing import List
 
 from rpcclient.darwin.symbol import DarwinSymbol
@@ -8,9 +8,9 @@ from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcA
 from rpcclient.structs.consts import RTLD_NOW
 
 
-class Direction(IntEnum):
+class AXDirection(IntEnum):
     Next = 1
-    Prev = 2
+    Previous = 2
 
 
 class FrameStyle(IntEnum):
@@ -20,6 +20,65 @@ class FrameStyle(IntEnum):
     Yellow = 4
     LightGreen = 5
     Invisible = 6
+
+
+class AXTraits(IntFlag):
+    kAXButtonTrait = 0x01
+    kAXLinkTrait = 0x02
+    kAXVisitedTrait = 0x100000000
+    kAXHeaderTrait = 0x10000
+    kAXFooterTrait = 0x4000000
+    kAXWebContentTrait = 0x20000
+    kAXTextEntryTrait = 0x40000
+    kAXImageTrait = 0x4
+    kAXSelectedTrait = 0x8
+    kAXPlaysSoundTrait = 0x10
+    kAXKeyboardKeyTrait = 0x20
+    kAXStaticTextTrait = 0x40
+    kAXSummaryElementTrait = 0x80
+    kAXNotEnabledTrait = 0x100
+    kAXPickerElementTrait = 0x80000
+    kAXUpdatesFrequentlyTrait = 0x200
+    kAXIsEditingTrait = 0x200000
+    kAXLaunchIconTrait = 0x400000
+    kAXFolderIconTrait = 0x4000000000000
+    kAXSearchFieldTrait = 0x400
+    kAXStatusBarElementTrait = 0x800000
+    kAXAllowsLayoutChangeInStatusBarTrait = 0x400000000000000
+    kAXSecureTextFieldTrait = 0x1000000
+    kAXBackButtonTrait = 0x8000000
+    kAXToggleTrait = 0x20000000000000
+    kAXSelectionDismissesItemTrait = 0x80000000
+    kAXScrollableTrait = 0x200000000
+    kAXSpacerTrait = 0x400000000
+    kAXTableIndexTrait = 0x800000000
+    kAXMapTrait = 0x1000000000
+    kAXTextOperationsAvailableTrait = 0x2000000000
+    kAXDraggableTrait = 0x4000000000
+    kAXGesturePracticeRegionTrait = 0x8000000000
+    kAXPopupButtonTrait = 0x10000000000
+    kAXAllowsNativeSlidingTrait = 0x20000000000
+    kAXTouchContainerTrait = 0x200000000000
+    kAXSupportsZoomTrait = 0x400000000000
+    kAXTextAreaTrait = 0x800000000000
+    kAXBookContentTrait = 0x1000000000000
+    kAXStartsMediaSessionTrait = 0x800
+    kAXAdjustableTrait = 0x1000
+    kAXMenuItemTrait = 0x10000000000000
+    kAXAutoCorrectCandidateTrait = 0x20000000
+    kAXDeleteKeyTrait = 0x40000000
+    kAXTabButtonTrait = 0x10000000
+    kAXIgnoreItemChooserTrait = 0x40000000000000
+    kAXAllowsDirectInteractionTrait = 0x2000
+    kAXCausesPageTurnTrait = 0x4000
+    kAXTabBarTrait = 0x8000
+    kAXRadioButtonTrait = 0x100000
+    kAXMathEquationTrait = 0x40000000000
+    kAXInactiveTrait = 0x2000000
+    kAXSupportsTrackingDetailTrait = 0x80000000000000
+    kAXAlertTrait = 0x100000000000000
+    kAXReadOnlyTrait = 0x8000000000000
+    kAXProminentIconTrait = 0x1000000000000000
 
 
 @dataclasses.dataclass
@@ -80,7 +139,7 @@ class AXElement(DarwinSymbol):
     @property
     def identifier(self) -> str:
         """ get element's identifier """
-        return self.objc_call('label').py(encoding='utf8')
+        return self.objc_call('identifier').py(encoding='utf8')
 
     @property
     def url(self) -> str:
@@ -119,6 +178,11 @@ class AXElement(DarwinSymbol):
         return self.objc_call('pid').c_uint16
 
     @property
+    def process_name(self) -> str:
+        """ get element's process name """
+        return self.objc_call('processName').py()
+
+    @property
     def screen_locked(self) -> bool:
         """ get screen lock state """
         return self.objc_call('isScreenLocked') == 1
@@ -144,19 +208,41 @@ class AXElement(DarwinSymbol):
         """ get encapsulated AXUIElement """
         return self.objc_call('uiElement')
 
-    def highlight(self):
+    @property
+    def traits(self) -> AXTraits:
+        """ get current element traits """
+        return AXTraits(self.objc_call('traits').c_uint64)
+
+    @property
+    def elements(self) -> List:
+        """ get all current displayed elements """
+        result = []
+        for element in self.objc_call('explorerElements').py():
+            result.append(self._client.accessibility.axelement(element))
+        return result
+
+    def insert_text(self, text: str) -> None:
+        """ insert text into currently editable element """
+        self.objc_call('insertText:', self._client.cf(text))
+
+    def delete_text(self) -> None:
+        """ delete a character from currently editable element """
+        self.objc_call('deleteText')
+
+    def highlight(self) -> None:
+        """ draw a frame around the element (replace the old one if existing) """
         frame = self.frame
         self._client.accessibility.draw_frame(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)
 
-    def scroll_to_visible(self):
+    def scroll_to_visible(self) -> None:
         """ scroll until element becomes fully visible """
         self.objc_call('scrollToVisible')
 
-    def press(self):
+    def press(self) -> None:
         """ press element """
         self.objc_call('press')
 
-    def long_press(self):
+    def long_press(self) -> None:
         """ long press element """
         self.objc_call('longPress')
 
@@ -173,7 +259,7 @@ class AXElement(DarwinSymbol):
             result = self.objc_call('elementForAttribute:parameter:', axattribute, parameter)
         return AXElement.create(result, self._client)
 
-    def _next_opaque(self, direction=Direction.Next):
+    def _next_opaque(self, direction=AXDirection.Next):
         element = self
 
         if not element.is_accessibility_opaque_element_provider:
@@ -209,7 +295,7 @@ class AXElement(DarwinSymbol):
         if parent:
             parent._set_assistive_focus(focused)
 
-    def next(self, direction=Direction.Next, cyclic=False):
+    def next(self, direction=AXDirection.Next, cyclic=False):
         """
         Will get and scroll to the next element in the current view.
 
@@ -221,7 +307,7 @@ class AXElement(DarwinSymbol):
         if not self.is_accessibility_opaque_element_provider and next_opaque:
             return next_opaque
 
-        if direction == Direction.Next:
+        if direction == AXDirection.Next:
             next_or_prev_list = self._next_elements_with_count(1)
         else:
             next_or_prev_list = self._previous_elements_with_count(1)
@@ -245,14 +331,17 @@ class AXElement(DarwinSymbol):
         if not self.is_accessibility_opaque_element_provider:
             parent = self.parent
             if parent:
-                return parent.next(direction)
+                return parent.next(direction, cyclic=cyclic)
 
         if cyclic:
-            if direction == Direction.Next:
-                return self.first_element
-            return self.last_element
+            if direction == AXDirection.Next:
+                return self._client.accessibility.primary_app.first_element
+            return self._client.accessibility.primary_app.last_element
 
         return None
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} LABEL:{self.label}>'
 
 
 class Accessibility:
@@ -271,10 +360,10 @@ class Accessibility:
             client.cf('AXAuditAXUIService'))
 
     @property
-    def primary_app(self):
+    def primary_app(self) -> AXElement:
         if not self.enabled:
             raise RpcAccessibilityTurnedOffError()
-        return self._axelement(self._client.symbols.objc_getClass('AXElement').objc_call('primaryApp'))
+        return self.axelement(self._client.symbols.objc_getClass('AXElement').objc_call('primaryApp'))
 
     @property
     def enabled(self) -> bool:
@@ -302,11 +391,11 @@ class Accessibility:
             if auto_scroll:
                 element.scroll_to_visible()
 
-            if element.label == label:
-                return element
-
             if draw_frame:
                 element.highlight()
+
+            if element.label == label:
+                return element
 
         if draw_frame:
             self.hide_frame()
@@ -347,5 +436,5 @@ class Accessibility:
                 return
         raise MissingLibraryError('failed to load AccessibilityUI')
 
-    def _axelement(self, symbol: DarwinSymbol):
+    def axelement(self, symbol: DarwinSymbol) -> AXElement:
         return AXElement.create(symbol, self._client)
