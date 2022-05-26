@@ -73,6 +73,16 @@ class ElementNotFoundError(RpcClientException):
     pass
 
 
+class FirstElementNotFoundError(RpcClientException):
+    """ Failed to find the first element """
+    pass
+
+
+class LastElementNotFoundError(RpcClientException):
+    """ Failed to find the last element """
+    pass
+
+
 class RpcFileExistsError(BadReturnValueError):
     """ RPC version for FileExistsError (errno = EEXIST) """
     pass
