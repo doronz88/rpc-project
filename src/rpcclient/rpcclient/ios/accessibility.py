@@ -396,6 +396,17 @@ class Accessibility:
         rect = {'frame': f' {{{{{x},{y}}}, {{{width},{height}}}}}'}
         self._ui_client.objc_call('sendSynchronousMessage:withIdentifier:error:', self._client.cf(rect), 1, 0)
 
+    def wait_for_element_by_label(self, label: str, auto_scroll=True, draw_frame=True, timeout=5) -> AXElement:
+        """ busy-wait for an element to become available """
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                return self.get_element_by_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame)
+            except ElementNotFoundError:
+                pass
+        raise ElementNotFoundError(f'failed to find AXElement by label: "{label}" after waiting for {timeout} seconds '
+                                   f'for it to load')
+
     def get_element_by_label(self, label: str, auto_scroll=True, draw_frame=True) -> AXElement:
         """ get an AXElement by given label """
         for element in self.primary_app:
@@ -413,21 +424,18 @@ class Accessibility:
 
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_elements_by_labels(self, labels: List[str], interval=2, draw_frame=True):
+    def press_elements_by_labels(self, labels: List[str], draw_frame=True, timeout=5):
         """
         press a sequence of labels
         :param labels: label list to press
-        :param interval: interval in seconds to sleep between each press
         :param draw_frame: draw a frame over the current element
+        :param timeout: timeout to wait for each element to appear
         """
         for label in labels:
-            self.get_element_by_label(label, draw_frame=draw_frame).press()
+            self.wait_for_element_by_label(label, draw_frame=draw_frame, timeout=timeout).press()
 
             if draw_frame:
                 self.hide_frame()
-
-            # wait before next interation
-            time.sleep(interval)
 
     def _load_ax_runtime(self):
         options = [
