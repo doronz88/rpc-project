@@ -1,10 +1,11 @@
 import dataclasses
 import time
 from enum import IntEnum, IntFlag
-from typing import List
+from typing import List, Optional
 
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcAccessibilityTurnedOffError
+from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcAccessibilityTurnedOffError, \
+    LastElementNotFoundError, FirstElementNotFoundError
 from rpcclient.structs.consts import RTLD_NOW
 
 
@@ -119,7 +120,7 @@ class AXElement(DarwinSymbol):
         """ get first element in hierarchy """
         result = self._element_for_attribute(3000)
         if not result:
-            raise ElementNotFoundError('failed to get first element in hierarchy')
+            raise FirstElementNotFoundError('failed to get first element in hierarchy')
 
         if result.ui_element.objc_call('boolWithAXAttribute:', 2046):
             result = result._element_for_attribute(3000)
@@ -130,7 +131,7 @@ class AXElement(DarwinSymbol):
         """ get last element in hierarchy """
         result = self._element_for_attribute(3016)
         if not result:
-            raise ElementNotFoundError('failed to get last element in hierarchy')
+            raise LastElementNotFoundError('failed to get last element in hierarchy')
 
         if result.ui_element.objc_call('boolWithAXAttribute:', 2046):
             result = result._element_for_attribute(3016)
@@ -158,7 +159,7 @@ class AXElement(DarwinSymbol):
         return CGRect(origin=CGPoint(x=d[0], y=d[1]), size=CGSize(width=d[2], height=d[3]))
 
     @property
-    def label(self) -> str:
+    def label(self) -> Optional[str]:
         """ get element's label (actual displayed text) """
         return self.objc_call('label').py(encoding='utf8')
 
@@ -282,11 +283,17 @@ class AXElement(DarwinSymbol):
 
         return element
 
-    def _next_elements_with_count(self, count: int):
-        return [AXElement.create(e, self._client) for e in self.objc_call('nextElementsWithCount:', count).py()]
+    def _next_elements_with_count(self, count: int) -> Optional[List]:
+        result = self.objc_call('nextElementsWithCount:', count).py()
+        if not result:
+            return None
+        return [AXElement.create(e, self._client) for e in result]
 
-    def _previous_elements_with_count(self, count: int):
-        return [AXElement.create(e, self._client) for e in self.objc_call('previousElementsWithCount:', count).py()]
+    def _previous_elements_with_count(self, count: int) -> Optional[List]:
+        result = self.objc_call('previousElementsWithCount:', count).py()
+        if not result:
+            return None
+        return [AXElement.create(e, self._client) for e in result]
 
     def _set_assistive_focus(self, focused: bool):
         self.ui_element.objc_call('setAXAttribute:withObject:synchronous:', 2018, self._client.cf({
@@ -342,6 +349,10 @@ class AXElement(DarwinSymbol):
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} LABEL:{self.label}>'
+
+    def __str__(self) -> str:
+        result = self.label
+        return result if result else 'NO LABEL'
 
 
 class Accessibility:
