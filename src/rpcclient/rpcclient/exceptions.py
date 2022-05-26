@@ -73,12 +73,12 @@ class ElementNotFoundError(RpcClientException):
     pass
 
 
-class FirstElementNotFoundError(RpcClientException):
+class FirstElementNotFoundError(ElementNotFoundError):
     """ Failed to find the first element """
     pass
 
 
-class LastElementNotFoundError(RpcClientException):
+class LastElementNotFoundError(ElementNotFoundError):
     """ Failed to find the last element """
     pass
 
