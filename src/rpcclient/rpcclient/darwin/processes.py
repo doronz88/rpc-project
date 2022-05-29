@@ -267,9 +267,9 @@ class Process:
         """ kill(pid, sig) at remote. read man for more details. """
         return self._client.processes.kill(self._pid, sig)
 
-    def waitpid(self, pid: int):
-        """ waitpid(pid, sig) at remote. read man for more details. """
-        return self._client.processes.waitpid(self._pid)
+    def waitpid(self, flags: int = 0):
+        """ waitpid(pid, stat_loc, 0) at remote. read man for more details. """
+        return self._client.processes.waitpid(self._pid, flags)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek at memory address """
