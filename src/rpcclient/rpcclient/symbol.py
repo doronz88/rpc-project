@@ -46,21 +46,21 @@ class Symbol(int):
         value &= 0xFFFFFFFFFFFFFFFF
 
         symbol = cls(value)
+        symbol._prepare(client)
+        return symbol
 
-        # public properties
-        symbol.retval_bit_count = RETVAL_BIT_COUNT
-        symbol.is_retval_signed = True
-        symbol.item_size = 8
+    def _prepare(self, client):
+        self.retval_bit_count = RETVAL_BIT_COUNT
+        self.is_retval_signed = True
+        self.item_size = 8
 
         # private members
-        symbol._client = client
-        symbol._offset = 0
+        self._client = client
+        self._offset = 0
 
         for method_name in Symbol.PROXY_METHODS:
-            getattr(symbol.__class__, method_name).__doc__ = \
+            getattr(self.__class__, method_name).__doc__ = \
                 getattr(client, method_name).__doc__
-
-        return symbol
 
     @contextmanager
     def change_item_size(self, new_item_size: int):
