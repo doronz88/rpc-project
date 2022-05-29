@@ -18,6 +18,11 @@ class SymbolAbsentError(RpcClientException):
     pass
 
 
+class ProcessSymbolAbsentError(RpcClientException):
+    """ trying to access a symbol which is not exported from any library currently loaded into the process's memory """
+    pass
+
+
 class ArgumentError(RpcClientException):
     """ at least one of the supplied arguments for a given function was invalid """
     pass

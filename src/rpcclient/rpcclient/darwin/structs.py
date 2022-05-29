@@ -656,15 +656,16 @@ TASK_DYLD_INFO_COUNT = task_dyld_info_data_t.sizeof() / natural_t.sizeof()
 
 STRUCT_ARM_THREAD_STATE64 = Struct(
     'x' / Array(29, uint64_t),
-    'fp' / uint64_t,
-    'lr' / uint64_t,
-    'sp' / uint64_t,
-    'pc' / uint64_t,
-    'cpsr' / uint32_t,
-    'pad' / uint32_t,
+    'fp' / Default(uint64_t, 0),
+    'lr' / Default(uint64_t, 0),
+    'sp' / Default(uint64_t, 0),
+    'pc' / Default(uint64_t, 0),
+    'cpsr' / Default(uint32_t, 0),
+    Padding(4),
 )
 
 arm_thread_state64_t = STRUCT_ARM_THREAD_STATE64
+ARM_THREAD_STATE64_COUNT = arm_thread_state64_t.sizeof() // uint32_t.sizeof()
 
 STRUCT_X86_THREAD_STATE32 = Struct(
     'eax' / Int32sl,

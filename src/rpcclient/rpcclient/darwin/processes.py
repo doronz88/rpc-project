@@ -1,5 +1,6 @@
 import dataclasses
 import errno
+import posixpath
 import re
 from collections import namedtuple
 from datetime import datetime
@@ -15,10 +16,10 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
-    arm_thread_state64_t, PROX_FDTYPE_KQUEUE
+    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError, \
-    RpcClientException
+    RpcClientException, ProcessSymbolAbsentError
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
 from rpcclient.structs.consts import SIGTERM, RTLD_NOW
@@ -126,6 +127,12 @@ class Thread:
     def set_state(self, state: Mapping):
         raise NotImplementedError()
 
+    def resume(self):
+        raise NotImplementedError()
+
+    def suspend(self):
+        raise NotImplementedError()
+
     def __repr__(self):
         return f'<{self.__class__.__name__} TID:{self._thread_id}>'
 
@@ -151,7 +158,7 @@ class ArmThread64(Thread):
     def get_state(self):
         with self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_state:
             with self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_thread_state_count:
-                p_thread_state_count[0] = arm_thread_state64_t.sizeof() // Int32ul.sizeof()
+                p_thread_state_count[0] = ARM_THREAD_STATE64_COUNT
                 if self._client.symbols.thread_get_state(self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64,
                                                          p_state, p_thread_state_count):
                     raise BadReturnValueError('thread_get_state() failed')
@@ -160,8 +167,16 @@ class ArmThread64(Thread):
     def set_state(self, state: Mapping):
         if self._client.symbols.thread_set_state(self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64,
                                                  arm_thread_state64_t.build(state),
-                                                 arm_thread_state64_t.sizeof() // Int32ul.sizeof()):
+                                                 ARM_THREAD_STATE64_COUNT):
             raise BadReturnValueError('thread_set_state() failed')
+
+    def suspend(self):
+        if self._client.symbols.thread_suspend(self._thread_id):
+            raise BadReturnValueError('thread_suspend() failed')
+
+    def resume(self):
+        if self._client.symbols.thread_resume(self._thread_id):
+            raise BadReturnValueError('thread_resume() failed')
 
 
 @dataclasses.dataclass
@@ -233,7 +248,9 @@ class Backtrace:
 class ProcessSymbol(Symbol):
     @classmethod
     def create(cls, value: int, client, process):
-        symbol = super(ProcessSymbol, cls).create(value, client)
+        symbol = super().create(value, client)
+        symbol = ProcessSymbol(symbol)
+        symbol._prepare(client)
         symbol.process = process
         return symbol
 
@@ -267,9 +284,9 @@ class Process:
         """ kill(pid, sig) at remote. read man for more details. """
         return self._client.processes.kill(self._pid, sig)
 
-    def waitpid(self, pid: int):
-        """ waitpid(pid, sig) at remote. read man for more details. """
-        return self._client.processes.waitpid(self._pid)
+    def waitpid(self, flags: int = 0):
+        """ waitpid(pid, stat_loc, 0) at remote. read man for more details. """
+        return self._client.processes.waitpid(self._pid, flags)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek at memory address """
@@ -306,8 +323,18 @@ class Process:
             raise SymbolAbsentError()
         return self._client.symbols.CSSymbolGetName(x[0], x[1]).peek_str()
 
-    def get_symbol_address(self, name: str, lib: str) -> int:
-        return self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64
+    def get_symbol_address(self, name: str, lib: str = None) -> ProcessSymbol:
+        if lib is not None:
+            return ProcessSymbol.create(
+                self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64, self._client,
+                self)
+
+        for lib in self.images:
+            result = self.get_symbol_address(name, posixpath.basename(lib.path))
+            if result:
+                return result
+
+        raise ProcessSymbolAbsentError()
 
     @property
     def loaded_classes(self):
@@ -354,7 +381,7 @@ class Process:
         return result
 
     @property
-    def pid(self):
+    def pid(self) -> int:
         """ get pid """
         return self._pid
 
