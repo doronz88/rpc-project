@@ -126,3 +126,13 @@ class RpcPermissionError(BadReturnValueError):
 class RpcAccessibilityTurnedOffError(BadReturnValueError):
     """ Application AX and Automation is turned off """
     pass
+
+
+class RpcFailedToRecordError(BadReturnValueError):
+    """ An attempt to record has failed """
+    pass
+
+
+class RpcFailedToPlayError(BadReturnValueError):
+    """ An attempt to play has failed """
+    pass
