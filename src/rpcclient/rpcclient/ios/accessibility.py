@@ -434,7 +434,7 @@ class Accessibility:
         for label in labels:
             self.wait_for_element_by_label(label, draw_frame=draw_frame, timeout=timeout).press()
 
-            if draw_frame:
+            if not draw_frame:
                 self.hide_frame()
 
     def _load_ax_runtime(self):
