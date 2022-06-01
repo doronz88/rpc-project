@@ -1,8 +1,27 @@
-from enum import Enum, auto
+from enum import Enum, auto, IntFlag, IntEnum
 
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0
-AVAudioSessionCategoryOptionDefaultToSpeaker = 0x8
+
+
+class AVAudioSessionRouteSharingPolicy(IntEnum):
+    Default = 0
+    LongFormAudio = 1
+    Independent = 2
+    LongFormVideo = 3
+    LongForm = LongFormAudio
+
+
+class AVAudioSessionCategoryOptions(IntFlag):
+    MixWithOthers = 0x1
+    DuckOthers = 0x2
+    AllowBluetooth = 0x4
+    DefaultToSpeaker = 0x8
+    InterruptSpokenAudioAndMixWithOthers = 0x11
+    AllowBluetoothA2DP = 0x20
+    AllowAirPlay = 0x40
+    OverrideMutedMicrophoneInterruption = 0x80
+
 
 # Types from MacTypes.h
 
