@@ -3,7 +3,7 @@ from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, t
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
-    in_addr, uint8_t, u_char, UNIX_PATH_MAX, time_t
+    in_addr, uint8_t, u_char, UNIX_PATH_MAX, time_t, st_flags
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
@@ -103,7 +103,7 @@ stat64 = Struct(
     'st_size' / off_t,
     'st_blocks' / blkcnt_t,  # blocks allocated for file
     'st_blksize' / blksize_t,  # optimal blocksize for I/O
-    'st_flags' / Int32ul,  # blocks allocated for file
+    'st_flags' / st_flags,  # blocks allocated for file
     'st_gen' / Int32ul,  # user defined flags for file
     # seems like this value doesn't really exist
     # 'st_lspare' / Int32ul,

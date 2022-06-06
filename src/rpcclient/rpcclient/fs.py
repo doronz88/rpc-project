@@ -480,6 +480,13 @@ class Fs:
         err = self._client.symbols.access(path, mode)
         return err == 0
 
+    @path_to_str('path')
+    def chflags(self, path: str, flags: int = 0):
+        """ set file flags """
+        err = self._client.symbols.chflags(path, flags)
+        if err < 0:
+            self._client.raise_errno_exception(f'failed to chflags on: {path}')
+
     @path_to_str('top')
     def find(self, top: str, topdown=True):
         """ traverse a file tree top to down """

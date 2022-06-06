@@ -1,5 +1,5 @@
 from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, PaddedString, Pointer, \
-    this, CString, LazyBound, Padding, If, Int8ul, Int64ul
+    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum
 
 from rpcclient.structs.consts import AF_UNIX, AF_INET, AF_INET6
 from rpcclient.symbol import SymbolFormatField
@@ -45,6 +45,14 @@ sockaddr = Struct(
     Padding(1),
     'sa_family' / Int8ul,
 )
+
+st_flags = FlagsEnum(Int32ul,
+                     UF_NODUMP=1,
+                     UF_IMMUTABLE=2,
+                     UF_APPEND=4,
+                     SF_ARCHIVED=0x00010000,
+                     SF_IMMUTABLE=0x00020000,
+                     SF_APPEND=0x00040000)
 
 
 def hostent(client):
