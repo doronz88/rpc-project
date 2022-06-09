@@ -2,6 +2,7 @@ import dataclasses
 import errno
 import posixpath
 import re
+import struct
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +24,7 @@ from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsen
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
 from rpcclient.structs.consts import SIGTERM, RTLD_NOW
-from rpcclient.symbol import Symbol
+from rpcclient.symbol import Symbol, ADDRESS_SIZE_TO_STRUCT_FORMAT
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
@@ -263,6 +264,17 @@ class ProcessSymbol(Symbol):
     def peek_str(self, encoding='utf-8') -> str:
         """ peek string at given address """
         return self.process.peek_str(self, encoding)
+
+    def __getitem__(self, item):
+        fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
+        addr = self + item * self.item_size
+        return self._client.symbol(
+            struct.unpack(self._client._endianness + fmt, self.process.peek(addr, self.item_size))[0])
+
+    def __setitem__(self, item, value):
+        fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
+        value = struct.pack(self._client._endianness + fmt, int(value))
+        self.process.poke(self + item * self.item_size, value)
 
     def __call__(self, *args, **kwargs):
         raise RpcClientException('ProcessSymbol is not callable')
