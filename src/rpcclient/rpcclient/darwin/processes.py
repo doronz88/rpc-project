@@ -302,11 +302,12 @@ class Process:
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek at memory address """
-        with self._client.safe_malloc(8) as p_buf:
-            with self._client.safe_malloc(size) as p_size:
-                if self._client.symbols.vm_read(self.task, address, size, p_buf, p_size):
+        with self._client.safe_malloc(size) as buf:
+            with self._client.safe_malloc(8) as p_size:
+                p_size[0] = size
+                if self._client.symbols.vm_read_overwrite(self.task, address, size, buf, p_size):
                     raise BadReturnValueError('vm_read() failed')
-                return p_buf[0].peek(size)
+                return buf.peek(size)
 
     def peek_str(self, address: int, encoding='utf-8') -> str:
         """ peek string at memory address """
