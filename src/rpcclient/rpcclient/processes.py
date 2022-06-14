@@ -13,7 +13,7 @@ class Processes:
     def kill(self, pid: int, sig: int = SIGTERM):
         """ kill(pid, sig) at remote. read man for more details. """
         if 0 != self._client.symbols.kill(pid, sig):
-            raise BadReturnValueError(f'kill() failed ({self._client.last_error})')
+            raise BadReturnValueError(f'kill({pid}, {sig}) failed ({self._client.last_error})')
 
     def waitpid(self, pid: int, flags: int = 0):
         """ waitpid(pid, sig) at remote. read man for more details. """

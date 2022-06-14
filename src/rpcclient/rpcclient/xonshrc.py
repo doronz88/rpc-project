@@ -408,6 +408,7 @@ class XonshRc:
         kill a process
         """
         signal_number = int(signal_number)
+        pid = int(pid)
         self.client.processes.kill(pid, signal_number)
 
     def _rpc_killall(self, expression: str, signal_number: Annotated[int, Arg(nargs='?', default=SIGTERM)]):
@@ -560,6 +561,8 @@ class XonshRc:
         recursive : -r, --recursive
             remove recursively
         """
+        uid = int(uid)
+        gid = int(gid)
         self.client.fs.chown(filename, uid, gid, recursive=recursive)
 
     def _rpc_find(self, filename: Annotated[str, Arg(completer=path_completer)], depth=True):
