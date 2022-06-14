@@ -265,11 +265,11 @@ class ProcessSymbol(Symbol):
         """ peek string at given address """
         return self.process.peek_str(self, encoding)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> 'ProcessSymbol':
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
-        return self._client.symbol(
-            struct.unpack(self._client._endianness + fmt, self.process.peek(addr, self.item_size))[0])
+        deref = struct.unpack(self._client._endianness + fmt, self.process.peek(addr, self.item_size))[0]
+        return self.create(deref, self._client, self.process)
 
     def __setitem__(self, item, value):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
