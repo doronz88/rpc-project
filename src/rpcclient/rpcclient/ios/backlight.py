@@ -13,13 +13,13 @@ class Backlight:
         self._brightness = BrightnessSystemClient.objc_call('new')
 
     @property
-    def brighness(self) -> float:
+    def brightness(self) -> float:
         """ get brightness value in range: 0.0 - 1.0 """
         return self._brightness.objc_call('copyPropertyForKey:', self._client.cf('DisplayBrightness')).py()['Brightness']
 
-    @brighness.setter
-    def brighness(self, value: float):
-        """ set brighness in range: 0.0 - 1.0 """
+    @brightness.setter
+    def brightness(self, value: float):
+        """ set brightness in range: 0.0 - 1.0 """
         if not self._brightness.objc_call('setProperty:forKey:', self._client.cf(value),
                                           self._client.cf('DisplayBrightness')):
             raise BadReturnValueError('failed to set DisplayBrightness')
