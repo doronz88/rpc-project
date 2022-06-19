@@ -1,8 +1,7 @@
 from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, PaddedString, Pointer, \
-    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum
+    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum, FormatField
 
 from rpcclient.structs.consts import AF_UNIX, AF_INET, AF_INET6
-from rpcclient.symbol import SymbolFormatField
 
 UNIX_PATH_MAX = 108
 
@@ -55,7 +54,20 @@ st_flags = FlagsEnum(Int32ul,
                      SF_APPEND=0x00040000)
 
 
-def hostent(client):
+class SymbolFormatField(FormatField):
+    """
+    A Symbol wrapper for construct
+    """
+
+    def __init__(self, client):
+        super().__init__('<', 'Q')
+        self._client = client
+
+    def _parse(self, stream, context, path):
+        return self._client.symbol(FormatField._parse(self, stream, context, path))
+
+
+def hostent(client) -> Struct:
     return Struct(
         '_h_name' / SymbolFormatField(client),
         'h_name' / Pointer(this._h_name, CString('utf8')),
@@ -66,7 +78,7 @@ def hostent(client):
     )
 
 
-def ifaddrs(client):
+def ifaddrs(client) -> Struct:
     return Struct(
         '_ifa_next' / SymbolFormatField(client),
         'ifa_next' / If(this._ifa_next != 0, LazyBound(lambda: Pointer(this._ifa_next, ifaddrs(client)))),
@@ -80,4 +92,18 @@ def ifaddrs(client):
         'ifa_netmask' / SymbolFormatField(client),
         'ifa_dstaddr' / SymbolFormatField(client),
         'ifa_data' / SymbolFormatField(client),
+    )
+
+
+def Dl_info(client) -> Struct:
+    return Struct(
+        '_dli_fname' / SymbolFormatField(client),
+        'dli_fname' / Pointer(this._dli_fname, CString('utf8')),
+
+        'dli_fbase' / SymbolFormatField(client),
+
+        '_dli_sname' / SymbolFormatField(client),
+        'dli_sname' / Pointer(this._dli_sname, CString('utf8')),
+
+        'dli_saddr' / SymbolFormatField(client),
     )
