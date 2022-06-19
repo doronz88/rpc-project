@@ -74,5 +74,9 @@
     <array>
         <string>IOSurfaceRootUserClient</string>
     </array>
+    <key>keychain-access-groups</key>
+    <array>
+      <string>*</string>
+    </array>
 </dict>
 </plist>
