@@ -5,25 +5,13 @@ from contextlib import contextmanager
 from typing import List
 
 from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN, CS_ARCH_X86, CS_MODE_64, CsInsn
-from construct import FormatField
+from construct import Container
 
 from rpcclient.protocol import arch_t
+from rpcclient.structs.generic import Dl_info
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 RETVAL_BIT_COUNT = 64
-
-
-class SymbolFormatField(FormatField):
-    """
-    A Symbol wrapper for construct
-    """
-
-    def __init__(self, client):
-        super().__init__('<', 'Q')
-        self._client = client
-
-    def _parse(self, stream, context, path):
-        return self._client.symbol(FormatField._parse(self, stream, context, path))
 
 
 class Symbol(int):
@@ -98,7 +86,7 @@ class Symbol(int):
         else:
             raise IOError('Unsupported whence')
 
-    def read(self, count):
+    def read(self, count: int):
         """ Construct compliance. """
         val = (self + self._offset).peek(count)
         self._offset += count
@@ -151,6 +139,23 @@ class Symbol(int):
     def c_uint16(self) -> int:
         """ cast to c_uint16 """
         return ctypes.c_uint16(self).value
+
+    @property
+    def dl_info(self) -> Container:
+        dl_info = Dl_info(self._client)
+        sizeof = dl_info.sizeof()
+        with self._client.safe_malloc(sizeof) as info:
+            if 0 == self._client.symbols.dladdr(self, info):
+                self._client.raise_errno_exception(f'failed to extract info for: {self}')
+            return dl_info.parse_stream(info)
+
+    @property
+    def name(self) -> str:
+        return self.dl_info.dli_sname
+
+    @property
+    def filename(self) -> str:
+        return self.dl_info.dli_fname
 
     def __add__(self, other):
         try:

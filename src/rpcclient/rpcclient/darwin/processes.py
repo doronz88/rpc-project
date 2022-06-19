@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Mapping
 
 from cached_property import cached_property
-from construct import Array, Int32ul
+from construct import Array, Int32ul, Container
 
 from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors, VM_FLAGS_ANYWHERE
@@ -265,6 +265,18 @@ class ProcessSymbol(Symbol):
         """ peek string at given address """
         return self.process.peek_str(self, encoding)
 
+    @property
+    def dl_info(self) -> Container:
+        raise NotImplementedError('dl_info isn\'t implemented for remote process symbols')
+
+    @property
+    def name(self) -> str:
+        return self.process.get_symbol_name(self)
+
+    @property
+    def filename(self) -> str:
+        return self.process.get_symbol_image(self.name).path
+
     def __getitem__(self, item) -> 'ProcessSymbol':
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
@@ -336,18 +348,22 @@ class Process:
             raise SymbolAbsentError()
         return self._client.symbols.CSSymbolGetName(x[0], x[1]).peek_str()
 
+    def get_symbol_image(self, name: str) -> Image:
+        for image in self.images:
+            result = self.get_symbol_address(name, posixpath.basename(image.path))
+            if result:
+                return image
+
+        raise ProcessSymbolAbsentError()
+
     def get_symbol_address(self, name: str, lib: str = None) -> ProcessSymbol:
         if lib is not None:
             return ProcessSymbol.create(
                 self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64, self._client,
                 self)
 
-        for lib in self.images:
-            result = self.get_symbol_address(name, posixpath.basename(lib.path))
-            if result:
-                return result
-
-        raise ProcessSymbolAbsentError()
+        image = self.get_symbol_image(name)
+        return self.get_symbol_address(name, posixpath.basename(image.path))
 
     @property
     def loaded_classes(self):
