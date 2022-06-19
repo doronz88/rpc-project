@@ -15,6 +15,7 @@ from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.hid import Hid
 from rpcclient.darwin.ioregistry import IORegistry
+from rpcclient.darwin.keychain import Keychain
 from rpcclient.darwin.location import Location
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
@@ -69,6 +70,7 @@ class DarwinClient(Client):
         self.lief = DarwinLief(self)
         self.bluetooth = Bluetooth(self)
         self.core_graphics = CoreGraphics(self)
+        self.keychain = Keychain(self)
         self.type_decoders = {
             self.symbols.CFNullGetTypeID(): self._decode_cfnull,
             self.symbols.CFStringGetTypeID(): self._decode_cfstr,
