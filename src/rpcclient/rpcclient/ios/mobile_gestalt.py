@@ -344,6 +344,10 @@ class MobileGestalt:
     def IsUIBuild(self):
         return self.get_answer('IsUIBuild')
 
+    @property
+    def PasswordConfigured(self):
+        return self.get_answer('PasswordConfigured')
+
     # Regional Behaviour
 
     @property
