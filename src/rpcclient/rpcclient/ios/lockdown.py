@@ -2,7 +2,7 @@ import plistlib
 from collections import namedtuple
 from typing import List
 
-PairRecord = namedtuple('PairRecord', 'hostname host_id certificate')
+PairRecord = namedtuple('PairRecord', 'system_buid hostname host_id certificate')
 
 
 class Lockdown:
@@ -16,7 +16,7 @@ class Lockdown:
         for entry in self._client.fs.scandir('/var/root/Library/Lockdown/pair_records'):
             with self._client.fs.open(entry.path, 'r') as f:
                 record = plistlib.loads(f.read())
-            result.append(PairRecord(hostname=record['HostName'], host_id=record['HostID'],
-                                     certificate=record['HostCertificate']))
+            result.append(PairRecord(system_buid=record['SystemBUID'], hostname=record.get('HostName'),
+                                     host_id=record['HostID'], certificate=record['HostCertificate']))
 
         return result
