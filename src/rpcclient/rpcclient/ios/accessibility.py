@@ -215,7 +215,7 @@ class AXElement(DarwinSymbol):
         return AXTraits(self.objc_call('traits').c_uint64)
 
     @property
-    def elements(self) -> List:
+    def elements(self) -> List['AXElement']:
         """ get all current displayed elements """
         result = []
         for element in self.objc_call('explorerElements').py():
@@ -347,6 +347,22 @@ class AXElement(DarwinSymbol):
 
         return None
 
+    def compare_label(self, label: str, auto_scroll=True, draw_frame=True) -> bool:
+        """
+        compares given label with the self's
+
+        will auto_scroll into current label if required
+        """
+        if auto_scroll:
+            self.scroll_to_visible()
+
+        if draw_frame:
+            self.highlight()
+
+        if self.label == label:
+            return True
+        return False
+
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} LABEL:{self.label}>'
 
@@ -396,43 +412,66 @@ class Accessibility:
         rect = {'frame': f' {{{{{x},{y}}}, {{{width},{height}}}}}'}
         self._ui_client.objc_call('sendSynchronousMessage:withIdentifier:error:', self._client.cf(rect), 1, 0)
 
-    def wait_for_element_by_label(self, label: str, auto_scroll=True, draw_frame=True, timeout=5) -> AXElement:
+    def wait_for_element_by_label(self, label: str, auto_scroll=True, draw_frame=True, timeout=5,
+                                  direction=AXDirection.Next, displayed_only=False) -> AXElement:
         """ busy-wait for an element to become available """
         start = time.time()
         while time.time() - start < timeout:
             try:
-                return self.get_element_by_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame)
+                return self._get_element_by_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame,
+                                                  direction=direction, displayed_only=displayed_only)
             except ElementNotFoundError:
+                pass
+            except AttributeError:
                 pass
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}" after waiting for {timeout} seconds '
                                    f'for it to load')
 
-    def get_element_by_label(self, label: str, auto_scroll=True, draw_frame=True) -> AXElement:
+    def _get_element_by_label(self, label: str, auto_scroll=True, draw_frame=True, direction=AXDirection.Next,
+                              displayed_only=False) -> AXElement:
         """ get an AXElement by given label """
-        for element in self.primary_app:
-            if auto_scroll:
-                element.scroll_to_visible()
+        if direction == AXDirection.Next:
+            element = self.primary_app.first_element
+            elements_list = self.primary_app.elements
+        elif direction == AXDirection.Previous:
+            element = self.primary_app.last_element
+            elements_list = reversed(self.primary_app.elements)
+        else:
+            raise TypeError(f'bad value for: {direction}')
 
-            if draw_frame:
-                element.highlight()
+        if displayed_only:
+            for element in elements_list:
+                if element.compare_label(label, auto_scroll=False, draw_frame=draw_frame):
+                    return element
+        else:
+            while True:
+                if element is None:
+                    break
 
-            if element.label == label:
-                return element
+                if element.compare_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame):
+                    return element
+
+                element = element.next(direction=direction)
 
         if draw_frame:
             self.hide_frame()
 
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_elements_by_labels(self, labels: List[str], draw_frame=True, timeout=5):
+    def press_elements_by_labels(self, labels: List[str], auto_scroll=True, draw_frame=True, timeout=5,
+                                 direction: AXDirection = AXDirection.Next, displayed_only=False):
         """
         press a sequence of labels
         :param labels: label list to press
+        :param auto_scroll: scroll over the chosen element
         :param draw_frame: draw a frame over the current element
         :param timeout: timeout to wait for each element to appear
+        :param direction: the direction of search
+        :param displayed_only: search just in the displayed elements
         """
         for label in labels:
-            self.wait_for_element_by_label(label, draw_frame=draw_frame, timeout=timeout).press()
+            self.wait_for_element_by_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame, timeout=timeout,
+                                           direction=direction, displayed_only=displayed_only).press()
 
             if draw_frame:
                 self.hide_frame()
