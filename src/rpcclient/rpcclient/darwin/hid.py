@@ -17,6 +17,9 @@ class TouchEventType(Enum):
     TOUCH_MOVE = 2
 
 
+TOUCH_EVENT_SLEEP = 0.1
+
+
 EVENT_TYPE_PARAMS = {
     TouchEventType.TOUCH_DOWN: {
         'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value |
@@ -119,6 +122,7 @@ class Hid:
 
     def send_swipe(self, from_x: float, from_y: float, to_x: float, to_y: float):
         self.send_touch_event(TouchEventType.TOUCH_DOWN, from_x, from_y)
+        time.sleep(TOUCH_EVENT_SLEEP)
         self.send_touch_event(TouchEventType.TOUCH_MOVE, to_x, to_y)
         self.send_touch_event(TouchEventType.TOUCH_UP, to_x, to_y)
 
