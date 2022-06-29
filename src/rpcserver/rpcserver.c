@@ -42,7 +42,7 @@
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define SERVER_MAGIC_VERSION (0x88888803)
+#define SERVER_MAGIC_VERSION (0x88888804)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
@@ -122,6 +122,7 @@ typedef struct
 typedef struct
 {
     u64 address;
+    u64 va_list_index;
     u64 argc;
     argument_t argv[0];
 } cmd_call_t;
@@ -559,7 +560,7 @@ error:
 }
 
 #ifdef __ARM_ARCH_ISA_A64
-bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv);
+bool call_function(int sockfd, intptr_t address, size_t va_list_index, size_t argc, argument_t **p_argv);
 __asm__(
     "_call_function:\n"
     // the "stack_arguments" must be the first local ([sp, 0]) to serialize stack arguments
@@ -568,7 +569,8 @@ __asm__(
     ".set stack_arguments, 0\n"
     ".set result, stack_arguments+0x100\n"
     ".set address, result+0x08\n"
-    ".set argc, address+0x08\n"
+    ".set va_list_index, address+0x08\n"
+    ".set argc, va_list_index+0x08\n"
     ".set argv, argc+0x08\n"
     ".set sockfd, argv+0x08\n"
 
@@ -592,7 +594,7 @@ __asm__(
 
     ".set register_end, register_d7+0x08\n"
 
-    ".set size, register_end+0x08\n"
+    ".set size, register_end+0x00\n"
 
     // backup registers x19 -> x30 = 8*12 bytes = 0x60 bytes
     // according to arm abi, the stack is structured as follows:
@@ -616,14 +618,16 @@ __asm__(
     // backup arguments to stack
     "str x0, [sp, sockfd]\n"
     "str x1, [sp, address]\n"
-    "str x2, [sp, argc]\n"
-    "str x3, [sp, argv]\n"
+    "str x2, [sp, va_list_index]\n"
+    "str x3, [sp, argc]\n"
+    "str x4, [sp, argv]\n"
 
     // result = 0
     "str xzr, [sp, result]\n"
 
     // x19 = argument = *argv
     // x24 = argc
+    // x28 = va_list_index
     // x21 = integer_offset = 0
     // x22 = double_offset = 0
     // x23 = current_arg_index = 0
@@ -631,6 +635,7 @@ __asm__(
     "ldr x19, [sp, argv]\n"
     "ldr x19, [x19]\n"
     "ldr x24, [sp, argc]\n"
+    "ldr x28, [sp, va_list_index]\n"
     "mov x21, 0\n"
     "mov x22, 0\n"
     "mov x23, 0\n"
@@ -646,6 +651,10 @@ __asm__(
 
     // argument++
     "add x19, x19, 8\n"
+
+    // if (current_arg_index >= va_list_index) goto 7
+    "cmp x21, x28\n"
+    "bge 7f\n"
 
     // if (argument.type == INTEGER) goto 2
     "cmp x20, 0\n"
@@ -807,7 +816,7 @@ __asm__(
     "b 1b\n");
 
 #else
-bool call_function(int sockfd, intptr_t address, size_t argc, argument_t **p_argv)
+bool call_function(int sockfd, intptr_t address, size_t va_list_index, size_t argc, argument_t **p_argv)
 {
     typedef u64 (*call_argc0_t)();
     typedef u64 (*call_argc1_t)(u64);
@@ -894,7 +903,7 @@ bool handle_call(int sockfd)
     CHECK(recvall(sockfd, (char *)argv, sizeof(argument_t) * cmd.argc));
 
     TRACE("address: %p", cmd.address);
-    CHECK(call_function(sockfd, cmd.address, cmd.argc, (argument_t **)cmd.argv));
+    CHECK(call_function(sockfd, cmd.address, cmd.va_list_index, cmd.argc, (argument_t **)cmd.argv));
 
     result = true;
 
