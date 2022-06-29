@@ -23,7 +23,7 @@ arch_t = Enum(Int32ul,
               )
 
 DEFAULT_PORT = 5910
-SERVER_MAGIC_VERSION = 0x88888803
+SERVER_MAGIC_VERSION = 0x88888804
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 
@@ -64,6 +64,7 @@ argument_t = Struct(
 
 cmd_call_t = Struct(
     'address' / Int64ul,
+    'va_list_index' / Int64ul,
     'argv' / PrefixedArray(Int64ul, argument_t),
 )
 

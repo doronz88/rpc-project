@@ -183,7 +183,7 @@ class Client:
         return address
 
     def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False,
-             return_float16=False, return_raw=False) -> Symbol:
+             return_float16=False, return_raw=False, va_list_index: int = 0xffff) -> Symbol:
         """ call a remote function and retrieve its return value as Symbol object """
         fixed_argv = []
         free_list = []
@@ -220,7 +220,7 @@ class Client:
 
         message = protocol_message_t.build({
             'cmd_type': cmd_type_t.CMD_CALL,
-            'data': {'address': address, 'argv': fixed_argv},
+            'data': {'address': address, 'va_list_index': va_list_index, 'argv': fixed_argv},
         })
 
         with self._protocol_lock:
