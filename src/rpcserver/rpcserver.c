@@ -653,7 +653,7 @@ __asm__(
     "add x19, x19, 8\n"
 
     // if (current_arg_index >= va_list_index) goto 7
-    "cmp x21, x28\n"
+    "cmp x23, x28\n"
     "bge 7f\n"
 
     // if (argument.type == INTEGER) goto 2
