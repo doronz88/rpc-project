@@ -1,5 +1,5 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default
+    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default, Aligned, CString, GreedyRange
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
@@ -721,4 +721,12 @@ timeval = Struct(
     Padding(4),
     'tv_usec' / suseconds_t,
     Padding(4),
+)
+
+procargs2_t = Struct(
+    'argc' / Int32ul,
+    'executable' / Aligned(4, CString('utf8')),
+    'argv' / Array(this.argc, CString('utf8')),
+    '_environ_apple' / GreedyRange(CString('utf8')),
+    'environ_apple' / Computed(lambda ctx: [s for s in ctx._environ_apple if s]),
 )
