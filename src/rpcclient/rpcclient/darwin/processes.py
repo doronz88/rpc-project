@@ -643,10 +643,15 @@ class Process:
             address_range = line[i]
             i += 1
             start, end = address_range.split('-')
-            start = int(start, 0)
-            end = int(end, 0)
-            vsize = line[i].split('V=', 1)[1].split(']', 1)[0]
-            i += 1
+            start = int(start, 16)
+            end = int(end, 16)
+            vsize = None
+            if 'V=' in line[i]:
+                vsize = line[i].split('V=', 1)[1].split(']', 1)[0]
+
+            while '/' not in line[i]:
+                i += 1
+
             protection = line[i].split('/')
             i += 1
 
