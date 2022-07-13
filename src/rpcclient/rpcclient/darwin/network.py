@@ -73,19 +73,10 @@ class WifiInterface(Allocated):
         self._client.symbols.Apple80211Disassociate(self._interface)
 
     def _set(self, is_on: bool):
-        with self._client.preferences.sc.open('com.apple.wifi.plist') as pref:
-            pref.set('AllowEnable', int(is_on))
-
-        if not is_on:
-            if self._client.symbols.WiFiManagerClientDisable(self._wifi_manager_client):
-                self._client.raise_errno_exception('WiFiManagerClientDisable failed')
-
-        if self._client.symbols.WiFiDeviceClientSetPower(self._device, is_on):
-            self._client.raise_errno_exception('WiFiDeviceClientSetPower failed')
-
-        if is_on:
-            if self._client.symbols.WiFiManagerClientEnable(self._wifi_manager_client):
-                self._client.raise_errno_exception('WiFiManagerClientEnable failed')
+        if not self._client.symbols.WiFiManagerClientSetProperty(self._wifi_manager_client,
+                                                                 self._client.cf('AllowEnable'),
+                                                                 self._client.cf(is_on)):
+            self._client.raise_errno_exception('WiFiManagerClientSetProperty failed')
 
     def turn_on(self):
         self._set(True)
