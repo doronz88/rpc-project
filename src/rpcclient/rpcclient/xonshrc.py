@@ -246,7 +246,10 @@ class XonshRc:
         # -- processes
         self._register_rpc_command('run', self._rpc_run)
         self._register_rpc_command('run-async', self._rpc_run_async)
-        self._register_arg_parse_alias('ps', self._rpc_ps)
+        if self.client.fs.accessible('/bin/ps'):
+            XSH.aliases['ps'] = 'run ps'
+        else:
+            self._register_arg_parse_alias('ps', self._rpc_ps)
         self._register_arg_parse_alias('kill', self._rpc_kill)
         self._register_arg_parse_alias('killall', self._rpc_killall)
 
