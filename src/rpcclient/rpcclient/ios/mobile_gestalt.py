@@ -211,7 +211,7 @@ class MobileGestalt:
         return self.get_answer('IntegratedCircuitCardIdentifier')
 
     @property
-    def AirplaneMode(self):
+    def AirplaneMode(self) -> bool:
         return self.get_answer('AirplaneMode')
 
     @property

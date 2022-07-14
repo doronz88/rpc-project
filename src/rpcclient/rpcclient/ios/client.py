@@ -23,8 +23,20 @@ class IosClient(DarwinClient):
         self.telephony = Telephony(self)
         self.screen_capture = ScreenCapture(self)
         self.accessibility = Accessibility(self)
+        self._radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
 
     @property
     def roots(self) -> typing.List[str]:
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
         return super().roots + ['/var/mobile']
+
+    @property
+    def airplane_mode(self) -> bool:
+        # use MobileGestalt for a more accurate result
+        return self.mobile_gestalt.AirplaneMode
+
+    @airplane_mode.setter
+    def airplane_mode(self, value: bool):
+        """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
+        self._radio_preferences.objc_call('setAirplaneMode:', value)
+        self._radio_preferences.objc_call('synchronize')
