@@ -18,7 +18,6 @@ from rpcclient.darwin.ioregistry import IORegistry
 from rpcclient.darwin.keychain import Keychain
 from rpcclient.darwin.location import Location
 from rpcclient.darwin.media import DarwinMedia
-from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
 from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
@@ -60,7 +59,6 @@ class DarwinClient(Client):
         self.preferences = Preferences(self)
         self.processes = DarwinProcesses(self)
         self.media = DarwinMedia(self)
-        self.network = DarwinNetwork(self)
         self.ioregistry = IORegistry(self)
         self.location = Location(self)
         self.xpc = Xpc(self)
@@ -240,10 +238,10 @@ class DarwinClient(Client):
 
         return False
 
-    def _decode_cfnull(self, symbol) -> None:
+    def _decode_cfnull(self, symbol, **kwargs) -> None:
         return None
 
-    def _decode_cfstr(self, symbol, encoding='mac_roman') -> str:
+    def _decode_cfstr(self, symbol, encoding='mac_roman', **kwargs) -> str:
         supported_encodings = {
             'mac_roman': CFStringEncoding.kCFStringEncodingMacRoman,
             'utf8': CFStringEncoding.kCFStringEncodingUTF8,
@@ -260,10 +258,10 @@ class DarwinClient(Client):
                 raise CfSerializationError('CFStringGetCString failed')
             return buf.peek_str(encoding)
 
-    def _decode_cfbool(self, symbol) -> bool:
+    def _decode_cfbool(self, symbol, **kwargs) -> bool:
         return bool(self.symbols.CFBooleanGetValue(symbol))
 
-    def _decode_cfnumber(self, symbol) -> int:
+    def _decode_cfnumber(self, symbol, **kwargs) -> int:
         with self.safe_malloc(200) as buf:
             if self.symbols.CFNumberIsFloatType(symbol):
                 if not self.symbols.CFNumberGetValue(symbol, kCFNumberDoubleType, buf):
@@ -273,21 +271,26 @@ class DarwinClient(Client):
                 raise CfSerializationError(f'failed to deserialize int: {symbol}')
             return int(buf[0])
 
-    def _decode_cfdate(self, symbol) -> datetime.datetime:
+    def _decode_cfdate(self, symbol, **kwargs) -> datetime.datetime:
         return datetime.datetime.strptime(symbol.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
 
-    def _decode_cfdata(self, symbol) -> bytes:
+    def _decode_cfdata(self, symbol, **kwargs) -> bytes:
         count = self.symbols.CFDataGetLength(symbol)
         return self.symbols.CFDataGetBytePtr(symbol).peek(count)
 
-    def _decode_cfarray(self, symbol) -> typing.List:
+    def _decode_cfarray(self, symbol, depth: int = None, **kwargs) -> typing.List:
         result = []
         count = self.symbols.CFArrayGetCount(symbol)
         for i in range(count):
-            result.append(self.symbols.CFArrayGetValueAtIndex(symbol, i).py())
+            item = self.symbols.CFArrayGetValueAtIndex(symbol, i)
+            if depth is None:
+                item = item.py()
+            elif depth > 0:
+                item = item.py(depth=depth - 1)
+            result.append(item)
         return result
 
-    def _decode_cfdict(self, symbol) -> typing.Mapping:
+    def _decode_cfdict(self, symbol, **kwargs) -> typing.Mapping:
         result = {}
         count = self.symbols.CFArrayGetCount(symbol)
         with self.safe_malloc(8 * count) as keys:

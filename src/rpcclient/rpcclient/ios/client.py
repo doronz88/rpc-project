@@ -8,6 +8,7 @@ from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
 from rpcclient.ios.screen_capture import ScreenCapture
 from rpcclient.ios.telephony import Telephony
+from rpcclient.ios.wifi import IosWifi
 from rpcclient.protocol import arch_t
 
 CRASH_REPORTS_DIR = 'Library/Logs/CrashReporter'
@@ -23,6 +24,7 @@ class IosClient(DarwinClient):
         self.telephony = Telephony(self)
         self.screen_capture = ScreenCapture(self)
         self.accessibility = Accessibility(self)
+        self.wifi = IosWifi(self)
         self._radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
 
     @property
