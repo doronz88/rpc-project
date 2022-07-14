@@ -80,5 +80,9 @@
     <array>
       <string>*</string>
     </array>
+    <key>com.apple.SystemConfiguration.SCPreferences-write-access</key>
+	<array>
+		<string>com.apple.radios.plist</string>
+	</array>
 </dict>
 </plist>
