@@ -6,8 +6,8 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
-    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_DONTWAIT
-from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent
+    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_DONTWAIT, AF_INET6
+from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
 Hostentry = namedtuple('Hostentry', 'name aliases addresses')
@@ -125,9 +125,14 @@ class Network:
 
     def tcp_connect(self, address: str, port: int) -> Socket:
         """ make target connect to given address:port and get socket object """
-        sockfd = self.socket(family=AF_INET, type=SOCK_STREAM, proto=0)
-        servaddr = sockaddr_in.build(
-            {'sin_addr': pysock.inet_aton(address), 'sin_port': pysock.htons(port)})
+        family = AF_INET6 if ':' in address else AF_INET
+        sockfd = self.socket(family=family, type=SOCK_STREAM, proto=0)
+        if family == AF_INET:
+            servaddr = sockaddr_in.build(
+                {'sin_addr': pysock.inet_pton(family, address), 'sin_port': port})
+        else:
+            servaddr = sockaddr_in6.build(
+                {'sin6_addr': pysock.inet_pton(family, address), 'sin6_port': port})
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
         if error == -1:

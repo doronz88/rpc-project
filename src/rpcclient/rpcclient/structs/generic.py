@@ -1,5 +1,5 @@
 from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, PaddedString, Pointer, \
-    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum, FormatField
+    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum, FormatField, Int16ub, Int32ub
 
 from rpcclient.structs.consts import AF_UNIX, AF_INET, AF_INET6
 
@@ -18,21 +18,21 @@ time_t = Int32ul
 long = Int64sl
 mode_t = Int16ul
 in_addr = Bytes(4)
-in6_addr = Bytes(8)
+in6_addr = Bytes(16)
 
 sockaddr_in = Struct(
     'sin_family' / Default(Int16sl, AF_INET),
-    'sin_port' / Int16ul,
+    'sin_port' / Int16ub,
     'sin_addr' / in_addr,
     'sin_zero' / Default(Bytes(8), b'\x00' * 8),
 )
 
 sockaddr_in6 = Struct(
     'sin6_family' / Default(Int16sl, AF_INET6),
-    'sin6_port' / Int16ul,
-    'sin6_flowinfo' / Int32ul,
+    'sin6_port' / Int16ub,
+    'sin6_flowinfo' / Default(Int32ub, 0),
     'sin6_addr' / in6_addr,
-    'sin6_scope_id' / Int32ul,
+    'sin6_scope_id' / Default(Int32ub, 0),
 )
 
 sockaddr_un = Struct(
