@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Mapping
 
+from rpcclient.darwin.scpreferences import SCPreference
+
 PAIR_RECORD_PATH = '/var/root/Library/Lockdown/pair_records'
 DATA_ARK_PATH = '/var/root/Library/Lockdown/data_ark.plist'
 FAR_FUTURE_DATE = datetime(9999, 1, 1)
@@ -69,8 +71,8 @@ class Lockdown:
         return result
 
     @property
-    def data_ark(self) -> Mapping:
-        return plistlib.loads(self._client.fs.read_file(DATA_ARK_PATH))
+    def data_ark(self) -> SCPreference:
+        return self._client.preferences.sc.open(DATA_ARK_PATH)
 
     def set_pair_date(self, host_id: str, date: datetime):
         self._client.preferences.cf.set(host_id, int(date.timestamp()), 'com.apple.mobile.ldpair', 'mobile',
