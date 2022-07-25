@@ -449,6 +449,8 @@ class Accessibility:
                     break
 
                 if element.compare_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame):
+                    if draw_frame:
+                        self.hide_frame()
                     return element
 
                 element = element.next(direction=direction)
