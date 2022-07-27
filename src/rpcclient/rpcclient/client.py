@@ -10,11 +10,11 @@ import typing
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
+from select import select
 
 import IPython
 import xonsh
 from construct import Int64sl, Float64l, Float32l, Float16l, Int64ul
-from select import select
 from traitlets.config import Config
 from xonsh.built_ins import XSH
 
@@ -611,7 +611,8 @@ class Client:
                         stdout.write(data.decode())
                         stdout.flush()
                     elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
-                        return exitcode_t.parse(data)
+                        # WEXITSTATUS(x)
+                        return exitcode_t.parse(data) >> 8
 
     def raise_errno_exception(self, message: str):
         message += f' ({self.last_error})'
