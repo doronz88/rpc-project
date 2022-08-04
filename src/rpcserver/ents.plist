@@ -84,5 +84,7 @@
 	<array>
 		<string>com.apple.radios.plist</string>
 	</array>
+    <key>com.apple.duet.activityscheduler.allow</key>
+    <true/>
 </dict>
 </plist>

@@ -1,4 +1,8 @@
 from functools import lru_cache
+from typing import List
+
+from rpcclient.exceptions import MissingLibraryError
+from rpcclient.structs.consts import RTLD_NOW
 
 
 class Xpc:
@@ -7,6 +11,8 @@ class Xpc:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
+        self._load_duet_activity_scheduler_manager()
+        self._scheduler = self._client.symbols.objc_getClass('_DASScheduler').objc_call('sharedScheduler')
 
     def send_message(self, service_name, message):
         """
@@ -34,6 +40,9 @@ class Xpc:
         conn = self._connect_to_mach_service(service_name)
         return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
 
+    def force_run_activities(self, activities: List[str]):
+        self._scheduler.objc_call('forceRunActivities:', self._client.cf(activities))
+
     @lru_cache(maxsize=None)
     def _connect_to_mach_service(self, service_name):
         conn = self._client.symbols.xpc_connection_create_mach_service(service_name, 0, 0)
@@ -41,3 +50,12 @@ class Xpc:
         self._client.symbols.xpc_connection_set_event_handler(conn, self._client.get_dummy_block())
         self._client.symbols.xpc_connection_resume(conn)
         return conn
+
+    def _load_duet_activity_scheduler_manager(self):
+        options = [
+            '/System/Library/PrivateFrameworks/DuetActivityScheduler.framework/DuetActivityScheduler',
+        ]
+        for option in options:
+            if self._client.dlopen(option, RTLD_NOW):
+                return
+        raise MissingLibraryError('failed to load DuetActivityScheduler')
