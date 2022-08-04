@@ -4,6 +4,7 @@
 
 #include "common.h"
 
+#define SERVER_MAGIC_VERSION (0x88888805)
 #define HANDSHAKE_SYSNAME_LEN (256)
 #define MAX_PATH_LEN (1024)
 

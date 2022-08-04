@@ -48,7 +48,6 @@ int handle_showclass(int sockfd) { return 0; }
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define SERVER_MAGIC_VERSION (0x88888804)
 #define MAGIC (0x12345678)
 #define MAX_CONNECTIONS (1024)
 
