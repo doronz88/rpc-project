@@ -1,3 +1,5 @@
+import ast
+import builtins
 import datetime
 import json
 import struct
@@ -30,10 +32,12 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError, ArgumentError
+from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError, ArgumentError, \
+    GettingObjectiveCClassError
 from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
 from rpcclient.structs.consts import RTLD_NOW
 from rpcclient.symbol import Symbol
+from rpcclient.symbols_jar import SymbolsJar
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -326,3 +330,34 @@ class DarwinClient(Client):
                 for i in range(count):
                     result[keys[i].py()] = values[i].py()
                 return result
+
+    def _ipython_run_cell_hook(self, info):
+        """
+        Enable lazy loading for symbols
+        :param info: IPython's CellInf4o object
+        """
+        super()._ipython_run_cell_hook(info)
+
+        if info.raw_cell.startswith('!') or info.raw_cell.endswith('?'):
+            return
+
+        for node in ast.walk(ast.parse(info.raw_cell)):
+            if not isinstance(node, ast.Name):
+                # we are only interested in names
+                continue
+
+            if node.id in locals() or node.id in globals() or node.id in dir(builtins):
+                # That are undefined
+                continue
+
+            if not hasattr(SymbolsJar, node.id):
+                # ignore SymbolsJar properties
+                try:
+                    symbol = self.objc_get_class(node.id)
+                except GettingObjectiveCClassError:
+                    pass
+                else:
+                    self._add_global(
+                        node.id,
+                        symbol
+                    )
