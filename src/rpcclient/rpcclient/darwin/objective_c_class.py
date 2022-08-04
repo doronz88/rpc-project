@@ -66,16 +66,22 @@ class Class:
         Should be used whenever the class layout changes (for example, during method swizzling)
         """
         objc_class = self._class_object if self._class_object else self._client.symbols.objc_getClass(self.name)
-        super = objc.get_super(self._client, objc_class)
-        self.super = Class(self._client, super) if super else None
-        self.name = objc.get_class_name(self._client, objc_class)
-        self.protocols = objc.get_class_protocols(self._client, objc_class)
+        class_description = self._client.showclass(objc_class)
+
+        self.super = Class(self._client, class_description['super']) if class_description['super'] else None
+        self.name = class_description['name']
+        self.protocols = class_description['protocols']
         self.ivars = [
             Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'])
-            for ivar in objc.get_class_ivars(self._client, objc_class)
+            for ivar in class_description['ivars']
         ]
-        self.properties = objc.get_class_properties(self._client, objc_class)
-        self.methods = objc.get_class_methods(self._client, objc_class)
+        self.properties = [
+            objc.Property(name=prop['name'], attributes=objc.convert_encoded_property_attributes(prop['attributes']))
+            for prop in class_description['properties']
+        ]
+        self.methods = [
+            objc.Method.from_data(method, self._client) for method in class_description['methods']
+        ]
 
     def show(self):
         """

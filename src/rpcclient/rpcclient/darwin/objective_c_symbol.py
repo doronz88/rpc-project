@@ -8,6 +8,7 @@ from pygments.lexers import ObjectiveCLexer
 
 from rpcclient.exceptions import RpcClientException
 from rpcclient.darwin.objective_c_class import Class
+from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin import objc
@@ -53,29 +54,27 @@ class ObjectiveCSymbol(DarwinSymbol):
         """
         Reload object's in-memory layout.
         """
-        self.ivars.clear()
-        self.properties.clear()
-        self.methods.clear()
-        self.class_ = None
+        object_data = self._client.showobject(self)
 
-        objc_class = self.objc_call('class')
-        ivars = objc.get_object_ivars(self._client, objc_class, self)
-        self.ivars = [
-            Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'], value=ivar['value']) for ivar in ivars
+        ivars_list = [
+            Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'],
+                 value=ivar['value']) for ivar in object_data['ivars']
         ]
-        self.properties = objc.get_object_properties(self._client, objc_class)
-        self.methods = objc.get_class_methods(self._client, objc_class)
+        methods_list = [
+            objc.Method.from_data(method, self._client) for method in object_data['methods']
+        ]
+        properties_list = [
+            objc.Property(name=prop['name'], attributes=objc.convert_encoded_property_attributes(prop['attributes']))
+            for prop in object_data['properties']
+        ]
 
-        data = {
-            'name': objc.get_class_name(self._client, objc_class),
-            'address': objc_class,
-            'super': objc.get_super(self._client, objc_class),
-            'protocols': objc.get_class_protocols(self._client, objc_class),
-            'ivars': ivars,
-            'properties': self.properties,
-            'methods': self.methods,
-        }
-        self.class_ = Class(self._client, objc_class, data)
+        class_object = Symbol.create(object_data['class_address'], self._client)
+        class_wrapper = Class(self._client, class_object)
+
+        self.ivars = ivars_list
+        self.methods = methods_list
+        self.properties = properties_list
+        self.class_ = class_wrapper
 
     def show(self, recursive: bool = False):
         """
