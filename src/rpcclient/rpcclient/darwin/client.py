@@ -1,8 +1,12 @@
 import datetime
+import json
 import struct
 import typing
+
+from construct import Int64sl
 from collections import namedtuple
 from functools import lru_cache
+from typing import Mapping
 
 from cached_property import cached_property
 
@@ -27,8 +31,9 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError, ArgumentError
-from rpcclient.protocol import arch_t
+from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
 from rpcclient.structs.consts import RTLD_NOW
+from rpcclient.symbol import Symbol
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -101,6 +106,28 @@ class DarwinClient(Client):
     def roots(self) -> typing.List[str]:
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
         return ['/', '/var/root']
+
+    def showobject(self, object_address: Symbol) -> Mapping:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_SHOWOBJECT,
+            'data': {'address': object_address},
+        })
+        with self._protocol_lock:
+            self._sock.sendall(message)
+            response_len = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+            response = self._recvall(response_len)
+        return json.loads(response)
+
+    def showclass(self, class_address: Symbol) -> Mapping:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_SHOWCLASS,
+            'data': {'address': class_address},
+        })
+        with self._protocol_lock:
+            self._sock.sendall(message)
+            response_len = Int64sl.parse(self._recvall(Int64sl.sizeof()))
+            response = self._recvall(response_len)
+        return json.loads(response)
 
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
