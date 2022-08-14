@@ -136,3 +136,8 @@ class RpcFailedToRecordError(BadReturnValueError):
 class RpcFailedToPlayError(BadReturnValueError):
     """ An attempt to play has failed """
     pass
+
+
+class RpcResourceTemporarilyUnavailableError(BadReturnValueError):
+    """ raised when errno = EAGAIN """
+    pass
