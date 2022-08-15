@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
-from rpcclient.exceptions import BadReturnValueError, RpcResourceTemporarilyUnavailableError
+from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
     MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_DONTWAIT, AF_INET6
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
@@ -78,10 +78,7 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                try:
-                    buf += self._recv(chunk, size)
-                except RpcResourceTemporarilyUnavailableError:
-                    pass
+                buf += self._recv(chunk, size)
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
