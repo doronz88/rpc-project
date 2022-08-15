@@ -1,6 +1,7 @@
 import socket as pysock
 import typing
 from collections import namedtuple
+from time import sleep
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
@@ -73,14 +74,19 @@ class Socket(Allocated):
         with self._client.safe_malloc(size) as chunk:
             return self._recv(chunk, size)
 
-    def recvall(self, size: int) -> bytes:
+    def recvall(self, size: int, max_retries: int = 5, retry_interval: float = 0.1) -> bytes:
         """ recv at remote until all buffer is received """
         buf = b''
         with self._client.safe_malloc(size) as chunk:
+            retry_count = 0
             while len(buf) < size:
                 try:
                     buf += self._recv(chunk, size)
                 except RpcResourceTemporarilyUnavailableError:
+                    retry_count += 1
+                    sleep(retry_interval)
+                    if retry_count == max_retries:
+                        raise RpcResourceTemporarilyUnavailableError
                     pass
         return buf
 
