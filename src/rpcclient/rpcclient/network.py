@@ -78,7 +78,7 @@ class Socket(Allocated):
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                buf += self._recv(chunk, size)
+                buf += self._recv(chunk, size - len(buf))
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
