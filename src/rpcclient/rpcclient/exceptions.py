@@ -141,3 +141,8 @@ class RpcFailedToPlayError(BadReturnValueError):
 class RpcResourceTemporarilyUnavailableError(BadReturnValueError):
     """ raised when errno = EAGAIN """
     pass
+
+
+class RpcConnectionRefusedError(BadReturnValueError):
+    """ RPC version for ConnectionRefusedError (errno = ECONNREFUSED) """
+    pass

@@ -134,7 +134,7 @@ class Network:
             servaddr = sockaddr_in6.build(
                 {'sin6_addr': pysock.inet_pton(family, address), 'sin6_port': port})
         self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.raise_errno_exception(f'failed connecting to: {address}:{port}')
         return Socket(self._client, sockfd)
@@ -144,7 +144,7 @@ class Network:
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
         self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.raise_errno_exception(f'failed connecting to: {filename}')
         return Socket(self._client, sockfd)
