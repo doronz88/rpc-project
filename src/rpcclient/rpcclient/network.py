@@ -25,6 +25,7 @@ class Socket(Allocated):
         self._client = client
         self.fd = fd
         self._blocking = self._getblocking()
+        self._timeout = None
 
     def _deallocate(self):
         """ close(fd) at remote. read man for more details. """
@@ -86,8 +87,12 @@ class Socket(Allocated):
             self._client.raise_errno_exception(f'setsockopt() failed: {self._client.last_error}')
 
     def settimeout(self, seconds: int):
+        self._timeout = seconds
         self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
         self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
+
+    def gettimeout(self) -> typing.Optional[int]:
+        return self._timeout
 
     def setblocking(self, blocking: bool):
         opts = self._client.symbols.fcntl(self.fd, F_GETFL, 0).c_uint64
