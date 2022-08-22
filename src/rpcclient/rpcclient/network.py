@@ -25,6 +25,7 @@ class Socket(Allocated):
         self._client = client
         self.fd = fd
         self._blocking = self._getblocking()
+        self._timeout = None
 
     def _deallocate(self):
         """ close(fd) at remote. read man for more details. """
@@ -86,8 +87,12 @@ class Socket(Allocated):
             self._client.raise_errno_exception(f'setsockopt() failed: {self._client.last_error}')
 
     def settimeout(self, seconds: int):
+        self._timeout = seconds
         self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
         self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
+
+    def gettimeout(self) -> typing.Optional[int]:
+        return self._timeout
 
     def setblocking(self, blocking: bool):
         opts = self._client.symbols.fcntl(self.fd, F_GETFL, 0).c_uint64
@@ -134,7 +139,7 @@ class Network:
             servaddr = sockaddr_in6.build(
                 {'sin6_addr': pysock.inet_pton(family, address), 'sin6_port': port})
         self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.raise_errno_exception(f'failed connecting to: {address}:{port}')
         return Socket(self._client, sockfd)
@@ -144,7 +149,7 @@ class Network:
         sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({'sun_path': filename})
         self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr))
+        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.raise_errno_exception(f'failed connecting to: {filename}')
         return Socket(self._client, sockfd)

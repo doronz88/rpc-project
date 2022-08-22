@@ -23,7 +23,7 @@ from rpcclient.darwin.structs import pid_t, exitcode_t
 from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
     InvalidServerVersionMagicError, BadReturnValueError, RpcFileExistsError, RpcNotEmptyError, RpcFileNotFoundError, \
     RpcBrokenPipeError, RpcIsADirectoryError, RpcPermissionError, RpcNotADirectoryError, \
-    RpcResourceTemporarilyUnavailableError
+    RpcResourceTemporarilyUnavailableError, RpcConnectionRefusedError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
@@ -31,7 +31,7 @@ from rpcclient.processes import Processes
 from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
     reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
     protocol_handshake_t, call_response_t_size, listdir_entry_t, MAGIC
-from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR, EPERM, ENOTDIR, EAGAIN
+from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR, EPERM, ENOTDIR, EAGAIN, ECONNREFUSED
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -626,6 +626,7 @@ class Client:
             EPIPE: RpcBrokenPipeError,
             ENOTEMPTY: RpcNotEmptyError,
             EAGAIN: RpcResourceTemporarilyUnavailableError,
+            ECONNREFUSED: RpcConnectionRefusedError,
         }
         exception = exceptions.get(self.errno)
         if exception:
