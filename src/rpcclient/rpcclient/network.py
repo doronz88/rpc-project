@@ -6,7 +6,7 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
-    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_DONTWAIT, AF_INET6
+    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_WAITALL, AF_INET6
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -43,7 +43,7 @@ class Socket(Allocated):
         """
         if size is None:
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | MSG_DONTWAIT).c_int64
+        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | MSG_WAITALL).c_int64
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
@@ -57,7 +57,7 @@ class Socket(Allocated):
             buf = buf[err:]
 
     def _recv(self, chunk, size: int):
-        err = self._client.symbols.recv(self.fd, chunk, size, MSG_DONTWAIT).c_int64
+        err = self._client.symbols.recv(self.fd, chunk, size, MSG_WAITALL).c_int64
         if err < 0:
             self._client.raise_errno_exception(f'recv() failed for fd: {self.fd}')
         elif err == 0:
