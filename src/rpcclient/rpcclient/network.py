@@ -8,6 +8,7 @@ from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
     MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_WAITALL, AF_INET6
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
+from rpcclient.symbol import Symbol
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
 Hostentry = namedtuple('Hostentry', 'name aliases addresses')
@@ -33,7 +34,7 @@ class Socket(Allocated):
         if fd < 0:
             raise BadReturnValueError(f'failed to close fd: {fd}')
 
-    def send(self, buf: bytes, size: int = None) -> int:
+    def send(self, buf: typing.Union[bytes, Symbol], size: int = None) -> int:
         """
         send(fd, buf, size, 0) at remote. read man for more details.
 
@@ -42,6 +43,8 @@ class Socket(Allocated):
         :return: how many bytes were sent
         """
         if size is None:
+            if isinstance(buf, Symbol):
+                raise ValueError('cannot calculate size argument for Symbol objects')
             size = len(buf)
         n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | MSG_WAITALL).c_int64
         if n < 0:
@@ -50,13 +53,17 @@ class Socket(Allocated):
             self._client.raise_errno_exception(f'failed to send on fd: {self.fd}')
         return n
 
-    def sendall(self, buf: bytes):
+    def sendall(self, buf: bytes) -> None:
         """ continue call send() until """
-        while buf:
-            err = self.send(buf, len(buf))
-            buf = buf[err:]
+        size = len(buf)
+        offset = 0
+        with self._client.safe_malloc(size) as block:
+            block.poke(buf)
+            while offset < size:
+                sent = self.send(block + offset, size - offset)
+                offset += sent
 
-    def _recv(self, chunk, size: int):
+    def _recv(self, chunk, size: int) -> bytes:
         err = self._client.symbols.recv(self.fd, chunk, size, MSG_WAITALL).c_int64
         if err < 0:
             self._client.raise_errno_exception(f'recv() failed for fd: {self.fd}')
