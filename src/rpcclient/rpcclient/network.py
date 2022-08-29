@@ -6,8 +6,9 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
-    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, MSG_WAITALL, AF_INET6
+    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, AF_INET6
 from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
+from rpcclient.symbol import Symbol
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
 Hostentry = namedtuple('Hostentry', 'name aliases addresses')
@@ -33,53 +34,61 @@ class Socket(Allocated):
         if fd < 0:
             raise BadReturnValueError(f'failed to close fd: {fd}')
 
-    def send(self, buf: bytes, size: int = None) -> int:
+    def send(self, buf: typing.Union[bytes, Symbol], size: int = None, flags: int = 0) -> int:
         """
         send(fd, buf, size, 0) at remote. read man for more details.
 
         :param buf: buffer to send
         :param size: If None, use len(buf)
+        :param flags: flags for send() syscall. MSG_NOSIGNAL will always be added
         :return: how many bytes were sent
         """
         if size is None:
+            if isinstance(buf, Symbol):
+                raise ValueError('cannot calculate size argument for Symbol objects')
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | MSG_WAITALL).c_int64
+        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | flags).c_int64
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
             self._client.raise_errno_exception(f'failed to send on fd: {self.fd}')
         return n
 
-    def sendall(self, buf: bytes):
+    def sendall(self, buf: bytes, flags: int = 0) -> None:
         """ continue call send() until """
-        while buf:
-            err = self.send(buf, len(buf))
-            buf = buf[err:]
+        size = len(buf)
+        offset = 0
+        with self._client.safe_malloc(size) as block:
+            block.poke(buf)
+            while offset < size:
+                sent = self.send(block + offset, size - offset, flags=flags)
+                offset += sent
 
-    def _recv(self, chunk, size: int):
-        err = self._client.symbols.recv(self.fd, chunk, size, MSG_WAITALL).c_int64
+    def _recv(self, chunk: Symbol, size: int, flags: int = 0) -> bytes:
+        err = self._client.symbols.recv(self.fd, chunk, size, MSG_NOSIGNAL | flags).c_int64
         if err < 0:
             self._client.raise_errno_exception(f'recv() failed for fd: {self.fd}')
         elif err == 0:
             self._client.raise_errno_exception(f'recv() failed for fd: {self.fd} (peer closed)')
-        return chunk.peek(size)
+        return chunk.peek(err)
 
-    def recv(self, size: int = CHUNK_SIZE) -> bytes:
+    def recv(self, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
         """
         recv() at remote. read man for more details.
 
         :param size: chunk size
+        :param flags: flags for recv() syscall. MSG_NOSIGNAL will always be added
         :return: received bytes
         """
         with self._client.safe_malloc(size) as chunk:
-            return self._recv(chunk, size)
+            return self._recv(chunk, size, flags=flags)
 
-    def recvall(self, size: int) -> bytes:
+    def recvall(self, size: int, flags: int = 0) -> bytes:
         """ recv at remote until all buffer is received """
         buf = b''
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
-                buf += self._recv(chunk, size - len(buf))
+                buf += self._recv(chunk, size - len(buf), flags=flags)
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):

@@ -10,6 +10,7 @@ from rpcclient.exceptions import RpcResourceTemporarilyUnavailableError, RpcConn
 RAND_PORT = 8989
 BAD_SOCK = '/tmp/BAD'
 TIMEOUT = 10
+CHUNK_SIZE = 1024
 
 
 def recvall(sock, size: int) -> bytes:
@@ -23,7 +24,8 @@ def server_process_handler(server, event):
     event.set()
     client = server.accept()[0]
     while True:
-        client.sendall(client.recv(1))
+        received = client.recv(CHUNK_SIZE)
+        client.sendall(received)
 
 
 @contextlib.contextmanager
