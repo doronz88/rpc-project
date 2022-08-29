@@ -146,3 +146,7 @@ class RpcResourceTemporarilyUnavailableError(BadReturnValueError):
 class RpcConnectionRefusedError(BadReturnValueError):
     """ RPC version for ConnectionRefusedError (errno = ECONNREFUSED) """
     pass
+
+
+class NoSuchActivityError(RpcClientException):
+    pass
