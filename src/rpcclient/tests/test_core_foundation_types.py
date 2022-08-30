@@ -9,7 +9,7 @@ pytestmark = pytest.mark.darwin
     None,
     True,
     False,
-    datetime.datetime(1967, 5, 4, 3, 2, 1, tzinfo=datetime.timezone.utc),
+    datetime.datetime(1967, 5, 4, 3, 2, 1),
     'string',
     b'bytes',
     123,

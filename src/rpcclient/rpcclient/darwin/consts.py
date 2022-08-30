@@ -23,6 +23,18 @@ class AVAudioSessionCategoryOptions(IntFlag):
     OverrideMutedMicrophoneInterruption = 0x80
 
 
+class CFPropertyListFormat(IntEnum):
+    kCFPropertyListOpenStepFormat = 1
+    kCFPropertyListXMLFormat_v1_0 = 100
+    kCFPropertyListBinaryFormat_v1_0 = 200
+
+
+class CFPropertyListMutabilityOptions(IntEnum):
+    kCFPropertyListImmutable = 0
+    kCFPropertyListMutableContainers = 1 << 0,
+    kCFPropertyListMutableContainersAndLeaves = 1 << 1,
+
+
 # Types from MacTypes.h
 
 # Basic C types
