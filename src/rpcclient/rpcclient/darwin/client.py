@@ -1,21 +1,21 @@
 import ast
 import builtins
-import datetime
 import json
-import struct
+import plistlib
 import typing
-
-from construct import Int64sl
 from collections import namedtuple
 from functools import lru_cache
 from typing import Mapping
 
 from cached_property import cached_property
+from construct import Int64sl
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.bluetooth import Bluetooth
-from rpcclient.darwin.consts import kCFNumberSInt64Type, kCFNumberDoubleType, CFStringEncoding, kCFAllocatorDefault
+from rpcclient.darwin.common import CfSerializable
+from rpcclient.darwin.consts import kCFAllocatorDefault, \
+    CFPropertyListFormat, CFPropertyListMutabilityOptions
 from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
@@ -32,8 +32,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import RpcClientException, MissingLibraryError, CfSerializationError, ArgumentError, \
-    GettingObjectiveCClassError
+from rpcclient.exceptions import RpcClientException, MissingLibraryError, GettingObjectiveCClassError
 from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
 from rpcclient.structs.consts import RTLD_NOW
 from rpcclient.symbol import Symbol
@@ -78,16 +77,7 @@ class DarwinClient(Client):
         self.bluetooth = Bluetooth(self)
         self.core_graphics = CoreGraphics(self)
         self.keychain = Keychain(self)
-        self.type_decoders = {
-            self.symbols.CFNullGetTypeID(): self._decode_cfnull,
-            self.symbols.CFStringGetTypeID(): self._decode_cfstr,
-            self.symbols.CFBooleanGetTypeID(): self._decode_cfbool,
-            self.symbols.CFNumberGetTypeID(): self._decode_cfnumber,
-            self.symbols.CFDateGetTypeID(): self._decode_cfdate,
-            self.symbols.CFDataGetTypeID(): self._decode_cfdata,
-            self.symbols.CFArrayGetTypeID(): self._decode_cfarray,
-            self.symbols.CFDictionaryGetTypeID(): self._decode_cfdict,
-        }
+        self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
 
     @property
     def modules(self) -> typing.List[str]:
@@ -137,92 +127,25 @@ class DarwinClient(Client):
         """ at a symbol object from a given address """
         return DarwinSymbol.create(symbol, self)
 
-    def _cf_encode_none(self, o: object) -> DarwinSymbol:
-        return self.symbols.kCFNull[0]
+    def decode_cf(self, symbol: Symbol) -> CfSerializable:
+        objc_data = self._NSPropertyListSerialization.dataWithPropertyList_format_options_error_(
+            symbol, CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0, 0, 0)
+        if objc_data == 0:
+            return None
+        count = self.symbols.CFDataGetLength(objc_data)
+        result = plistlib.loads(self.symbols.CFDataGetBytePtr(objc_data).peek(count))
+        objc_data.objc_call('release')
+        return result
 
-    def _cf_encode_darwin_symbol(self, o: object) -> DarwinSymbol:
-        # assuming it's already a cfobject
-        return o
-
-    def _cf_encode_str(self, o: object) -> DarwinSymbol:
-        return self.symbols.CFStringCreateWithCString(kCFAllocatorDefault, o,
-                                                      CFStringEncoding.kCFStringEncodingMacRoman)
-
-    def _cf_encode_bytes(self, o: object) -> DarwinSymbol:
-        return self.symbols.CFDataCreate(kCFAllocatorDefault, o, len(o))
-
-    def _ns_encode_datetime(self, o: object) -> DarwinSymbol:
-        comps = self.symbols.objc_getClass('NSDateComponents').objc_call('new')
-        comps.objc_call('setDay:', o.day)
-        comps.objc_call('setMonth:', o.month)
-        comps.objc_call('setYear:', o.year)
-        comps.objc_call('setHour:', o.hour)
-        comps.objc_call('setMinute:', o.minute)
-        comps.objc_call('setSecond:', o.second)
-        comps.objc_call('setTimeZone:',
-                        self.symbols.objc_getClass('NSTimeZone').objc_call('timeZoneWithAbbreviation:',
-                                                                           self.cf('UTC')))
-        return self.symbols.objc_getClass('NSCalendar').objc_call('currentCalendar') \
-            .objc_call('dateFromComponents:', comps)
-
-    def _cf_encode_bool(self, o: object) -> DarwinSymbol:
-        if o:
-            return self.symbols.kCFBooleanTrue[0]
-        else:
-            return self.symbols.kCFBooleanFalse[0]
-
-    def _cf_encode_int(self, o: object) -> DarwinSymbol:
-        with self.safe_malloc(8) as buf:
-            buf[0] = o
-            return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt64Type, buf)
-
-    def _cf_encode_float(self, o: object) -> DarwinSymbol:
-        with self.safe_malloc(8) as buf:
-            buf.poke(struct.pack('<d', o))
-            return self.symbols.CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, buf)
-
-    def _cf_encode_list(self, o: object) -> DarwinSymbol:
-        cfvalues = [self.cf(i) for i in o]
-        with self.safe_malloc(8 * len(cfvalues)) as buf:
-            for i in range(len(cfvalues)):
-                buf[i] = cfvalues[i]
-            return self.symbols.CFArrayCreate(kCFAllocatorDefault, buf, len(cfvalues), 0)
-
-    def _cf_encode_dict(self, o: object) -> DarwinSymbol:
-        cfkeys = [self.cf(i) for i in o.keys()]
-        cfvalues = [self.cf(i) for i in o.values()]
-        with self.safe_malloc(8 * len(cfkeys)) as keys_buf:
-            with self.safe_malloc(8 * len(cfvalues)) as values_buf:
-                for i in range(len(cfkeys)):
-                    keys_buf[i] = cfkeys[i]
-                for i in range(len(cfvalues)):
-                    values_buf[i] = cfvalues[i]
-                return self.symbols.CFDictionaryCreate(
-                    kCFAllocatorDefault, keys_buf, values_buf, len(cfvalues), 0, 0)
-
-    def cf(self, o: object) -> DarwinSymbol:
+    def cf(self, o: CfSerializable) -> DarwinSymbol:
         """ construct a CFObject from a given python object """
         if o is None:
-            return self._cf_encode_none(o)
+            return self.symbols.kCFNull[0]
 
-        encoders = {
-            DarwinSymbol: self._cf_encode_darwin_symbol,
-            str: self._cf_encode_str,
-            bytes: self._cf_encode_bytes,
-            datetime.datetime: self._ns_encode_datetime,
-            bool: self._cf_encode_bool,
-            int: self._cf_encode_int,
-            float: self._cf_encode_float,
-            list: self._cf_encode_list,
-            tuple: self._cf_encode_list,
-            dict: self._cf_encode_dict,
-        }
-
-        for type_, encoder in encoders.items():
-            if isinstance(o, type_):
-                return encoder(o)
-
-        raise NotImplementedError()
+        plist_bytes = plistlib.dumps(o, fmt=plistlib.FMT_BINARY)
+        plist_objc_bytes = self.symbols.CFDataCreate(kCFAllocatorDefault, plist_bytes, len(plist_bytes))
+        return self._NSPropertyListSerialization.propertyListWithData_options_format_error_(
+            plist_objc_bytes, CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves, 0, 0)
 
     def objc_symbol(self, address) -> ObjectiveCSymbol:
         """
@@ -268,68 +191,6 @@ class DarwinClient(Client):
                 return True
 
         return False
-
-    def _decode_cfnull(self, symbol, **kwargs) -> None:
-        return None
-
-    def _decode_cfstr(self, symbol, encoding='mac_roman', **kwargs) -> str:
-        supported_encodings = {
-            'mac_roman': CFStringEncoding.kCFStringEncodingMacRoman,
-            'utf8': CFStringEncoding.kCFStringEncodingUTF8,
-        }
-        if encoding not in supported_encodings:
-            raise ArgumentError(f'given encoding: {encoding} is not supported. must be one of: '
-                                f'{supported_encodings.keys()}')
-        ptr = self.symbols.CFStringGetCStringPtr(symbol, supported_encodings[encoding])
-        if ptr:
-            return ptr.peek_str(encoding)
-
-        with self.safe_malloc(4096) as buf:
-            if not self.symbols.CFStringGetCString(symbol, buf, 4096, supported_encodings[encoding]):
-                raise CfSerializationError('CFStringGetCString failed')
-            return buf.peek_str(encoding)
-
-    def _decode_cfbool(self, symbol, **kwargs) -> bool:
-        return bool(self.symbols.CFBooleanGetValue(symbol))
-
-    def _decode_cfnumber(self, symbol, **kwargs) -> int:
-        with self.safe_malloc(200) as buf:
-            if self.symbols.CFNumberIsFloatType(symbol):
-                if not self.symbols.CFNumberGetValue(symbol, kCFNumberDoubleType, buf):
-                    raise CfSerializationError(f'failed to deserialize float: {symbol}')
-                return struct.unpack('<d', buf.peek(8))[0]
-            if not self.symbols.CFNumberGetValue(symbol, kCFNumberSInt64Type, buf):
-                raise CfSerializationError(f'failed to deserialize int: {symbol}')
-            return int(buf[0])
-
-    def _decode_cfdate(self, symbol, **kwargs) -> datetime.datetime:
-        return datetime.datetime.strptime(symbol.cfdesc, '%Y-%m-%d  %H:%M:%S %z')
-
-    def _decode_cfdata(self, symbol, **kwargs) -> bytes:
-        count = self.symbols.CFDataGetLength(symbol)
-        return self.symbols.CFDataGetBytePtr(symbol).peek(count)
-
-    def _decode_cfarray(self, symbol, depth: int = None, **kwargs) -> typing.List:
-        result = []
-        count = self.symbols.CFArrayGetCount(symbol)
-        for i in range(count):
-            item = self.symbols.CFArrayGetValueAtIndex(symbol, i)
-            if depth is None:
-                item = item.py()
-            elif depth > 0:
-                item = item.py(depth=depth - 1)
-            result.append(item)
-        return result
-
-    def _decode_cfdict(self, symbol, **kwargs) -> typing.Mapping:
-        result = {}
-        count = self.symbols.CFArrayGetCount(symbol)
-        with self.safe_malloc(8 * count) as keys:
-            with self.safe_malloc(8 * count) as values:
-                self.symbols.CFDictionaryGetKeysAndValues(symbol, keys, values)
-                for i in range(count):
-                    result[keys[i].py()] = values[i].py()
-                return result
 
     def _ipython_run_cell_hook(self, info):
         """

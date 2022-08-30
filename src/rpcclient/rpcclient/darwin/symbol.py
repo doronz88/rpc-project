@@ -16,11 +16,7 @@ class DarwinSymbol(Symbol):
         if self == 0:
             return None
 
-        cf_type = self._client.symbols.CFGetTypeID(self)
-        if cf_type not in self._client.type_decoders:
-            return self
-
-        return self._client.type_decoders[cf_type](self, *args, **kwargs)
+        return self._client.decode_cf(self)
 
     @property
     def region(self):
