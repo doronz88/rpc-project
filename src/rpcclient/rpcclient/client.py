@@ -111,9 +111,6 @@ class Client:
 
         self.reconnect_lock = threading.Lock()
 
-        # whether the system uses inode structs of 64 bits
-        self.inode64 = False
-
         self._init_process_specific()
 
     def _init_process_specific(self):
