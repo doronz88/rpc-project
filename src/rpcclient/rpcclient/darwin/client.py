@@ -61,8 +61,6 @@ class DarwinClient(Client):
         if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
 
-        if self.uname.machine != 'x86_64':
-            self.inode64 = True
         self.fs = DarwinFs(self)
         self.preferences = Preferences(self)
         self.processes = DarwinProcesses(self)
