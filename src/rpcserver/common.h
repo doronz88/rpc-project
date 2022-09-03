@@ -15,9 +15,9 @@ typedef signed int s32;
 typedef unsigned long u64;
 typedef unsigned long s64;
 
-bool g_stdout;
-bool g_syslog;
-FILE *g_file;
+extern bool g_stdout;
+extern bool g_syslog;
+extern FILE *g_file;
 
 #define TRACE(...) trace(__PRETTY_FUNCTION__, __VA_ARGS__)
 #define CHECK(expression)            \
