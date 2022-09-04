@@ -4,7 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from rpcclient.client_factory import DarwinClient, create_tcp_client
+from rpcclient.client_factory import create_tcp_client
+from rpcclient.darwin.client import DarwinClient
 from rpcclient.exceptions import BadReturnValueError
 
 

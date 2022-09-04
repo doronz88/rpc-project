@@ -25,7 +25,7 @@ arch_t = Enum(Int32ul,
               )
 
 DEFAULT_PORT = 5910
-SERVER_MAGIC_VERSION = 0x88888805
+SERVER_MAGIC_VERSION = 0x88888806
 MAGIC = 0x12345678
 MAX_PATH_LEN = 1024
 
@@ -33,6 +33,7 @@ protocol_handshake_t = Struct(
     'magic' / Hex(Int32ul),
     'arch' / arch_t,
     'sysname' / PaddedString(256, 'utf8'),
+    'machine' / PaddedString(256, 'utf8'),
 )
 
 cmd_exec_t = Struct(

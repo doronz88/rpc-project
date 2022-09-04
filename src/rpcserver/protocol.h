@@ -4,8 +4,9 @@
 
 #include "common.h"
 
-#define SERVER_MAGIC_VERSION (0x88888805)
+#define SERVER_MAGIC_VERSION (0x88888806)
 #define HANDSHAKE_SYSNAME_LEN (256)
+#define HANDSHAKE_MACHINE_LEN (256)
 #define MAX_PATH_LEN (1024)
 
 typedef enum
@@ -44,6 +45,7 @@ typedef struct
     u32 magic;
     u32 arch; // arch_t
     char sysname[HANDSHAKE_SYSNAME_LEN];
+    char machine[HANDSHAKE_MACHINE_LEN];
 } protocol_handshake_t;
 
 typedef struct
