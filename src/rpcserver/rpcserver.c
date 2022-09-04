@@ -1012,6 +1012,7 @@ void handle_client(int sockfd)
     handshake.magic = SERVER_MAGIC_VERSION;
     handshake.arch = ARCH_UNKNOWN;
     strncpy(handshake.sysname, uname_buf.sysname, HANDSHAKE_SYSNAME_LEN - 1);
+    strncpy(handshake.machine, uname_buf.machine, HANDSHAKE_MACHINE_LEN - 1);
 
     CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
 

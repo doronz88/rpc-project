@@ -3,7 +3,6 @@ import typing
 from socket import socket
 
 from rpcclient.client import Client
-from rpcclient.darwin.client import DarwinClient
 from rpcclient.exceptions import FailedToConnectError, InvalidServerVersionMagicError
 from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
@@ -43,14 +42,13 @@ def create_client(create_socket_cb: typing.Callable):
         raise InvalidServerVersionMagicError(f'got {handshake.magic:x} instead of {SERVER_MAGIC_VERSION:x}')
 
     sysname = handshake.sysname.lower()
+    machine = handshake.machine.lower()
     arch = handshake.arch
 
-    logging.info(f'connection uname.sysname: {handshake.sysname}')
+    logging.info(f'connection uname.sysname: {sysname} uname.machine: {machine}')
 
     if sysname == 'darwin':
-        client = DarwinClient(sock, sysname, arch, create_socket_cb)
-
-        if client.uname.machine.startswith('iPhone'):
+        if machine.startswith('iPhone'):
             return IosClient(sock, sysname, arch, create_socket_cb)
         else:
             return MacosClient(sock, sysname, arch, create_socket_cb)
