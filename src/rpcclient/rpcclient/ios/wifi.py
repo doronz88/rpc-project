@@ -40,31 +40,30 @@ class WifiSavedNetwork:
 
 
 class WifiScannedNetwork:
-    def __init__(self, client, interface: DarwinSymbol, network: DarwinSymbol):
+    def __init__(self, client, interface: DarwinSymbol, network: Mapping):
         self._client = client
         self._interface = interface
-        self._network_symbol = network
-        self.network_dict = network.py()
+        self.network = network
 
     @property
     def ssid(self) -> bytes:
-        return self.network_dict.get('SSID')
+        return self.network.get('SSID')
 
     @property
     def bssid(self) -> str:
-        return self.network_dict.get('BSSID')
+        return self.network.get('BSSID')
 
     @property
     def rssi(self) -> int:
-        return ctypes.c_int64(self.network_dict['RSSI']).value
+        return ctypes.c_int64(self.network['RSSI']).value
 
     @property
     def channel(self) -> int:
-        return self.network_dict['CHANNEL']
+        return self.network['CHANNEL']
 
     def connect(self, password: str = None):
         """ connect to Wi-Fi network """
-        result = self._client.symbols.Apple80211Associate(self._interface, self._network_symbol,
+        result = self._client.symbols.Apple80211Associate(self._interface, self._client.cf(self.network),
                                                           self._client.cf(password) if password else 0)
 
         if result:
@@ -108,7 +107,7 @@ class WifiInterface(Allocated):
                     raise BadReturnValueError('Apple80211Scan failed')
                 # else, try again
 
-            for network in p_found_networks[0].py(depth=0):
+            for network in p_found_networks[0].py():
                 result.append(WifiScannedNetwork(self._client, self._interface, network))
 
         return result
