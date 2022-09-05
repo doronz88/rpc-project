@@ -48,7 +48,7 @@ def create_client(create_socket_cb: typing.Callable):
     logging.info(f'connection uname.sysname: {sysname} uname.machine: {machine}')
 
     if sysname == 'darwin':
-        if machine.startswith('iPhone'):
+        if machine.startswith('iphone'):
             return IosClient(sock, sysname, arch, create_socket_cb)
         else:
             return MacosClient(sock, sysname, arch, create_socket_cb)
