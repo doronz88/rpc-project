@@ -218,8 +218,9 @@ class AXElement(DarwinSymbol):
     def elements(self) -> List['AXElement']:
         """ get all current displayed elements """
         result = []
-        for element in self.objc_call('explorerElements').py():
-            result.append(self._client.accessibility.axelement(element))
+        elements = self.objc_call('explorerElements')
+        for i in range(elements.objc_call('count')):
+            result.append(self._client.accessibility.axelement(elements.objc_call('objectAtIndex:', i)))
         return result
 
     def insert_text(self, text: str) -> None:
