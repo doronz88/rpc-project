@@ -284,17 +284,19 @@ class AXElement(DarwinSymbol):
 
         return element
 
-    def _next_elements_with_count(self, count: int) -> Optional[List]:
-        result = self.objc_call('nextElementsWithCount:', count).py()
-        if not result:
-            return None
-        return [AXElement.create(e, self._client) for e in result]
+    def _next_elements_with_count(self, count: int) -> List['AXElement']:
+        elements = self.objc_call('nextElementsWithCount:', count)
+        result = []
+        for i in range(elements.objc_call('count')):
+            result.append(AXElement.create(elements.objc_call('objectAtIndex:', i), self._client))
+        return result
 
-    def _previous_elements_with_count(self, count: int) -> Optional[List]:
-        result = self.objc_call('previousElementsWithCount:', count).py()
-        if not result:
-            return None
-        return [AXElement.create(e, self._client) for e in result]
+    def _previous_elements_with_count(self, count: int) -> List['AXElement']:
+        elements = self.objc_call('previousElementsWithCount:', count)
+        result = []
+        for i in range(elements.objc_call('count')):
+            result.append(AXElement.create(elements.objc_call('objectAtIndex:', i), self._client))
+        return result
 
     def _set_assistive_focus(self, focused: bool):
         self.ui_element.objc_call('setAXAttribute:withObject:synchronous:', 2018, self._client.cf({
