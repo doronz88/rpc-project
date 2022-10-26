@@ -72,8 +72,14 @@ class Telephony:
         Return on object representing the current active call.
         """
         calls = self.cx_call_observer.objc_call('calls')
-        for call_id in range(calls.objc_call('count')):
-            call = calls.py()[call_id]
+        call_count = calls.objc_call('count')
+
+        call_list = []
+        for i in range(call_count):
+            call_list.append(calls.objc_call('objectAtIndex:', i))
+
+        for call_id in range(call_count):
+            call = calls[call_id]
             if call.objc_call('hasEnded'):
                 continue
             return Call(self._client, self.cx_call_controller, call)
