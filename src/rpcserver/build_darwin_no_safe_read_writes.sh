@@ -15,7 +15,7 @@ do
     ARCH="$2"
     SYSROOT="$(xcrun --sdk $SDK --show-sdk-path)"
     CC="$(xcrun -f --sdk $SDK clang)"
-    CFLAGS="-arch $ARCH --sysroot=$SYSROOT -DSAFE_READ_WRITES"
+    CFLAGS="-arch $ARCH --sysroot=$SYSROOT"
 
     make clean
     make all SERVER_CC="$CC" SERVER_CFLAGS="$CFLAGS"
