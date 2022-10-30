@@ -79,7 +79,7 @@ class Telephony:
             call_list.append(calls.objc_call('objectAtIndex:', i))
 
         for call_id in range(call_count):
-            call = calls[call_id]
+            call = call_list[call_id]
             if call.objc_call('hasEnded'):
                 continue
             return Call(self._client, self.cx_call_controller, call)
