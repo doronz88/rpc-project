@@ -29,7 +29,7 @@ jobs:
       - name: Run server
         working-directory: ./src/rpcserver
         run: |
-          make all
+          make SERVER_CFLAGS=-DSAFE_READ_WRITES
           sudo nohup ./rpcserver &
       - name: Install python package + pytest
         working-directory: ./src/rpcclient
