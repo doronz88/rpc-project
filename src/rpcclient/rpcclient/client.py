@@ -13,10 +13,10 @@ from pathlib import Path
 from select import select
 
 import IPython
-import xonsh
 from construct import Int64sl, Float64l, Float32l, Float16l, Int64ul
 from traitlets.config import Config
 from xonsh.built_ins import XSH
+from xonsh.main import main as xonsh_main
 
 import rpcclient
 from rpcclient.darwin.structs import pid_t, exitcode_t
@@ -516,7 +516,7 @@ class Client:
         XSH.ctx['_create_socket_cb'] = self._create_socket_cb
 
         try:
-            xonsh.main.main(args)
+            xonsh_main(args)
         except SystemExit:
             self._logger.disabled = False
             self._ipython_run_cell_hook_enabled = True
