@@ -785,14 +785,13 @@ bool handle_peek(int sockfd)
     u64 *argv = NULL;
     cmd_peek_t cmd;
 
-#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
+#if defined(__APPLE__)
     mach_port_t task;
     vm_offset_t data = 0;
     mach_msg_type_number_t size;
 
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
-    CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
-    if (vm_read(task, cmd.address, cmd.size, &data, &size) == KERN_SUCCESS)
+    if (vm_read(mach_task_self(), cmd.address, cmd.size, &data, &size) == KERN_SUCCESS)
     {
         CHECK(send_reply(sockfd, CMD_REPLY_PEEK));
         CHECK(sendall(sockfd, (char *)cmd.address, cmd.size));
