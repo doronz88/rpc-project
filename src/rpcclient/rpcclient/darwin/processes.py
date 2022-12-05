@@ -554,8 +554,13 @@ class Process:
 
     @cached_property
     def task(self) -> int:
+        self_task_port = self._client.symbols.mach_task_self()
+
+        if self.pid == self._client.pid:
+            return self_task_port
+
         with self._client.safe_malloc(8) as p_task:
-            if self._client.symbols.task_for_pid(self._client.symbols.mach_task_self(), self.pid, p_task):
+            if self._client.symbols.task_for_pid(self_task_port, self.pid, p_task):
                 raise BadReturnValueError('task_for_pid() failed')
             return p_task[0].c_int64
 
