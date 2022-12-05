@@ -183,7 +183,7 @@ class RpcLsStub(LsStub):
 
 class XonshRc:
     def __init__(self):
-        self.client = None  # type: Union[None, rpcclient.client.Client, rpcclient.darwin.client.DarwinClient]
+        self.client: Union[None, rpcclient.client.Client, rpcclient.darwin.client.DarwinClient] = None
         self._commands = {}
         self._orig_aliases = {}
         self._orig_prompt = XSH.env['PROMPT']
