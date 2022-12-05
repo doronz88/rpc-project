@@ -1,5 +1,6 @@
 import dataclasses
 import errno
+import logging
 import posixpath
 import re
 import struct
@@ -32,6 +33,8 @@ _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
 _BACKTRACE_FRAME_REGEX = re.compile(r'\[\s*(\d+)\] (0x[0-9a-f]+)\s+\{(.+?) \+ (.+?)\} (.*)')
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass()
@@ -190,6 +193,10 @@ class Region:
     protection: str
     protection_max: str
     region_detail: str
+
+    @property
+    def size(self) -> int:
+        return self.end - self.start
 
 
 @dataclasses.dataclass
@@ -669,6 +676,27 @@ class Process:
             if self._client.symbols.vm_allocate(self.task, out_address, size, VM_FLAGS_ANYWHERE):
                 raise BadReturnValueError('vm_allocate() failed')
             return ProcessSymbol.create(out_address[0], self._client, self)
+
+    @path_to_str('filename')
+    def dump(self, filename: str) -> None:
+        """ dump macho contiguous memory layout into given file """
+        last_address = None
+
+        with open(filename, 'wb') as f:
+            for region in self.regions:
+                logger.debug(f'dumping {region}')
+
+                if last_address is not None and region.start != last_address:
+                    # non-contiguous memory
+                    break
+                last_address = region.end
+
+                if region.protection == '---':
+                    buf = b'\x00' * region.size
+                else:
+                    buf = self.peek(region.start, region.size)
+
+                f.write(buf)
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
