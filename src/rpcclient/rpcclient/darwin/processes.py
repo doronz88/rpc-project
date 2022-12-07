@@ -18,7 +18,7 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
-    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT, procargs2_t
+    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT, procargs2_t, mach_port_status
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError, \
     RpcClientException, ProcessSymbolAbsentError
@@ -33,6 +33,8 @@ _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
 _BACKTRACE_FRAME_REGEX = re.compile(r'\[\s*(\d+)\] (0x[0-9a-f]+)\s+\{(.+?) \+ (.+?)\} (.*)')
 
 FdStruct = namedtuple('FdStruct', 'fd struct')
+
+MACH_PORT_RECEIVE_STATUS = 2
 
 logger = logging.getLogger(__name__)
 
@@ -702,6 +704,25 @@ class Process:
                     buf = self.peek(region.start, region.size)
 
                 f.write(buf)
+
+    def mach_port_get_attributes(self):
+        self_task_port = self._client.symbols.mach_task_self()
+        mach_port_status_size = mach_port_status.sizeof()
+        with self._client.safe_malloc(8) as p_port, self._client.safe_malloc(
+                mach_port_status_size) as p_status, self._client.safe_malloc(8) \
+                as p_info_count:
+            assert 0 == self._client.symbols.mach_port_allocate(self_task_port, 1, p_port)
+
+            # add all types of rights
+            for right in range(16, 27):
+                err = self._client.symbols.mach_port_insert_right(self_task_port, p_port[0], p_port[0], right)
+                if err not in [0, 0x11, 0xd]:
+                    print(f'mach_port_insert_right got an unexpected error: {err}')
+            p_info_count[0] = mach_port_status_size
+            assert 0 == self._client.symbols.mach_port_get_attributes(self_task_port, p_port[0],
+                                                                      MACH_PORT_RECEIVE_STATUS,
+                                                                      p_status, p_info_count)
+            return mach_port_status.parse_stream(p_status)
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'

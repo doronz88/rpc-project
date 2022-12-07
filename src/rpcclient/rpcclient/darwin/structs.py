@@ -37,6 +37,13 @@ vm_behavior_t = Int32ul
 mach_vm_address_t = Int64ul
 mach_vm_size_t = Int64ul
 integer_t = Int32sl
+natural_t = Int32ul
+mach_port_name_t = natural_t  # containing port set
+mach_port_seqno_t = natural_t  # sequence number
+mach_port_mscount_t = natural_t  # make-send count
+mach_port_msgcount_t = Int32sl  # queue limit
+mach_port_msgcount_t = natural_t  # number in the queue
+mach_port_rights_t = natural_t  # how many send-once rights
 
 timespec = Struct(
     'tv_sec' / long,
@@ -729,4 +736,28 @@ procargs2_t = Struct(
     'argv' / Array(this.argc, CString('utf8')),
     '_environ_apple' / GreedyRange(CString('utf8')),
     'environ_apple' / Computed(lambda ctx: [s for s in ctx._environ_apple if s]),
+)
+
+mps_flags_t = FlagsEnum(natural_t,
+                        MACH_PORT_STATUS_FLAG_TEMPOWNER=0x01,
+                        MACH_PORT_STATUS_FLAG_GUARDED=0x02,
+                        MACH_PORT_STATUS_FLAG_STRICT_GUARD=0x04,
+                        MACH_PORT_STATUS_FLAG_IMP_DONATION=0x08,
+                        MACH_PORT_STATUS_FLAG_REVIVE=0x10,
+                        MACH_PORT_STATUS_FLAG_TASKPTR=0x20,
+                        MACH_PORT_STATUS_FLAG_GUARD_IMMOVABLE_RECEIVE=0x40,
+                        MACH_PORT_STATUS_FLAG_NO_GRANT=0x80,
+                        )
+
+mach_port_status = Struct(
+    'mps_pset' / mach_port_name_t,  # containing port set
+    'mps_seqno' / mach_port_seqno_t,  # sequence number
+    'mps_mscount' / mach_port_mscount_t,  # make-send count
+    'mps_qlimit' / mach_port_msgcount_t,  # queue limit
+    'mps_msgcount' / mach_port_msgcount_t,  # number in the queue
+    'mps_sorights' / mach_port_rights_t,  # how many send-once rights
+    'mps_srights' / boolean_t,  # do send rights exist?
+    'mps_pdrequest' / boolean_t,  # port-deleted requested?
+    'mps_nsrequest' / boolean_t,  # no-senders requested?
+    'mps_flags' / mps_flags_t,  # port flags
 )
