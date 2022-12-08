@@ -150,3 +150,8 @@ class RpcConnectionRefusedError(BadReturnValueError):
 
 class NoSuchActivityError(RpcClientException):
     pass
+
+
+class RpcFailedLaunchingAppError(BadReturnValueError):
+    """ Failed to launch application """
+    pass
