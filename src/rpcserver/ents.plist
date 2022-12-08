@@ -86,5 +86,7 @@
 	</array>
     <key>com.apple.duet.activityscheduler.allow</key>
     <true/>
+    <key>com.apple.springboard.launchapplications</key>
+    <true/>
 </dict>
 </plist>
