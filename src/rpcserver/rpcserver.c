@@ -833,8 +833,6 @@ bool handle_poke(int sockfd)
     cmd_poke_t cmd;
 
 #if defined(SAFE_READ_WRITES) && defined(__APPLE__)
-    mach_port_t task;
-    CHECK(task_for_pid(mach_task_self(), getpid(), &task) == KERN_SUCCESS);
     CHECK(recvall(sockfd, (char *)&cmd, sizeof(cmd)));
 
     // TODO: consider splitting recieve chunks
@@ -842,7 +840,7 @@ bool handle_poke(int sockfd)
     CHECK(data);
     CHECK(recvall(sockfd, data, cmd.size));
 
-    if (vm_write(task, cmd.address, (vm_offset_t)data, cmd.size) == KERN_SUCCESS)
+    if (vm_write(mach_task_self(), cmd.address, (vm_offset_t)data, cmd.size) == KERN_SUCCESS)
     {
         CHECK(send_reply(sockfd, CMD_REPLY_POKE));
     }
