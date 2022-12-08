@@ -7,6 +7,7 @@ from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
 from rpcclient.ios.screen_capture import ScreenCapture
+from rpcclient.ios.sprinboard import SpringBoard
 from rpcclient.ios.telephony import Telephony
 from rpcclient.ios.wifi import IosWifi
 from rpcclient.protocol import arch_t
@@ -25,6 +26,7 @@ class IosClient(DarwinClient):
         self.screen_capture = ScreenCapture(self)
         self.accessibility = Accessibility(self)
         self.wifi = IosWifi(self)
+        self.springboard = SpringBoard(self)
         self._radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
 
     @property
