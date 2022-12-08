@@ -785,7 +785,7 @@ bool handle_peek(int sockfd)
     u64 *argv = NULL;
     cmd_peek_t cmd;
 
-#if defined(__APPLE__)
+#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
     mach_port_t task;
     vm_offset_t data = 0;
     mach_msg_type_number_t size;
