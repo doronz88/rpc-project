@@ -23,12 +23,12 @@ class SpringBoard:
     def get_screen_lock_status(self) -> ScreenLockStatus:
         """ get lockscreen and passcode status using SpringBoardServices """
         server_port = self.get_spring_board_server_port()
-        is_lock = self._client.symbols.malloc(8)
-        is_lock[0] = 0
-        is_passcode = self._client.symbols.malloc(8)
-        is_passcode[0] = 0
-        self._client.symbols.SBGetScreenLockStatus(server_port, is_lock, is_passcode)
-        return ScreenLockStatus(is_lock[0] == 1, is_passcode[0] == 1)
+        with self._client.safe_malloc(8) as p_is_lock:
+            with self._client.safe_malloc(8) as p_is_passcode:
+                p_is_lock[0] = 0
+                p_is_passcode[0] = 0
+                self._client.symbols.SBGetScreenLockStatus(server_port, p_is_lock, p_is_passcode)
+                return ScreenLockStatus(p_is_lock[0] == 1, p_is_passcode[0] == 1)
 
     def open_sensitive_url_and_unlock(self, url: str, unlock: bool = True) -> None:
         """ open default application according to url scheme """
