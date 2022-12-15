@@ -1,5 +1,6 @@
 import datetime
 
+from rpcclient.darwin.cfpreferences import kCFPreferencesAnyHost
 from rpcclient.exceptions import BadReturnValueError
 
 
@@ -23,14 +24,20 @@ class Syslog:
         enable/disable HAR logging
         https://github.com/doronz88/harlogger
         """
+        users = ['mobile', 'root']
         if enable:
-            self._client.preferences.cf.set('har-capture-global',
-                                            self._client.cf(datetime.datetime(9999, 12, 31, 23, 59, 59)),
-                                            'com.apple.CFNetwork')
+            for user in users:
+                self._client.preferences.cf.set('har-capture-global',
+                                                datetime.datetime(9999, 12, 31, 23, 59, 59),
+                                                'com.apple.CFNetwork', user, hostname=kCFPreferencesAnyHost)
+                self._client.preferences.cf.set('har-body-size-limit',
+                                                1024 ** 2,
+                                                'com.apple.CFNetwork', user, hostname=kCFPreferencesAnyHost)
         else:
-            self._client.preferences.cf.set('har-capture-global',
-                                            self._client.cf(datetime.datetime(1970, 1, 1, 1, 1, 1)),
-                                            'com.apple.CFNetwork')
+            for user in users:
+                self._client.preferences.cf.set('har-capture-global',
+                                                datetime.datetime(1970, 1, 1, 1, 1, 1),
+                                                'com.apple.CFNetwork', user, hostname=kCFPreferencesAnyHost)
 
         if self._client.symbols.notify_post('com.apple.CFNetwork.har-capture-update'):
             raise BadReturnValueError('notify_post() failed')
