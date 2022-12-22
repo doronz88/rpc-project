@@ -364,6 +364,9 @@ class Process:
 
         raise ProcessSymbolAbsentError()
 
+    def get_symbol_class_info(self, address: int) -> DarwinSymbol:
+        return self.vmu_object_identifier.objc_call('classInfoForMemory:length:', address, 8)
+
     def get_symbol_address(self, name: str, lib: str = None) -> ProcessSymbol:
         if lib is not None:
             return ProcessSymbol.create(
@@ -713,6 +716,7 @@ class DarwinProcesses(Processes):
     def __init__(self, client):
         super().__init__(client)
         self._load_symbolication_library()
+        self._self_process = Process(self._client, self._client.pid)
 
     def _load_symbolication_library(self):
         options = [
@@ -722,6 +726,10 @@ class DarwinProcesses(Processes):
             if self._client.dlopen(option, RTLD_NOW):
                 return
         raise MissingLibraryError('Symbolication library isn\'t available')
+
+    def get_self(self) -> Process:
+        """ get self process """
+        return self._self_process
 
     def get_by_pid(self, pid: int) -> Process:
         """ get process object by pid """
