@@ -203,3 +203,13 @@ class DarwinClient(Client):
                         node.id,
                         symbol
                     )
+
+    @property
+    def loaded_objc_classes(self) -> typing.List[str]:
+        result = []
+        count = self.symbols.objc_getClassList(0, 0)
+        with self.safe_malloc(count * 8) as classes:
+            self.symbols.objc_getClassList(classes, count)
+            for i in range(count):
+                result.append(self.symbols.class_getName(classes[i]).peek_str())
+        return result

@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pathlib import Path
 from typing import Mapping
 from functools import partial
 
@@ -134,6 +135,11 @@ class Class:
             jar[f'[{self.name} {m.name}]'] = m.address
 
         return jar
+
+    @property
+    def bundle_path(self) -> Path:
+        return Path(self._client.symbols.objc_getClass('NSBundle')
+                    .objc_call('bundleForClass:', self._class_object).objc_call('bundlePath').py())
 
     def __dir__(self):
         result = set()
