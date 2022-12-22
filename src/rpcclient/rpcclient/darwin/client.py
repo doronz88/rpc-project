@@ -32,7 +32,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import RpcClientException, MissingLibraryError, GettingObjectiveCClassError
+from rpcclient.exceptions import MissingLibraryError, GettingObjectiveCClassError
 from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
 from rpcclient.structs.consts import RTLD_NOW
 from rpcclient.symbol import Symbol
@@ -162,33 +162,16 @@ class DarwinClient(Client):
         """
         return objective_c_class.Class.from_class_name(self, name)
 
-    @staticmethod
-    def is_objc_type(symbol: DarwinSymbol) -> bool:
+    def is_objc_type(self, symbol: DarwinSymbol) -> bool:
         """
         Test if a given symbol represents an objc object
         :param symbol:
         :return:
         """
-        # Tagged pointers are ObjC objects
-        if symbol & OBJC_TAG_MASK == OBJC_TAG_MASK:
-            return True
-
-        # Class are not ObjC objects
-        for mask, value in ISA_MAGICS:
-            if symbol & mask == value:
-                return False
-
-        try:
-            with symbol.change_item_size(8):
-                isa = symbol[0]
-        except RpcClientException:
+        class_info = self.processes.get_self().get_symbol_class_info(symbol)
+        if class_info == 0:
             return False
-
-        for mask, value in ISA_MAGICS:
-            if isa & mask == value:
-                return True
-
-        return False
+        return 'ObjC' == class_info.objc_call('typeName').py()
 
     def _ipython_run_cell_hook(self, info):
         """
