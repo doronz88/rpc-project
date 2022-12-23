@@ -19,7 +19,7 @@ class Class:
     Wrapper for ObjectiveC Class object.
     """
 
-    def __init__(self, client, class_object=0, class_data: Mapping = None):
+    def __init__(self, client, class_object=0, class_data: Mapping = None, lazy=False):
         """
         :param rpcclient.darwin.client.DarwinClient client: Darwin client.
         :param rpcclient.darwin.objective_c_symbol.Symbol class_object:
@@ -32,10 +32,11 @@ class Class:
         self.methods = []
         self.name = ''
         self.super = None
-        if class_data is None:
-            self.reload()
-        else:
-            self._load_class_data(class_data)
+        if not lazy:
+            if class_data is None:
+                self.reload()
+            else:
+                self._load_class_data(class_data)
 
     @staticmethod
     def from_class_name(client, class_name: str):

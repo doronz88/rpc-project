@@ -13,3 +13,4 @@ capstone
 xonsh
 plumbum
 pygnuutils
+tqdm
