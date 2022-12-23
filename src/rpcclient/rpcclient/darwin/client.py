@@ -9,6 +9,7 @@ from typing import Mapping
 
 from cached_property import cached_property
 from construct import Int64sl
+from tqdm import trange
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
@@ -75,6 +76,7 @@ class DarwinClient(Client):
         self.bluetooth = Bluetooth(self)
         self.core_graphics = CoreGraphics(self)
         self.keychain = Keychain(self)
+        self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
 
     @property
@@ -180,9 +182,6 @@ class DarwinClient(Client):
         """
         super()._ipython_run_cell_hook(info)
 
-        if info.raw_cell.startswith('!') or info.raw_cell.endswith('?'):
-            return
-
         for node in ast.walk(ast.parse(info.raw_cell)):
             if not isinstance(node, ast.Name):
                 # we are only interested in names
@@ -204,12 +203,22 @@ class DarwinClient(Client):
                         symbol
                     )
 
-    @property
-    def loaded_objc_classes(self) -> typing.List[str]:
-        result = []
+    def rebind_symbols(self, populate_global_scope=True) -> None:
+        self.loaded_objc_classes.clear()
+
+        # enumerate all loaded objc classes
         count = self.symbols.objc_getClassList(0, 0)
         with self.safe_malloc(count * 8) as classes:
             self.symbols.objc_getClassList(classes, count)
-            for i in range(count):
-                result.append(self.symbols.class_getName(classes[i]).peek_str())
-        return result
+            for i in trange(count):
+                class_object = classes[i]
+                class_name = self.symbols.class_getName(class_object).peek_str()
+                self.loaded_objc_classes.append(class_name)
+
+                # add each one but don't require to actually init them all with their respective data
+                objc_class = objective_c_class.Class(self, classes[i], lazy=True)
+                if populate_global_scope:
+                    self._add_global(
+                        class_name,
+                        objc_class
+                    )
