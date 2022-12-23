@@ -175,6 +175,10 @@ class DarwinClient(Client):
             return False
         return 'ObjC' == class_info.objc_call('typeName').py()
 
+    def _add_global(self, name: str, value) -> None:
+        super()._add_global(name, value)
+        globals()[name] = value
+
     def _ipython_run_cell_hook(self, info):
         """
         Enable lazy loading for symbols
@@ -187,8 +191,17 @@ class DarwinClient(Client):
                 # we are only interested in names
                 continue
 
-            if node.id in locals() or node.id in globals() or node.id in dir(builtins):
-                # That are undefined
+            if node.id in locals():
+                continue
+
+            global_var = globals().get(node.id)
+            if global_var is not None:
+                if isinstance(global_var, objective_c_class.Class) and global_var.name == '':
+                    # reload lazy classes right before actual use
+                    global_var.reload()
+                continue
+
+            if node.id in dir(builtins):
                 continue
 
             if not hasattr(SymbolsJar, node.id):

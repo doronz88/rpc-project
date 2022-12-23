@@ -457,7 +457,7 @@ class Client:
         print(USAGE)
         IPython.start_ipython(config=c, user_ns=namespace)
 
-    def _add_global(self, name, value):
+    def _add_global(self, name: str, value) -> None:
         globals()[name] = value
 
     def _ipython_run_cell_hook(self, info):
