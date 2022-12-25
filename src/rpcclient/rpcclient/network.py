@@ -150,6 +150,7 @@ class Network:
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
+            self._client.symbols.close(sockfd)
             self._client.raise_errno_exception(f'failed connecting to: {address}:{port}')
         return Socket(self._client, sockfd)
 
@@ -160,6 +161,7 @@ class Network:
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
+            self._client.symbols.close(sockfd)
             self._client.raise_errno_exception(f'failed connecting to: {filename}')
         return Socket(self._client, sockfd)
 
