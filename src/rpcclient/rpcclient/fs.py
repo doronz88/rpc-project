@@ -1,5 +1,7 @@
+import contextlib
 import os
 import posixpath
+import tempfile
 from pathlib import Path
 from typing import List
 
@@ -539,3 +541,15 @@ class Fs:
 
         if not topdown:
             yield top, dirs, files
+
+    @contextlib.contextmanager
+    @path_to_str('remote')
+    def remote_file(self, remote: str):
+        with tempfile.TemporaryDirectory() as local_dir:
+            local = Path(local_dir) / Path(remote).parts[-1]
+            if self.accessible(remote):
+                self.pull(remote, local.absolute())
+            try:
+                yield local.absolute()
+            finally:
+                pass
