@@ -25,6 +25,7 @@ from rpcclient.darwin.ioregistry import IORegistry
 from rpcclient.darwin.keychain import Keychain
 from rpcclient.darwin.location import Location
 from rpcclient.darwin.media import DarwinMedia
+from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
 from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
@@ -76,6 +77,7 @@ class DarwinClient(Client):
         self.bluetooth = Bluetooth(self)
         self.core_graphics = CoreGraphics(self)
         self.keychain = Keychain(self)
+        self.network = DarwinNetwork(self)
         self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
 
