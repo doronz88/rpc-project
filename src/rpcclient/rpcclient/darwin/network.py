@@ -12,7 +12,7 @@ class DarwinNetwork(Network):
     def __init__(self, client):
         super().__init__(client)
 
-    def remove_dns_pinning(self) -> None:
+    def remove_certificate_pinning(self) -> None:
         with self._client.fs.remote_file(PINNING_RULED_DB) as local_db_file:
             # truncate pinning rules
             conn = sqlite3.connect(local_db_file)
