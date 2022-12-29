@@ -97,7 +97,7 @@ Connecting via:
 python3 -m rpcclient <HOST> [-p port]
 ```
 
-> **_NOTE:_** If you are attempting to connect to a **jailbroken iOS device**, you will be required to also create a TCP tunnel to your device. For example, using: [`pymobiledevice3`](https://github.com/doronz88/pymobiledevice3): ```python3 -m pymobiledevice3 lockdown forward 5910 5910 -vvv```
+> **_NOTE:_** If you are attempting to connect to a **jailbroken iOS device**, you will be required to also create a TCP tunnel to your device. For example, using: [`pymobiledevice3`](https://github.com/doronz88/pymobiledevice3): ```python3 -m pymobiledevice3 usbmux forward 5910 5910 -vvv```
 
 You should now get a nice iPython shell looking like this:
 
