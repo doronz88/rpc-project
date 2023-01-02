@@ -349,8 +349,12 @@ class Fs:
     @path_to_str('remote')
     @path_to_str('local')
     def _pull_file(self, remote: str, local: str):
-        with open(local, 'wb') as f:
-            f.write(self.read_file(remote))
+        with open(local, 'wb') as local_file:
+            with self.open(remote, 'r') as remote_file:
+                buf = remote_file.read(File.CHUNK_SIZE)
+                while len(buf) > 0:
+                    local_file.write(buf)
+                    buf = remote_file.read(File.CHUNK_SIZE)
 
     @path_to_str('remote')
     @path_to_str('local')
