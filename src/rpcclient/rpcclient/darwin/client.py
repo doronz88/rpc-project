@@ -249,3 +249,10 @@ class DarwinClient(Client):
                         class_name,
                         objc_class
                     )
+
+    def load_framework(self, name: str) -> DarwinSymbol:
+        lib = self.dlopen(f'/System/Library/Frameworks/{name}.framework/{name}', RTLD_NOW)
+        if lib == 0:
+            lib = self.dlopen(f'/System/Library/PrivateFrameworks/{name}.framework/{name}', RTLD_NOW)
+        if lib == 0:
+            raise MissingLibraryError(f'failed to load {name}')
