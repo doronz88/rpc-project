@@ -15,8 +15,7 @@ from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.common import CfSerializable
-from rpcclient.darwin.consts import kCFAllocatorDefault, \
-    CFPropertyListFormat, CFPropertyListMutabilityOptions
+from rpcclient.darwin.consts import kCFAllocatorDefault, CFPropertyListFormat, CFPropertyListMutabilityOptions
 from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
@@ -34,7 +33,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import MissingLibraryError, GettingObjectiveCClassError
+from rpcclient.exceptions import MissingLibraryError, GettingObjectiveCClassError, CfSerializationError
 from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
 from rpcclient.structs.consts import RTLD_NOW
 from rpcclient.symbol import Symbol
@@ -80,6 +79,7 @@ class DarwinClient(Client):
         self.network = DarwinNetwork(self)
         self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
+        self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
     @property
     def modules(self) -> typing.List[str]:
@@ -130,8 +130,15 @@ class DarwinClient(Client):
         return DarwinSymbol.create(symbol, self)
 
     def decode_cf(self, symbol: Symbol) -> CfSerializable:
-        objc_data = self._NSPropertyListSerialization.dataWithPropertyList_format_options_error_(
-            symbol, CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0, 0, 0)
+        if self.symbols.CFGetTypeID(symbol) == self._CFNullTypeID:
+            return None
+
+        with self.safe_malloc(8) as p_error:
+            p_error[0] = 0
+            objc_data = self._NSPropertyListSerialization.dataWithPropertyList_format_options_error_(
+                symbol, CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0, 0, p_error)
+            if p_error[0] != 0:
+                raise CfSerializationError()
         if objc_data == 0:
             return None
         count = self.symbols.CFDataGetLength(objc_data)
@@ -146,8 +153,13 @@ class DarwinClient(Client):
 
         plist_bytes = plistlib.dumps(o, fmt=plistlib.FMT_BINARY)
         plist_objc_bytes = self.symbols.CFDataCreate(kCFAllocatorDefault, plist_bytes, len(plist_bytes))
-        return self._NSPropertyListSerialization.propertyListWithData_options_format_error_(
-            plist_objc_bytes, CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves, 0, 0)
+        with self.safe_malloc(8) as p_error:
+            p_error[0] = 0
+            result = self._NSPropertyListSerialization.propertyListWithData_options_format_error_(
+                plist_objc_bytes, CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves, 0, p_error)
+            if p_error[0] != 0:
+                raise CfSerializationError()
+            return result
 
     def objc_symbol(self, address) -> ObjectiveCSymbol:
         """
@@ -237,3 +249,10 @@ class DarwinClient(Client):
                         class_name,
                         objc_class
                     )
+
+    def load_framework(self, name: str) -> DarwinSymbol:
+        lib = self.dlopen(f'/System/Library/Frameworks/{name}.framework/{name}', RTLD_NOW)
+        if lib == 0:
+            lib = self.dlopen(f'/System/Library/PrivateFrameworks/{name}.framework/{name}', RTLD_NOW)
+        if lib == 0:
+            raise MissingLibraryError(f'failed to load {name}')

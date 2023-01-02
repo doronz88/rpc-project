@@ -911,3 +911,14 @@ CG_KEY_LEFT = 123
 CG_KEY_RIGHT = 124
 CG_KEY_DOWN = 125
 CG_KEY_UP = 126
+
+
+class OsLogLevel(IntEnum):
+    """ LogLevel. Extracted by reversing LevelForKey(id prefs, NSString *key) """
+
+    OFF = 0
+    NONE = 0
+    UNDEFINED = 1  # no such plist key
+    DEFAULT = 2
+    INFO = 3
+    DEBUG = 4

@@ -90,5 +90,9 @@
 	<true/>
 	<key>com.apple.backboardd.launchapplications</key>
 	<true/>
+	<key>com.apple.private.logging.admin</key>
+	<true/>
+	<key>com.apple.security.exception.shared-preference.read-write</key>
+	<string>com.apple.CFNetwork</string>
 </dict>
 </plist>
