@@ -39,7 +39,7 @@ class NoSuchPreferenceError(RpcClientException):
 
 
 class CfSerializationError(RpcClientException):
-    """ failed to decode a cfobject into a python object """
+    """ failed to encode/decode a cfobject into/from a python object """
     pass
 
 
