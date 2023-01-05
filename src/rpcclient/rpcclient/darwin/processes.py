@@ -764,8 +764,9 @@ class DarwinProcesses(Processes):
                 result.append(p)
         return result
 
-    def get_process_by_listening_port(self, port: int) -> Optional[Process]:
+    def get_processes_by_listening_port(self, port: int) -> List[Process]:
         """ get a process object listening on the specified port """
+        listening_processes = []
         for process in self.list():
             try:
                 fds = process.fds
@@ -777,7 +778,8 @@ class DarwinProcesses(Processes):
             for fd in fds:
                 if (isinstance(fd, Ipv4SocketFd) or isinstance(fd, Ipv6SocketFd)) and \
                         fd.local_port == port and fd.remote_port == 0:
-                    return process
+                    listening_processes.append(process)
+        return listening_processes
 
     def lsof(self) -> Mapping[int, List[Fd]]:
         """ get dictionary of pid to its opened fds """
