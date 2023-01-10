@@ -214,6 +214,7 @@ class Client:
                 fixed_argv.append({'type': argument_type_t.Double, 'value': tmp})
 
             else:
+                [self.symbols.free(f) for f in free_list]
                 raise ArgumentError(f'invalid parameter type: {arg}')
 
         message = protocol_message_t.build({
