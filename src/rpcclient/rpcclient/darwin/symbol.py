@@ -1,3 +1,7 @@
+from typing import Optional, List
+
+from osstatus.cache import get_possible_error_codes, ErrorCode
+
 from rpcclient.exceptions import UnrecognizedSelectorError
 from rpcclient.symbol import Symbol
 
@@ -42,3 +46,7 @@ class DarwinSymbol(Symbol):
         :return: Object representing the ObjectiveC symbol
         """
         return self._client.objc_symbol(self)
+
+    @property
+    def osstatus(self) -> Optional[List[ErrorCode]]:
+        return get_possible_error_codes(self)
