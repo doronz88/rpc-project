@@ -18,6 +18,9 @@ class CrashReports:
         """
         self._client.preferences.cf.set('SymbolicateCrashes', enabled, 'com.apple.CrashReporter', 'root')
 
+        # bugfix: at some point, this setting was moved to "com.apple.osanalytics" bundle identifier
+        self._client.preferences.cf.set('SymbolicateCrashes', enabled, 'com.apple.osanalytics', 'root')
+
     def list(self, prefixed='') -> List[CrashReport]:
         """ get a list of all crash reports as CrashReport parsed objects """
         result = []
