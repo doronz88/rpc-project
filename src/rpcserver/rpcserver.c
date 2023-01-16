@@ -785,8 +785,7 @@ bool handle_peek(int sockfd)
     u64 *argv = NULL;
     cmd_peek_t cmd;
 
-#if defined(__APPLE__)
-    mach_port_t task;
+#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
     vm_offset_t data = 0;
     mach_msg_type_number_t size;
 
@@ -795,6 +794,7 @@ bool handle_peek(int sockfd)
     {
         CHECK(send_reply(sockfd, CMD_REPLY_PEEK));
         CHECK(sendall(sockfd, (char *)cmd.address, cmd.size));
+        CHECK(vm_deallocate(mach_task_self(), data, size) == KERN_SUCCESS);
     }
     else
     {
@@ -814,12 +814,6 @@ error:
         free(argv);
     }
 
-#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
-    if (data)
-    {
-        vm_deallocate(task, data, size);
-    }
-#endif // __APPLE__
     return result;
 }
 
