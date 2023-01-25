@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from pycrashreport.crash_report import CrashReport
+from pycrashreport.crash_report import get_crash_report_from_buf, CrashReportBase
 
 
 class CrashReports:
@@ -21,7 +21,7 @@ class CrashReports:
         # bugfix: at some point, this setting was moved to "com.apple.osanalytics" bundle identifier
         self._client.preferences.cf.set('SymbolicateCrashes', enabled, 'com.apple.osanalytics', 'root')
 
-    def list(self, prefixed='') -> List[CrashReport]:
+    def list(self, prefixed='') -> List[CrashReportBase]:
         """ get a list of all crash reports as CrashReport parsed objects """
         result = []
         for root in self._client.roots:
@@ -33,7 +33,7 @@ class CrashReports:
             for entry in self._client.fs.scandir(root):
                 if entry.is_file() and entry.name.endswith('.ips') and entry.name.startswith(prefixed):
                     with self._client.fs.open(entry.path, 'r') as f:
-                        result.append(CrashReport(f.read().decode(), filename=entry.path))
+                        result.append(get_crash_report_from_buf(f.read().decode(), filename=entry.path))
         return result
 
     def clear(self, prefixed=''):
