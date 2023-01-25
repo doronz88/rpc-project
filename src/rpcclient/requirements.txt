@@ -7,7 +7,7 @@ cached-property
 dataclasses; python_version<"3.7"
 pygments
 objc_types_decoder
-pycrashreport>=1.0.1
+pycrashreport>=1.0.2
 lief
 capstone
 xonsh
