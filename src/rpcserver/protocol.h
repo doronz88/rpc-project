@@ -25,7 +25,8 @@ typedef enum
     CMD_REPLY_POKE = 11,
     CMD_LISTDIR = 12,
     CMD_SHOWOBJECT = 13,
-    CMD_SHOWCLASS = 14
+    CMD_SHOWCLASS = 14,
+    CMD_GET_CLASS_LIST = 15
 } cmd_type_t;
 
 typedef enum

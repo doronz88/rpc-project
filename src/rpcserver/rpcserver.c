@@ -28,6 +28,7 @@
 
 int handle_showobject(int sockfd);
 int handle_showclass(int sockfd);
+int handle_get_class_list(int sockfd);
 
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
@@ -35,6 +36,7 @@ int handle_showclass(int sockfd);
 #else
 int handle_showobject(int sockfd) { return 0; }
 int handle_showclass(int sockfd) { return 0; }
+int handle_get_class_list(int sockfd) { return 0; }
 #endif // __APPLE__
 
 #include "common.h"
@@ -1080,6 +1082,11 @@ void handle_client(int sockfd)
         case CMD_SHOWCLASS:
         {
             handle_showclass(sockfd);
+            break;
+        }
+        case CMD_GET_CLASS_LIST:
+        {
+            handle_get_class_list(sockfd);
             break;
         }
         default:
