@@ -49,6 +49,7 @@ The python client utilizes the ability to call native functions in order to prov
   - iOS Only:
     - MobileGestalt (`p.mobile_gestalt.*`)
     - Backlight adjusting (`p.backlight.*`)
+    - Dump decrypted applications (`p.processes.get_by_basename(process_name).dump_app('/path/to/output')`)
 
 and much more...
 

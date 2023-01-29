@@ -18,13 +18,14 @@ from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fd
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
     PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
     task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
-    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT, procargs2_t
+    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT, procargs2_t, mach_header_t, \
+    FAT_CIGAM, FAT_MAGIC, fat_header, LOAD_COMMAND_TYPE
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError, \
     RpcClientException, ProcessSymbolAbsentError
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
-from rpcclient.structs.consts import SIGTERM, RTLD_NOW
+from rpcclient.structs.consts import SIGTERM, RTLD_NOW, SEEK_SET
 from rpcclient.symbol import Symbol, ADDRESS_SIZE_TO_STRUCT_FORMAT
 from rpcclient.sysctl import CTL, KERN
 
@@ -35,6 +36,9 @@ _BACKTRACE_FRAME_REGEX = re.compile(r'\[\s*(\d+)\] (0x[0-9a-f]+)\s+\{(.+?) \+ (.
 FdStruct = namedtuple('FdStruct', 'fd struct')
 
 logger = logging.getLogger(__name__)
+
+CHUNK_SIZE = 1024 * 64
+APP_SUFFIX = '.app/'
 
 
 @dataclasses.dataclass()
@@ -411,6 +415,10 @@ class Process:
         return result
 
     @property
+    def app_images(self) -> List[Image]:
+        return [image for image in self.images if APP_SUFFIX in image.path]
+
+    @property
     def threads(self) -> List[Thread]:
         result = []
         with self._client.safe_malloc(8) as threads:
@@ -691,26 +699,59 @@ class Process:
                 raise BadReturnValueError('vm_allocate() failed')
             return self.get_process_symbol(out_address[0])
 
-    @path_to_str('filename')
-    def dump(self, filename: str) -> None:
-        """ dump macho contiguous memory layout into given file """
-        last_address = None
+    @path_to_str('output_dir')
+    def dump_app(self, output_dir: str, chunk_size=CHUNK_SIZE) -> None:
+        """
+        Based on:
+        https://github.com/AloneMonkey/frida-ios-dump/blob/master/dump.js
+        """
+        for image in self.app_images:
+            relative_name = image.path.split(APP_SUFFIX, 1)[1]
+            output_file = Path(output_dir).expanduser() / relative_name
+            output_file.parent.mkdir(exist_ok=True, parents=True)
+            logger.debug(f'dumping: {output_file}')
 
-        with open(filename, 'wb') as f:
-            for region in self.regions:
-                logger.debug(f'dumping {region}')
+            with open(output_file, 'wb') as output_file:
+                macho_in_memory = mach_header_t.parse_stream(image.address)
 
-                if last_address is not None and region.start != last_address:
-                    # non-contiguous memory
-                    break
-                last_address = region.end
+                with self._client.fs.open(image.path, 'r') as fat_file:
+                    # locating the correct MachO offset within the FAT image (if FAT)
+                    magic_in_fs = Int32ul.parse_stream(fat_file)
+                    fat_file.seek(0, SEEK_SET)
+                    if magic_in_fs in (FAT_CIGAM, FAT_MAGIC):
+                        parsed_fat = fat_header.parse_stream(fat_file)
+                        for arch in parsed_fat.archs:
+                            if arch.cputype == macho_in_memory.cputype and arch.cpusubtype == macho_in_memory.cpusubtype:
+                                # correct MachO offset found
+                                file_offset = arch.offset
+                                break
+                        fat_file.seek(file_offset, SEEK_SET)
 
-                if region.protection == '---':
-                    buf = b'\x00' * region.size
-                else:
-                    buf = self.peek(region.start, region.size)
+                    # perform actual MachO dump
+                    output_file.seek(0, SEEK_SET)
+                    while True:
+                        chunk = fat_file.read(chunk_size)
+                        if len(chunk) == 0:
+                            break
+                        output_file.write(chunk)
 
-                f.write(buf)
+                    offset_cryptid = None
+
+                    # if image is encrypted, patch its encryption loader command
+                    for load_command in macho_in_memory.load_commands:
+                        if load_command.cmd in (LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO_64,
+                                                LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO):
+                            offset_cryptid = load_command.data.cryptid_offset - image.address
+                            crypt_offset = load_command.data.cryptoff
+                            crypt_size = load_command.data.cryptsize
+                            break
+
+                    if offset_cryptid is not None:
+                        output_file.seek(offset_cryptid, SEEK_SET)
+                        output_file.write(b'\x00' * 4)  # cryptid = 0
+                        output_file.seek(crypt_offset, SEEK_SET)
+                        output_file.flush()
+                        output_file.write((image.address + crypt_offset).peek(crypt_size))
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
