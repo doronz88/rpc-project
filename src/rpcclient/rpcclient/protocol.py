@@ -16,7 +16,8 @@ cmd_type_t = Enum(Int32ul,
                   CMD_REPLY_POKE=11,
                   CMD_LISTDIR=12,
                   CMD_SHOWOBJECT=13,
-                  CMD_SHOWCLASS=14
+                  CMD_SHOWCLASS=14,
+                  CMD_GET_CLASS_LIST=15
                   )
 
 arch_t = Enum(Int32ul,

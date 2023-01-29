@@ -8,7 +8,7 @@ from functools import lru_cache
 from typing import Mapping
 
 from cached_property import cached_property
-from construct import Int64sl
+from construct import Int64sl, Int32ul, Int8ul, Int64ul
 from tqdm import trange
 
 from rpcclient.client import Client
@@ -125,6 +125,22 @@ class DarwinClient(Client):
             response = self._recvall(response_len)
         return json.loads(response)
 
+    def get_class_list(self) -> typing.Mapping[str, objective_c_class.Class]:
+        message = protocol_message_t.build({
+            'cmd_type': cmd_type_t.CMD_GET_CLASS_LIST,
+            'data': b'',
+        })
+        result = {}
+        with self._protocol_lock:
+            self._sock.sendall(message)
+            count = Int32ul.parse(self._recvall(Int32ul.sizeof()))
+            for i in trange(count):
+                name_len = Int8ul.parse(self._recvall(Int8ul.sizeof()))
+                name = self._recvall(name_len).decode()
+                class_ = objective_c_class.Class(self, Int64ul.parse(self._recvall(Int64ul.sizeof())), lazy=True)
+                result[name] = class_
+        return result
+
     def symbol(self, symbol: int):
         """ at a symbol object from a given address """
         return DarwinSymbol.create(symbol, self)
@@ -234,21 +250,13 @@ class DarwinClient(Client):
         self.loaded_objc_classes.clear()
 
         # enumerate all loaded objc classes
-        count = self.symbols.objc_getClassList(0, 0)
-        with self.safe_malloc(count * 8) as classes:
-            self.symbols.objc_getClassList(classes, count)
-            for i in trange(count):
-                class_object = classes[i]
-                class_name = self.symbols.class_getName(class_object).peek_str()
-                self.loaded_objc_classes.append(class_name)
-
-                # add each one but don't require to actually init them all with their respective data
-                objc_class = objective_c_class.Class(self, classes[i], lazy=True)
-                if populate_global_scope:
-                    self._add_global(
-                        class_name,
-                        objc_class
-                    )
+        for name, class_ in self.get_class_list().items():
+            self.loaded_objc_classes.append(name)
+            if populate_global_scope:
+                self._add_global(
+                    name,
+                    class_
+                )
 
     def load_framework(self, name: str) -> DarwinSymbol:
         lib = self.dlopen(f'/System/Library/Frameworks/{name}.framework/{name}', RTLD_NOW)
