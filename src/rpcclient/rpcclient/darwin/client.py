@@ -1,6 +1,7 @@
 import ast
 import builtins
 import json
+import logging
 import plistlib
 import typing
 from collections import namedtuple
@@ -9,7 +10,7 @@ from typing import Mapping
 
 from cached_property import cached_property
 from construct import Int64sl, Int32ul, Int8ul, Int64ul
-from tqdm import trange
+from tqdm import trange, tqdm
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
@@ -48,6 +49,16 @@ ISA_MAGICS = [
 ]
 # Mask for tagged pointer, from objc-internal.h
 OBJC_TAG_MASK = (1 << 63)
+
+FRAMEWORKS_PATH = '/System/Library/Frameworks'
+PRIVATE_FRAMEWORKS_PATH = '/System/Library/PrivateFrameworks'
+LIB_PATH = '/usr/lib'
+
+FRAMEWORKS_BLACKLIST = (
+    'PowerlogLiteOperators.framework', 'PowerlogCore.framework', 'PowerlogHelperdOperators.framework',
+    'PowerlogFullOperators.framework', 'PowerlogAccounting.framework',)
+
+logger = logging.getLogger(__name__)
 
 
 class DarwinClient(Client):
@@ -247,6 +258,7 @@ class DarwinClient(Client):
                     )
 
     def rebind_symbols(self, populate_global_scope=True) -> None:
+        logger.debug('rebinding symbols')
         self.loaded_objc_classes.clear()
 
         # enumerate all loaded objc classes
@@ -259,8 +271,28 @@ class DarwinClient(Client):
                 )
 
     def load_framework(self, name: str) -> DarwinSymbol:
-        lib = self.dlopen(f'/System/Library/Frameworks/{name}.framework/{name}', RTLD_NOW)
+        lib = self.dlopen(f'{FRAMEWORKS_PATH}/{name}.framework/{name}', RTLD_NOW)
         if lib == 0:
-            lib = self.dlopen(f'/System/Library/PrivateFrameworks/{name}.framework/{name}', RTLD_NOW)
+            lib = self.dlopen(f'{PRIVATE_FRAMEWORKS_PATH}/{name}.framework/{name}', RTLD_NOW)
         if lib == 0:
             raise MissingLibraryError(f'failed to load {name}')
+
+    def load_all_libraries(self, rebind_symbols=True) -> None:
+        logger.debug(f'loading frameworks: {FRAMEWORKS_PATH}')
+        for filename in tqdm(self.fs.listdir(FRAMEWORKS_PATH)):
+            self.dlopen(f'{FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
+
+        logger.debug(f'loading frameworks: {PRIVATE_FRAMEWORKS_PATH}')
+        for filename in tqdm(self.fs.listdir(PRIVATE_FRAMEWORKS_PATH)):
+            if filename in FRAMEWORKS_BLACKLIST:
+                continue
+            self.dlopen(f'{PRIVATE_FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
+
+        logger.debug(f'loading libraries: {LIB_PATH}')
+        for filename in tqdm(self.fs.listdir(LIB_PATH)):
+            if not filename.endswith('.dylib'):
+                continue
+            self.dlopen(f'{LIB_PATH}/{filename}', RTLD_NOW)
+
+        if rebind_symbols:
+            self.rebind_symbols()
