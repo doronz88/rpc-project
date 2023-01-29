@@ -56,7 +56,8 @@ LIB_PATH = '/usr/lib'
 
 FRAMEWORKS_BLACKLIST = (
     'PowerlogLiteOperators.framework', 'PowerlogCore.framework', 'PowerlogHelperdOperators.framework',
-    'PowerlogFullOperators.framework', 'PowerlogAccounting.framework',)
+    'PowerlogFullOperators.framework', 'PowerlogAccounting.framework', 'JavaVM.framework', 'ActionKit.framework',
+    'ActionKitUI.framework', 'WorkflowUI.framework', )
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +287,8 @@ class DarwinClient(Client):
     def load_all_libraries(self, rebind_symbols=True) -> None:
         logger.debug(f'loading frameworks: {FRAMEWORKS_PATH}')
         for filename in tqdm(self.fs.listdir(FRAMEWORKS_PATH)):
+            if filename in FRAMEWORKS_BLACKLIST:
+                continue
             self.dlopen(f'{FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
 
         logger.debug(f'loading frameworks: {PRIVATE_FRAMEWORKS_PATH}')
