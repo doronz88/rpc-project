@@ -24,7 +24,7 @@ int handle_get_class_list(int sockfd)
             u8 name_len = strlen(name);
             CHECK(sendall(sockfd, (char *)&name_len, sizeof(name_len)));
             CHECK(sendall(sockfd, name, name_len));
-            CHECK(sendall(sockfd, (char *)classes[i], sizeof(classes[i])));
+            CHECK(sendall(sockfd, (char *)&classes[i], sizeof(classes[i])));
         }
 
         free(classes);

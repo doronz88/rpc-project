@@ -145,10 +145,16 @@ class DarwinClient(Client):
         with self._protocol_lock:
             self._sock.sendall(message)
             count = Int32ul.parse(self._recvall(Int32ul.sizeof()))
-            for i in trange(count):
+            for _ in trange(count):
                 name_len = Int8ul.parse(self._recvall(Int8ul.sizeof()))
-                name = self._recvall(name_len).decode()
-                class_ = objective_c_class.Class(self, Int64ul.parse(self._recvall(Int64ul.sizeof())), lazy=True)
+                try:
+                    name = self._recvall(name_len).decode()
+                except UnicodeDecodeError:
+                    self._recvall(Int64ul.sizeof())
+                    continue
+
+                class_ = objective_c_class.Class(self, self.symbol(Int64ul.parse(self._recvall(Int64ul.sizeof()))),
+                                                 lazy=True)
                 result[name] = class_
         return result
 
