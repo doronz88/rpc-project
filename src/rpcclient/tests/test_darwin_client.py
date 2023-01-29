@@ -16,3 +16,26 @@ def test_uname(client):
     """
     assert client.uname.sysname == 'Darwin'
     assert 'machine' in client.uname
+
+
+def test_get_class_list(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    assert len(client.get_class_list()) > 0
+
+
+def test_load_framework(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    assert client.load_framework('Foundation') != 0
+
+
+def test_load_all_libraries(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    original_count = len(client.modules)
+    client.load_all_libraries()
+    assert len(client.modules) > original_count
