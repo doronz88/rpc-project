@@ -37,6 +37,9 @@ class Symbol(int):
         symbol._prepare(client)
         return symbol
 
+    def _clone_from_value(self, value: int):
+        return self.create(value, self._client)
+
     def _prepare(self, client):
         self.retval_bit_count = RETVAL_BIT_COUNT
         self.is_retval_signed = True
@@ -159,7 +162,7 @@ class Symbol(int):
 
     def __add__(self, other):
         try:
-            return self._client.symbol(int(self) + other)
+            return self._clone_from_value(int(self) + other)
         except TypeError:
             return int(self) + other
 
@@ -168,19 +171,19 @@ class Symbol(int):
 
     def __sub__(self, other):
         try:
-            return self._client.symbol(int(self) - other)
+            return self._clone_from_value(int(self) - other)
         except TypeError:
             return int(self) - other
 
     def __rsub__(self, other):
         try:
-            return self._client.symbol(other - int(self))
+            return self._clone_from_value(other - int(self))
         except TypeError:
             return other - int(self)
 
     def __mul__(self, other):
         try:
-            return self._client.symbol(int(self) * other)
+            return self._clone_from_value(int(self) * other)
         except TypeError:
             return int(self) * other
 
@@ -188,27 +191,27 @@ class Symbol(int):
         return self.__mul__(other)
 
     def __truediv__(self, other):
-        return self._client.symbol(int(self) / other)
+        return self._clone_from_value(int(self) / other)
 
     def __floordiv__(self, other):
-        return self._client.symbol(int(self) // other)
+        return self._clone_from_value(int(self) // other)
 
     def __mod__(self, other):
-        return self._client.symbol(int(self) % other)
+        return self._clone_from_value(int(self) % other)
 
     def __and__(self, other):
-        return self._client.symbol(int(self) & other)
+        return self._clone_from_value(int(self) & other)
 
     def __or__(self, other):
-        return self._client.symbol(int(self) | other)
+        return self._clone_from_value(int(self) | other)
 
     def __xor__(self, other):
-        return self._client.symbol(int(self) ^ other)
+        return self._clone_from_value(int(self) ^ other)
 
     def __getitem__(self, item):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
-        return self._client.symbol(
+        return self._clone_from_value(
             struct.unpack(self._client._endianness + fmt, self._client.peek(addr, self.item_size))[0])
 
     def __setitem__(self, item, value):

@@ -263,6 +263,9 @@ class ProcessSymbol(Symbol):
         symbol.process = process
         return symbol
 
+    def _clone_from_value(self, value: int):
+        return self.create(value, self._client, self.process)
+
     def peek(self, count: int) -> bytes:
         return self.process.peek(self, count)
 
