@@ -187,7 +187,7 @@ class ArmThread64(Thread):
 @dataclasses.dataclass
 class Region:
     region_type: str
-    start: int
+    start: 'ProcessSymbol'
     end: int
     vsize: str
     protection: str
@@ -407,7 +407,7 @@ class Process:
         buf = self.peek(all_image_infos.infoArray, all_image_infos.infoArrayCount * dyld_image_info_t.sizeof())
         for image in Array(all_image_infos.infoArrayCount, dyld_image_info_t).parse(buf):
             path = self.peek_str(image.imageFilePath)
-            result.append(Image(address=image.imageLoadAddress, path=path))
+            result.append(Image(address=self.get_process_symbol(image.imageLoadAddress), path=path))
         return result
 
     @property
@@ -677,16 +677,19 @@ class Process:
             if len(line) >= i + 1:
                 region_detail = line[i]
 
-            result.append(Region(region_type=region_type, start=start, end=end, vsize=vsize, protection=protection[0],
-                                 protection_max=protection[1], region_detail=region_detail))
+            result.append(Region(region_type=region_type, start=self.get_process_symbol(start), end=end, vsize=vsize,
+                                 protection=protection[0], protection_max=protection[1], region_detail=region_detail))
 
         return result
+
+    def get_process_symbol(self, address: int) -> ProcessSymbol:
+        return ProcessSymbol.create(address, self._client, self)
 
     def vm_allocate(self, size: int) -> ProcessSymbol:
         with self._client.safe_malloc(8) as out_address:
             if self._client.symbols.vm_allocate(self.task, out_address, size, VM_FLAGS_ANYWHERE):
                 raise BadReturnValueError('vm_allocate() failed')
-            return ProcessSymbol.create(out_address[0], self._client, self)
+            return self.get_process_symbol(out_address[0])
 
     @path_to_str('filename')
     def dump(self, filename: str) -> None:
