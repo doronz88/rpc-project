@@ -1,5 +1,6 @@
 from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default, Aligned, CString, GreedyRange
+    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default, Aligned, CString, \
+    GreedyRange, Tell, Hex, LazyArray, BitStruct, BitsInteger, Octet, Seek, Int32ub
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
@@ -729,4 +730,163 @@ procargs2_t = Struct(
     'argv' / Array(this.argc, CString('utf8')),
     '_environ_apple' / GreedyRange(CString('utf8')),
     'environ_apple' / Computed(lambda ctx: [s for s in ctx._environ_apple if s]),
+)
+
+# See: https://opensource.apple.com/source/xnu/xnu-7195.81.3/EXTERNAL_HEADERS/mach-o/loader.h
+LC_REQ_DYLD = 0x80000000
+
+LOAD_COMMAND_TYPE = Enum(Int32ul,
+                         LC_SEGMENT=0x1,
+                         LC_SYMTAB=0x2,
+                         LC_SYMSEG=0x3,
+                         LC_THREAD=0x4,
+                         LC_UNIXTHREAD=0x5,
+                         LC_LOADFVMLIB=0x6,
+                         LC_IDFVMLIB=0x7,
+                         LC_IDENT=0x8,
+                         LC_FVMFILE=0x9,
+                         LC_PREPAGE=0xa,
+                         LC_DYSYMTAB=0xb,
+                         LC_LOAD_DYLIB=0xc,
+                         LC_ID_DYLIB=0xd,
+                         LC_LOAD_DYLINKER=0xe,
+                         LC_ID_DYLINKER=0xf,
+                         LC_PREBOUND_DYLIB=0x10,
+                         LC_ROUTINES=0x11,
+                         LC_SUB_FRAMEWORK=0x12,
+                         LC_SUB_UMBRELLA=0x13,
+                         LC_SUB_CLIENT=0x14,
+                         LC_SUB_LIBRARY=0x15,
+                         LC_TWOLEVEL_HINTS=0x16,
+                         LC_PREBIND_CKSUM=0x17,
+                         LC_LOAD_WEAK_DYLIB=(0x18 | LC_REQ_DYLD),
+                         LC_SEGMENT_64=0x19,
+                         LC_ROUTINES_64=0x1a,
+                         LC_UUID=0x1b,
+                         LC_RPATH=(0x1c | LC_REQ_DYLD),
+                         LC_CODE_SIGNATURE=0x1d,
+                         LC_SEGMENT_SPLIT_INFO=0x1e,
+                         LC_REEXPORT_DYLIB=0x1f | LC_REQ_DYLD,
+                         LC_LAZY_LOAD_DYLIB=0x20,
+                         LC_ENCRYPTION_INFO=0x21,
+                         LC_DYLD_INFO=0x22,
+                         LC_DYLD_INFO_ONLY=(0x22 | LC_REQ_DYLD),
+                         LC_LOAD_UPWARD_DYLIB=(0x23 | LC_REQ_DYLD),
+                         LC_VERSION_MIN_MACOSX=0x24,
+                         LC_VERSION_MIN_IPHONEOS=0x25,
+                         LC_FUNCTION_STARTS=0x26,
+                         LC_DYLD_ENVIRONMENT=0x27,
+                         LC_MAIN=(0x28 | LC_REQ_DYLD),
+                         LC_DATA_IN_CODE=0x29,
+                         LC_SOURCE_VERSION=0x2A,
+                         LC_DYLIB_CODE_SIGN_DRS=0x2B,
+                         LC_ENCRYPTION_INFO_64=0x2C,
+                         LC_LINKER_OPTION=0x2D,
+                         LC_LINKER_OPTIMIZATION_HINT=0x2E,
+                         LC_VERSION_MIN_TVOS=0x2F,
+                         LC_VERSION_MIN_WATCHOS=0x30,
+                         LC_NOTE=0x31,
+                         LC_BUILD_VERSION=0x32,
+                         LC_DYLD_EXPORTS_TRIE=(0x33 | LC_REQ_DYLD),
+                         LC_DYLD_CHAINED_FIXUPS=(0x34 | LC_REQ_DYLD),
+                         LC_FILESET_ENTRY=(0x35 | LC_REQ_DYLD)
+                         )
+
+# Load commands:
+# reference - https://opensource.apple.com/source/xnu/xnu-2050.18.24/EXTERNAL_HEADERS/mach-o/loader.h
+
+FAT_MAGIC = 0xcafebabe
+FAT_CIGAM = 0xbebafeca
+
+cpu_type_t = Int32ul
+cpu_subtype_t = Int32ul
+
+version_t = BitStruct(
+    'major' / BitsInteger(16),
+    'minor' / Octet,
+    'bug' / Octet
+)
+
+segment_command_t = Struct(
+    'segname' / PaddedString(16, 'utf8'),
+    'vmaddr' / Int64ul,
+    'vmsize' / Int64ul,
+    'fileoff' / Int64ul,
+    'filesize' / Int64ul,
+    'maxprot' / Int32ul,
+    'initprot' / Int32ul,
+    'nsects' / Int32ul,
+    'flags' / Int32ul,
+)
+
+uuid_command_t = Struct(
+    'uuid' / Array(16, Int8ul)
+)
+
+build_tool_version = Struct(
+    'tool' / Int32ul,
+    'version' / Int32ul
+)
+
+build_version_command_t = Struct(
+    'platform' / Int32ul,
+    'minos' / version_t,
+    'sdk' / version_t,
+    'ntools' / Int32ul,
+)
+
+encryption_info_command = Struct(
+    'cryptoff' / Int32ul,  # file offset of encrypted range
+    'cryptsize' / Int32ul,  # file size of encrypted range
+    'cryptid' / Int32ul,  # which encryption system, 0 means not-encrypted yet
+)
+
+encryption_info_command_64 = Struct(
+    'cryptoff' / Int32ul,  # file offset of encrypted range
+    'cryptsize' / Int32ul,  # file size of encrypted range
+    'cryptid_offset' / Tell,
+    'cryptid' / Int32ul,  # which encryption system, 0 means not-encrypted yet
+    '_pad' / Int32ul,
+)
+
+load_command_t = Struct(
+    '_start' / Tell,
+    'cmd' / LOAD_COMMAND_TYPE,
+    'cmdsize' / Int32ul,
+    '_data_offset' / Tell,
+    'data' / Switch(this.cmd, {
+        LOAD_COMMAND_TYPE.LC_BUILD_VERSION: build_version_command_t,
+        LOAD_COMMAND_TYPE.LC_UUID: uuid_command_t,
+        LOAD_COMMAND_TYPE.LC_SEGMENT_64: segment_command_t,
+        LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO_64: encryption_info_command_64,
+        LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO: encryption_info_command,
+    }, Bytes(this.cmdsize - (this._data_offset - this._start))),
+    Seek(this._start + this.cmdsize),
+)
+
+mach_header_t = Struct(
+    'load_address' / Tell,
+    'magic' / Hex(Int32ul),
+    'cputype' / Hex(cpu_type_t),
+    'cpusubtype' / Hex(cpu_subtype_t),
+    'filetype' / Hex(Int32ul),
+    'ncmds' / Hex(Int32ul),
+    'sizeofcmds' / Hex(Int32ul),
+    'flags' / Hex(Int32ul),
+    'reserved' / Hex(Int32ul),
+    'load_commands' / LazyArray(this.ncmds, load_command_t),
+)
+
+fat_arch = Struct(
+    'cputype' / Hex(Int32ub),
+    'cpusubtype' / Hex(Int32ub),
+    'offset' / Hex(Int32ub),
+    'size' / Hex(Int32ub),
+    'align' / Hex(Int32ub),
+)
+
+fat_header = Struct(
+    'magic' / Hex(Int32ul),
+    'nfat_arch' / Hex(Int32ub),
+    'archs' / Array(this.nfat_arch, fat_arch)
 )

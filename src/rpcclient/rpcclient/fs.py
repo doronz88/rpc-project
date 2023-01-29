@@ -142,6 +142,9 @@ class File(Allocated):
 
     def read(self, size: int = -1, chunk_size: int = CHUNK_SIZE) -> bytes:
         """ read file at remote """
+        if size != -1 and size < chunk_size:
+            chunk_size = size
+
         buf = b''
         with self._client.safe_malloc(chunk_size) as chunk:
             while size == -1 or len(buf) < size:
