@@ -94,5 +94,7 @@
 	<true/>
 	<key>com.apple.security.exception.shared-preference.read-write</key>
 	<string>com.apple.CFNetwork</string>
+	<key>com.apple.mobileactivationd.spi</key>
+	<true/>
 </dict>
 </plist>
