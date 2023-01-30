@@ -628,6 +628,10 @@ class Process:
         return datetime.fromtimestamp(tv_sec + (tv_nsec / (10 ** 9)))
 
     @property
+    def parent(self) -> 'Process':
+        return Process(self._client, self.ppid)
+
+    @property
     def environ(self) -> List[str]:
         return self.vmu_proc_info.objc_call('envVars').py()
 
