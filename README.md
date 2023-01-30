@@ -3,8 +3,8 @@
 
 - [rpc-project](#rpc-project)
   - [Description](#description)
-  - [Building C Server](#building-c-server)
-  - [Installing python client](#installing-python-client)
+  - [Installation](#installation)
+  - [Building](#building)
   - [Quickstart](#quickstart)
   - [Calling native functions](#calling-native-functions)
     - [Globalized symbols](#globalized-symbols)
@@ -53,7 +53,21 @@ The python client utilizes the ability to call native functions in order to prov
 
 and much more...
 
-## Building C Server
+## Installation
+
+Download and execute the server artifact from here:
+
+<https://github.com/doronz88/rpc-project/actions/workflows/server-publish.yml>
+
+If your specific build isn't listed, you can also [build it yourself](#building).
+
+Install the latest client from PyPi:
+
+```shell
+python3 -m pip install -U rpcclient
+```
+
+## Building
 
 macOS & Linux:
 
@@ -63,20 +77,12 @@ cd src/rpcserver
 make
 ```
 
-On iOS (Make sure to have XCode installed):
+iOS (Make sure to have XCode installed):
 
 ```shell
 git clone git@github.com:doronz88/rpc-project.git
 cd src/rpcserver
 ./build_darwin.sh
-```
-
-## Installing python client
-
-```shell
-git clone git@github.com:doronz88/rpc-project.git
-cd src/rpcclient
-python3 -m pip install --user -U .
 ```
 
 ## Quickstart
