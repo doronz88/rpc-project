@@ -11,7 +11,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./src/rpcserver
+        working-directory: .
 
     strategy:
       matrix:
@@ -21,11 +21,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: build artifacts
-        run: make clean all
-      
-      - name: upload linux artifact
+      - if: matrix.os == 'ubuntu-latest'
+        name: Build server on ubuntu
+        working-directory: ./src/rpcserver
+        run: |
+          make SERVER_CFLAGS=-DSAFE_READ_WRITES
+
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload ubuntu server artifact
         uses: actions/upload-artifact@v3
         with:
-          name: rpcserver
-          path: rpcserver
+          name: rpcserver_ubuntu
+          path: ./src/rpcserver/rpcserver
+
+      - if: matrix.os == 'macos-latest'
+        name: Build server on macos
+        working-directory: ./src/rpcserver
+        run: |
+          ./build_darwin.sh
+
+      - if: matrix.os == 'macos-latest'
+        name: Upload iphoneos server artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rpcserver_iphoneos_arm64
+          path: ./src/rpcserver/rpcserver_iphoneos_arm64
+
+      - if: matrix.os == 'macos-latest'
+        name: Upload macos server artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rpcserver_macosx_x86_64
+          path: ./src/rpcserver/rpcserver_macosx_x86_64
