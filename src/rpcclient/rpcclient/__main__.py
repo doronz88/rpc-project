@@ -20,8 +20,11 @@ logging.getLogger('humanfriendly.prompts').disabled = True
 @click.argument('hostname')
 @click.option('-p', '--port', type=click.INT, default=DEFAULT_PORT)
 @click.option('-r', '--rebind-symbols', is_flag=True, help='reload all symbols upon connection')
-def cli(hostname: str, port: int, rebind_symbols: bool):
+@click.option('-l', '--load-all-libraries', is_flag=True, help='load all libraries')
+def cli(hostname: str, port: int, rebind_symbols: bool, load_all_libraries: bool):
     client = create_tcp_client(hostname, port=port)
+    if load_all_libraries:
+        client.load_all_libraries(rebind_symbols=False)
     if rebind_symbols:
         client.rebind_symbols()
     client.interactive()
