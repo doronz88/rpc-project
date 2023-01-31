@@ -2,8 +2,7 @@ name: Uploading release artifacts
 
 on:
   push:
-    tags:
-      - '*'
+    branches: [ 'master' ]
 
 jobs:
   build:
@@ -31,7 +30,7 @@ jobs:
         name: Upload ubuntu server artifact
         uses: actions/upload-artifact@v3
         with:
-          name: rpcserver_ubuntu
+          name: rpcserver_ubuntu_x86_64
           path: ./src/rpcserver/rpcserver
 
       - if: matrix.os == 'macos-latest'
