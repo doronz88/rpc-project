@@ -101,7 +101,19 @@ Example usage:
 Connecting via:
 
 ```shell
-python3 -m rpcclient <HOST> [-p port]
+python3 -m rpcclient <HOST>
+```
+
+Full usage:
+
+```
+Usage: python -m rpcclient [OPTIONS] HOSTNAME
+
+Options:
+  -p, --port INTEGER
+  -r, --rebind-symbols      reload all symbols upon connection
+  -l, --load-all-libraries  load all libraries
+  --help                    Show this message and exit.
 ```
 
 > **_NOTE:_** If you are attempting to connect to a **jailbroken iOS device**, you will be required to also create a TCP tunnel to your device. For example, using: [`pymobiledevice3`](https://github.com/doronz88/pymobiledevice3): ```python3 -m pymobiledevice3 usbmux forward 5910 5910 -vvv```
@@ -128,7 +140,7 @@ IPython 7.25.0 -- An enhanced Interactive Python. Type '?' for help.
 In [1]:
 ```
 
-And... Congrats! You are now ready to go! 😎 
+And... Congrats! You are now ready to go! 😎
 
 Try accessing the different features using the global `p` variable.
 For example (Just a tiny sample of the many things you can now do. Feel free to explore much more!):
