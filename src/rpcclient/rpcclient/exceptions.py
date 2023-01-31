@@ -155,3 +155,8 @@ class NoSuchActivityError(RpcClientException):
 class RpcFailedLaunchingAppError(BadReturnValueError):
     """ Failed to launch application """
     pass
+
+
+class RpcAppleScriptError(BadReturnValueError):
+    """ Failed to execute given AppleScript """
+    pass
