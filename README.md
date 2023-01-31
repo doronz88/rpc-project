@@ -55,11 +55,11 @@ and much more...
 
 ## Installation
 
-Download and execute the server artifact from here:
+Download and execute the latest server artifact from here:
 
-<https://github.com/doronz88/rpc-project/actions/workflows/server-publish.yml>
+<https://nightly.link/doronz88/rpc-project/workflows/server-publish/master>
 
-If your specific build isn't listed, you can also [build it yourself](#building).
+If your specific platform & arch isn't listed, you can also [build it yourself](#building).
 
 Install the latest client from PyPi:
 
