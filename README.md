@@ -223,7 +223,10 @@ s[0] = 1
 
 # storing the return value of the function executed at `0x11223344`
 # into `*s`
-s[0] = symbol(0x11223344)()  # calling symbols also returns symbols 
+s[0] = p.symbol(0x11223344)()  # calling symbols also returns symbols 
+
+# query in which file 0x11223344 is loaded from
+print(p.symbol(0x11223344).filename)
 ```
 
 ### Globalized symbols
@@ -258,6 +261,9 @@ some_cf_string = p.cf('some string')
 
 # create a new NSMutableDictionary
 a = NSMutableDictionary.new()
+
+# tell where this class is loaded from
+print(NSMutableDictionary.bundle_path)
 
 # which is a short-hand for objc_get_class(class_name)
 a = p.objc_get_class('NSMutableDictionary').new()
