@@ -57,7 +57,7 @@ LIB_PATH = '/usr/lib'
 FRAMEWORKS_BLACKLIST = (
     'PowerlogLiteOperators.framework', 'PowerlogCore.framework', 'PowerlogHelperdOperators.framework',
     'PowerlogFullOperators.framework', 'PowerlogAccounting.framework', 'JavaVM.framework', 'ActionKit.framework',
-    'ActionKitUI.framework', 'WorkflowUI.framework', )
+    'DashBoard.framework', 'CoverSheet.framework',)
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +294,8 @@ class DarwinClient(Client):
         logger.debug(f'loading frameworks: {PRIVATE_FRAMEWORKS_PATH}')
         for filename in tqdm(self.fs.listdir(PRIVATE_FRAMEWORKS_PATH)):
             if filename in FRAMEWORKS_BLACKLIST:
+                continue
+            if 'SpringBoard' in filename or 'UI' in filename:
                 continue
             self.dlopen(f'{PRIVATE_FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
 

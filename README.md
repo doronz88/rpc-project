@@ -280,4 +280,8 @@ a.setObject_forKey_(p.cf('value2'), p.cf('key2'))
 
 # and we can easily convert this object to python native using the py() method. please note that this is done behind-the-scene using plistlib, meaning only plist-serializable objects (and None) can be coverted this way.
 a = a.py()
+
+# attempt to load all frameworks for auto-completions of all ObjC classes
+# (equivalent to running the client with -l -r)
+p.load_all_libraries()
 ```
