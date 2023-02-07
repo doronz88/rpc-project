@@ -57,7 +57,8 @@ LIB_PATH = '/usr/lib'
 FRAMEWORKS_BLACKLIST = (
     'PowerlogLiteOperators.framework', 'PowerlogCore.framework', 'PowerlogHelperdOperators.framework',
     'PowerlogFullOperators.framework', 'PowerlogAccounting.framework', 'JavaVM.framework', 'ActionKit.framework',
-    'DashBoard.framework', 'CoverSheet.framework',)
+    'DashBoard.framework', 'CoverSheet.framework', 'StoreKitMacHelper.framework', 'ReplayKitMacHelper.framework',
+    'PassKitMacHelper.framework')
 
 logger = logging.getLogger(__name__)
 
