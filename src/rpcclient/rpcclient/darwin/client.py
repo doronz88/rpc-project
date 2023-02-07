@@ -287,18 +287,9 @@ class DarwinClient(Client):
 
     def load_all_libraries(self, rebind_symbols=True) -> None:
         logger.debug(f'loading frameworks: {FRAMEWORKS_PATH}')
-        for filename in tqdm(self.fs.listdir(FRAMEWORKS_PATH)):
-            if filename in FRAMEWORKS_BLACKLIST:
-                continue
-            self.dlopen(f'{FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
-
+        self._load_frameworks(FRAMEWORKS_PATH)
         logger.debug(f'loading frameworks: {PRIVATE_FRAMEWORKS_PATH}')
-        for filename in tqdm(self.fs.listdir(PRIVATE_FRAMEWORKS_PATH)):
-            if filename in FRAMEWORKS_BLACKLIST:
-                continue
-            if 'SpringBoard' in filename or 'UI' in filename:
-                continue
-            self.dlopen(f'{PRIVATE_FRAMEWORKS_PATH}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
+        self._load_frameworks(PRIVATE_FRAMEWORKS_PATH)
 
         logger.debug(f'loading libraries: {LIB_PATH}')
         for filename in tqdm(self.fs.listdir(LIB_PATH)):
@@ -308,3 +299,11 @@ class DarwinClient(Client):
 
         if rebind_symbols:
             self.rebind_symbols()
+
+    def _load_frameworks(self, frameworks_path: str):
+        for filename in tqdm(self.fs.listdir(frameworks_path)):
+            if filename in FRAMEWORKS_BLACKLIST:
+                continue
+            if 'SpringBoard' in filename or 'UI' in filename:
+                continue
+            self.dlopen(f'{frameworks_path}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
