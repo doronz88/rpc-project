@@ -3,8 +3,8 @@ import struct
 from typing import Mapping
 
 import lief
+from parameter_decorators import path_to_str
 
-from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import kSecCodeMagicEntitlement
 from rpcclient.exceptions import NoEntitlementsError
 from rpcclient.lief import Lief

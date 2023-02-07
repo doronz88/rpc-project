@@ -11,8 +11,8 @@ from typing import Optional, List, Mapping
 
 from cached_property import cached_property
 from construct import Array, Int32ul, Container
+from parameter_decorators import path_to_str
 
-from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors, VM_FLAGS_ANYWHERE
 from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
     vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \

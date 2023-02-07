@@ -2,8 +2,9 @@ import struct
 from enum import Enum
 from typing import List
 
+from parameter_decorators import path_to_str
+
 from rpcclient.allocated import Allocated
-from rpcclient.common import path_to_str
 from rpcclient.darwin.consts import AVAudioSessionCategoryOptions, AVAudioSessionRouteSharingPolicy
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, MissingLibraryError, RpcFailedToRecordError, RpcFailedToPlayError

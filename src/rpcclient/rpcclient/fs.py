@@ -5,8 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import List
 
+from parameter_decorators import path_to_str
+
 from rpcclient.allocated import Allocated
-from rpcclient.common import path_to_str
 from rpcclient.darwin.structs import MAXPATHLEN
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
