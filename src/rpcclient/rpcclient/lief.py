@@ -2,8 +2,7 @@ from collections import namedtuple
 from typing import Mapping
 
 import lief
-
-from rpcclient.common import path_to_str
+from parameter_decorators import path_to_str
 
 Symbol = namedtuple('Symbol', 'origin value')
 

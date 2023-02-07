@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rpcclient.protocol import DEFAULT_PORT
 
 LAUNCHD_PID = 1
@@ -23,7 +25,7 @@ def test_process_object(client):
     assert server.pid > 0
     assert len(server.regions) > 0
     assert len(server.images) > 0
-    assert server.images[0].path == server.path
+    assert Path(server.images[0].path).resolve() == Path(server.path).resolve()
     fds = server.fds
     assert fds[0].fd == 0
     assert fds[1].fd == 1

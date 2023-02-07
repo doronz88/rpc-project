@@ -1,6 +1,7 @@
 from typing import List, Mapping
 
-from rpcclient.common import path_to_str
+from parameter_decorators import path_to_str
+
 from rpcclient.darwin.structs import stat64, statfs64
 from rpcclient.fs import Fs
 
