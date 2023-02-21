@@ -1,4 +1,4 @@
-from construct import Struct, PaddedString, Int32ul, Int64ul, Int16ul, Int8ul, Bytes, Padding, Computed
+from construct import Bytes, Computed, Int8ul, Int16ul, Int32ul, Int64ul, PaddedString, Padding, Struct
 
 _UTSNAME_LENGTH = 65
 _D_NAME_LENGTH = 256

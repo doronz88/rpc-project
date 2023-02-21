@@ -1,6 +1,6 @@
-from typing import Optional, List
+from typing import List, Optional
 
-from osstatus.cache import get_possible_error_codes, ErrorCode
+from osstatus.cache import ErrorCode, get_possible_error_codes
 
 from rpcclient.exceptions import UnrecognizedSelectorError
 from rpcclient.symbol import Symbol

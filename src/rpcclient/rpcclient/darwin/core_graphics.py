@@ -1,7 +1,7 @@
 import time
 from typing import Union
 
-from rpcclient.darwin.consts import kCGHIDEventTap, kCGWindowListOptionAll, kCGNullWindowID
+from rpcclient.darwin.consts import kCGHIDEventTap, kCGNullWindowID, kCGWindowListOptionAll
 from rpcclient.exceptions import BadReturnValueError
 
 

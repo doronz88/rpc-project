@@ -1,15 +1,15 @@
 from collections import namedtuple
+from functools import partial
 from pathlib import Path
 from typing import Mapping
-from functools import partial
 
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
 from pygments.lexers import ObjectiveCLexer
 
+from rpcclient.darwin import objc
 from rpcclient.exceptions import GettingObjectiveCClassError
 from rpcclient.symbols_jar import SymbolsJar
-from rpcclient.darwin import objc
 
 Ivar = namedtuple('Ivar', 'name type_ offset')
 

@@ -1,5 +1,5 @@
 import logging
-from typing import Mapping, List
+from typing import List, Mapping
 
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.symbol import Symbol

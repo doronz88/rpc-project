@@ -4,7 +4,7 @@ from typing import List, Mapping
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import RpcClientException, BadReturnValueError
+from rpcclient.exceptions import BadReturnValueError, RpcClientException
 from rpcclient.structs.consts import RTLD_NOW
 
 logger = logging.getLogger(__name__)

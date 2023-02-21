@@ -13,25 +13,25 @@ from pathlib import Path
 from select import select
 
 import IPython
-from construct import Int64sl, Float64l, Float32l, Float16l, Int64ul
+from construct import Float16l, Float32l, Float64l, Int64sl, Int64ul
 from traitlets.config import Config
 from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
 import rpcclient
-from rpcclient.darwin.structs import pid_t, exitcode_t
-from rpcclient.exceptions import ArgumentError, SymbolAbsentError, SpawnError, ServerDiedError, \
-    InvalidServerVersionMagicError, BadReturnValueError, RpcFileExistsError, RpcNotEmptyError, RpcFileNotFoundError, \
-    RpcBrokenPipeError, RpcIsADirectoryError, RpcPermissionError, RpcNotADirectoryError, \
-    RpcResourceTemporarilyUnavailableError, RpcConnectionRefusedError
+from rpcclient.darwin.structs import exitcode_t, pid_t
+from rpcclient.exceptions import ArgumentError, BadReturnValueError, InvalidServerVersionMagicError, \
+    RpcBrokenPipeError, RpcConnectionRefusedError, RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, \
+    RpcNotADirectoryError, RpcNotEmptyError, RpcPermissionError, RpcResourceTemporarilyUnavailableError, \
+    ServerDiedError, SpawnError, SymbolAbsentError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
-from rpcclient.protocol import protocol_message_t, cmd_type_t, exec_chunk_t, exec_chunk_type_t, \
-    reply_protocol_message_t, dummy_block_t, SERVER_MAGIC_VERSION, argument_type_t, call_response_t, arch_t, \
-    protocol_handshake_t, call_response_t_size, listdir_entry_t, MAGIC
-from rpcclient.structs.consts import EEXIST, ENOTEMPTY, ENOENT, EPIPE, EISDIR, EPERM, ENOTDIR, EAGAIN, ECONNREFUSED
+from rpcclient.protocol import MAGIC, SERVER_MAGIC_VERSION, arch_t, argument_type_t, call_response_t, \
+    call_response_t_size, cmd_type_t, dummy_block_t, exec_chunk_t, exec_chunk_type_t, listdir_entry_t, \
+    protocol_handshake_t, protocol_message_t, reply_protocol_message_t
+from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl

@@ -4,8 +4,8 @@ from enum import IntEnum, IntFlag
 from typing import List, Optional
 
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import MissingLibraryError, ElementNotFoundError, RpcAccessibilityTurnedOffError, \
-    LastElementNotFoundError, FirstElementNotFoundError
+from rpcclient.exceptions import ElementNotFoundError, FirstElementNotFoundError, LastElementNotFoundError, \
+    MissingLibraryError, RpcAccessibilityTurnedOffError
 from rpcclient.structs.consts import RTLD_NOW
 
 

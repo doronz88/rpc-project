@@ -6,12 +6,12 @@ from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
 from pygments.lexers import ObjectiveCLexer
 
-from rpcclient.exceptions import RpcClientException
+from rpcclient.darwin import objc
 from rpcclient.darwin.objective_c_class import Class
+from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.exceptions import RpcClientException
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
-from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.darwin import objc
 
 
 class SettingIvarError(RpcClientException):

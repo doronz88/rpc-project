@@ -1,4 +1,4 @@
-from enum import Enum, auto, IntFlag, IntEnum
+from enum import Enum, IntEnum, IntFlag, auto
 
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0

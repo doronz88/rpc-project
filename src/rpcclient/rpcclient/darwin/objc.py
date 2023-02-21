@@ -2,7 +2,8 @@ from collections import namedtuple
 from dataclasses import dataclass, field
 from typing import Mapping
 
-from objc_types_decoder.decode import decode as decode_type, decode_with_tail
+from objc_types_decoder.decode import decode as decode_type
+from objc_types_decoder.decode import decode_with_tail
 
 Property = namedtuple('Property', 'name attributes')
 PropertyAttributes = namedtuple('PropertyAttributes', 'synthesize type_ list')

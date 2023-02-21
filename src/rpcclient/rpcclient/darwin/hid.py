@@ -3,11 +3,11 @@ import time
 from enum import Enum
 from typing import Union
 
-from rpcclient.darwin.consts import kCFAllocatorDefault, kHIDUsage_Csmr_Menu, kHIDUsage_Csmr_Power, \
-    kHIDUsage_Csmr_VolumeDecrement, kHIDUsage_Csmr_VolumeIncrement, kHIDPage_Consumer, kHIDUsage_Csmr_Mute, \
-    kHIDUsage_Csmr_ACSearch, kHIDUsage_Csmr_PlayOrPause, kHIDUsage_Csmr_Play, kHIDUsage_Csmr_Pause, \
-    kHIDUsage_Csmr_Rewind, kHIDUsage_Csmr_RandomPlay, kHIDUsage_Csmr_Repeat, kHIDUsage_Csmr_FastForward, \
-    IOHIDEventField, IOHIDDigitizerEventMask, IOHIDDigitizerTransducerType, IOHIDEventFieldDigitizer
+from rpcclient.darwin.consts import IOHIDDigitizerEventMask, IOHIDDigitizerTransducerType, IOHIDEventField, \
+    IOHIDEventFieldDigitizer, kCFAllocatorDefault, kHIDPage_Consumer, kHIDUsage_Csmr_ACSearch, \
+    kHIDUsage_Csmr_FastForward, kHIDUsage_Csmr_Menu, kHIDUsage_Csmr_Mute, kHIDUsage_Csmr_Pause, kHIDUsage_Csmr_Play, \
+    kHIDUsage_Csmr_PlayOrPause, kHIDUsage_Csmr_Power, kHIDUsage_Csmr_RandomPlay, kHIDUsage_Csmr_Repeat, \
+    kHIDUsage_Csmr_Rewind, kHIDUsage_Csmr_VolumeDecrement, kHIDUsage_Csmr_VolumeIncrement
 from rpcclient.exceptions import BadReturnValueError
 
 

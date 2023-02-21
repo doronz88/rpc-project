@@ -2,7 +2,7 @@ import typing
 from collections import UserDict
 
 import IPython
-from pygments import highlight, lexers, formatters
+from pygments import formatters, highlight, lexers
 
 from rpcclient.allocated import Allocated
 from rpcclient.exceptions import RpcClientException

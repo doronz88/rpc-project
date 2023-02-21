@@ -1,5 +1,5 @@
-from construct import Struct, Int32ul, PrefixedArray, Const, Enum, this, PascalString, Switch, PaddedString, Bytes, \
-    Int64ul, Int8ul, IfThenElse, Float64l, Array, Union, Hex
+from construct import Array, Bytes, Const, Enum, Float64l, Hex, IfThenElse, Int8ul, Int32ul, Int64ul, PaddedString, \
+    PascalString, PrefixedArray, Struct, Switch, Union, this
 
 cmd_type_t = Enum(Int32ul,
                   CMD_EXEC=0,

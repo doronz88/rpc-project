@@ -7,7 +7,7 @@ from parameter_decorators import path_to_str
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.consts import AVAudioSessionCategoryOptions, AVAudioSessionRouteSharingPolicy
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import BadReturnValueError, MissingLibraryError, RpcFailedToRecordError, RpcFailedToPlayError
+from rpcclient.exceptions import BadReturnValueError, MissingLibraryError, RpcFailedToPlayError, RpcFailedToRecordError
 from rpcclient.structs.consts import RTLD_NOW
 
 
