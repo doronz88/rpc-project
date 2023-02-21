@@ -5,6 +5,7 @@ from rpcclient.darwin.cfpreferences import kCFPreferencesAnyHost
 from rpcclient.darwin.consts import OsLogLevel
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError
+from rpcclient.structs.consts import SIGKILL
 
 
 class OsLogPreferencesBase:
@@ -123,6 +124,7 @@ class Syslog:
         with self._client.preferences.sc.open(
                 '/Library/Preferences/Logging/com.apple.system.logging.plist') as pref:
             pref.set_dict({'Enable-Logging': True, 'Enable-Private-Data': enable})
+        self._client.processes.get_by_basename('logd').kill(SIGKILL)
 
     def set_har_capture_global(self, enable: bool = True):
         """
