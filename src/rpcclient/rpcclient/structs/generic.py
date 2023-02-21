@@ -1,7 +1,7 @@
-from construct import Int32ul, Int16ul, Struct, Int16sl, Bytes, Default, Int64sl, PaddedString, Pointer, \
-    this, CString, LazyBound, Padding, If, Int8ul, Int64ul, FlagsEnum, FormatField, Int16ub, Int32ub
+from construct import Bytes, CString, Default, FlagsEnum, FormatField, If, Int8ul, Int16sl, Int16ub, Int16ul, Int32ub, \
+    Int32ul, Int64sl, Int64ul, LazyBound, PaddedString, Padding, Pointer, Struct, this
 
-from rpcclient.structs.consts import AF_UNIX, AF_INET, AF_INET6
+from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 
 UNIX_PATH_MAX = 108
 

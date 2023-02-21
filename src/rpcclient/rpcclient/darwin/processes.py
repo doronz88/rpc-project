@@ -7,26 +7,26 @@ import struct
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Mapping
+from typing import List, Mapping, Optional
 
 from cached_property import cached_property
-from construct import Array, Int32ul, Container
+from construct import Array, Container, Int32ul
 from parameter_decorators import path_to_str
 
-from rpcclient.darwin.consts import TASK_DYLD_INFO, x86_THREAD_STATE64, ARMThreadFlavors, VM_FLAGS_ANYWHERE
-from rpcclient.darwin.structs import pid_t, MAXPATHLEN, PROC_PIDLISTFDS, proc_fdinfo, PROX_FDTYPE_VNODE, \
-    vnode_fdinfowithpath, PROC_PIDFDVNODEPATHINFO, proc_taskallinfo, PROC_PIDTASKALLINFO, PROX_FDTYPE_SOCKET, \
-    PROC_PIDFDSOCKETINFO, socket_fdinfo, so_kind_t, so_family_t, PROX_FDTYPE_PIPE, PROC_PIDFDPIPEINFO, pipe_info, \
-    task_dyld_info_data_t, TASK_DYLD_INFO_COUNT, all_image_infos_t, dyld_image_info_t, x86_thread_state64_t, \
-    arm_thread_state64_t, PROX_FDTYPE_KQUEUE, ARM_THREAD_STATE64_COUNT, procargs2_t, mach_header_t, \
-    FAT_CIGAM, FAT_MAGIC, fat_header, LOAD_COMMAND_TYPE
+from rpcclient.darwin.consts import TASK_DYLD_INFO, VM_FLAGS_ANYWHERE, ARMThreadFlavors, x86_THREAD_STATE64
+from rpcclient.darwin.structs import ARM_THREAD_STATE64_COUNT, FAT_CIGAM, FAT_MAGIC, LOAD_COMMAND_TYPE, MAXPATHLEN, \
+    PROC_PIDFDPIPEINFO, PROC_PIDFDSOCKETINFO, PROC_PIDFDVNODEPATHINFO, PROC_PIDLISTFDS, PROC_PIDTASKALLINFO, \
+    PROX_FDTYPE_KQUEUE, PROX_FDTYPE_PIPE, PROX_FDTYPE_SOCKET, PROX_FDTYPE_VNODE, TASK_DYLD_INFO_COUNT, \
+    all_image_infos_t, arm_thread_state64_t, dyld_image_info_t, fat_header, mach_header_t, pid_t, pipe_info, \
+    proc_fdinfo, proc_taskallinfo, procargs2_t, so_family_t, so_kind_t, socket_fdinfo, task_dyld_info_data_t, \
+    vnode_fdinfowithpath, x86_thread_state64_t
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import BadReturnValueError, ArgumentError, SymbolAbsentError, MissingLibraryError, \
-    RpcClientException, ProcessSymbolAbsentError
+from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibraryError, ProcessSymbolAbsentError, \
+    RpcClientException, SymbolAbsentError
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
-from rpcclient.structs.consts import SIGTERM, RTLD_NOW, SEEK_SET
-from rpcclient.symbol import Symbol, ADDRESS_SIZE_TO_STRUCT_FORMAT
+from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGTERM
+from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
 from rpcclient.sysctl import CTL, KERN
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')

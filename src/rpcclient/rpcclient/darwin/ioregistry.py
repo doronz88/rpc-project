@@ -1,9 +1,9 @@
 from typing import Mapping
 
-from rpcclient.darwin.consts import MACH_PORT_NULL, kCFAllocatorDefault, kIOServicePlane
-from rpcclient.darwin.structs import mach_port_t, io_name_t, io_object_t
-from rpcclient.exceptions import RpcClientException, BadReturnValueError
 from rpcclient.allocated import Allocated
+from rpcclient.darwin.consts import MACH_PORT_NULL, kCFAllocatorDefault, kIOServicePlane
+from rpcclient.darwin.structs import io_name_t, io_object_t, mach_port_t
+from rpcclient.exceptions import BadReturnValueError, RpcClientException
 
 
 class IOService(Allocated):

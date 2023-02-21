@@ -9,18 +9,18 @@ import time
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Union, List, Callable
+from typing import Callable, List, Union
 from uuid import UUID
 
 import plumbum
 from click.exceptions import Exit
 from humanfriendly.prompts import prompt_for_choice
 from prompt_toolkit.keys import Keys
-from pygments import highlight, formatters, lexers
+from pygments import formatters, highlight, lexers
 from pygnuutils.cli.ls import ls as ls_cli
-from pygnuutils.ls import LsStub, Ls
+from pygnuutils.ls import Ls, LsStub
 from xonsh.built_ins import XSH
-from xonsh.cli_utils import ArgParserAlias, Annotated, Arg
+from xonsh.cli_utils import Annotated, Arg, ArgParserAlias
 from xonsh.events import events
 from xonsh.tools import print_color
 

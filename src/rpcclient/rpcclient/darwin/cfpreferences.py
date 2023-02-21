@@ -1,7 +1,7 @@
-from contextlib import suppress
 import typing
+from contextlib import suppress
 
-from rpcclient.exceptions import RpcClientException, NoSuchPreferenceError, BadReturnValueError
+from rpcclient.exceptions import BadReturnValueError, NoSuchPreferenceError, RpcClientException
 
 kCFPreferencesCurrentUser = 'kCFPreferencesCurrentUser'
 kCFPreferencesAnyUser = 'kCFPreferencesAnyUser'

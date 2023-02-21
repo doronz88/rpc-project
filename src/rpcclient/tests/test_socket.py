@@ -1,11 +1,11 @@
 import contextlib
 import socket
 import time
-from multiprocessing import Process, Event
+from multiprocessing import Event, Process
 
 import pytest
 
-from rpcclient.exceptions import RpcResourceTemporarilyUnavailableError, RpcConnectionRefusedError, RpcFileNotFoundError
+from rpcclient.exceptions import RpcConnectionRefusedError, RpcFileNotFoundError, RpcResourceTemporarilyUnavailableError
 
 RAND_PORT = 8989
 BAD_SOCK = '/tmp/BAD'

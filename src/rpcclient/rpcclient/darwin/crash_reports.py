@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 
-from pycrashreport.crash_report import get_crash_report_from_buf, CrashReportBase
+from pycrashreport.crash_report import CrashReportBase, get_crash_report_from_buf
 
 
 class CrashReports:

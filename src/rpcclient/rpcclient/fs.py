@@ -10,10 +10,10 @@ from parameter_decorators import path_to_str
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import MAXPATHLEN
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import BadReturnValueError, ArgumentError, RpcFileNotFoundError, RpcFileExistsError, \
-    RpcIsADirectoryError, RpcClientException
-from rpcclient.structs.consts import O_RDONLY, O_WRONLY, O_CREAT, O_TRUNC, S_IFMT, S_IFDIR, O_RDWR, SEEK_CUR, S_IFREG, \
-    DT_LNK, DT_UNKNOWN, S_IFLNK, DT_REG, DT_DIR, R_OK
+from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcClientException, RpcFileExistsError, \
+    RpcFileNotFoundError, RpcIsADirectoryError
+from rpcclient.structs.consts import DT_DIR, DT_LNK, DT_REG, DT_UNKNOWN, O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, \
+    R_OK, S_IFDIR, S_IFLNK, S_IFMT, S_IFREG, SEEK_CUR
 
 
 class DirEntry:

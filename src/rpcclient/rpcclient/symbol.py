@@ -4,7 +4,7 @@ import struct
 from contextlib import contextmanager
 from typing import List
 
-from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN, CS_ARCH_X86, CS_MODE_64, CsInsn
+from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
 
 from rpcclient.protocol import arch_t

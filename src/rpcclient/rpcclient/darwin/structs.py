@@ -1,10 +1,10 @@
-from construct import PaddedString, Struct, Int32ul, Int16ul, Int64ul, Int8ul, this, Int32sl, Padding, Array, Int64sl, \
-    Bytes, Computed, FlagsEnum, Int16sl, Union, Enum, Switch, Int16ub, Adapter, Default, Aligned, CString, \
-    GreedyRange, Tell, Hex, LazyArray, BitStruct, BitsInteger, Octet, Seek, Int32ub
+from construct import Adapter, Aligned, Array, BitsInteger, BitStruct, Bytes, Computed, CString, Default, Enum, \
+    FlagsEnum, GreedyRange, Hex, Int8ul, Int16sl, Int16ub, Int16ul, Int32sl, Int32ub, Int32ul, Int64sl, Int64ul, \
+    LazyArray, Octet, PaddedString, Padding, Seek, Struct, Switch, Tell, Union, this
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
-from rpcclient.structs.generic import uid_t, gid_t, long, mode_t, uint64_t, short, u_short, uint32_t, u_int32_t, \
-    in_addr, uint8_t, u_char, UNIX_PATH_MAX, time_t, st_flags
+from rpcclient.structs.generic import UNIX_PATH_MAX, gid_t, in_addr, long, mode_t, short, st_flags, time_t, u_char, \
+    u_int32_t, u_short, uid_t, uint8_t, uint32_t, uint64_t
 
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256

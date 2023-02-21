@@ -5,9 +5,9 @@ from collections import namedtuple
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
-from rpcclient.structs.consts import AF_UNIX, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_RCVTIMEO, SO_SNDTIMEO, \
-    MSG_NOSIGNAL, EPIPE, F_GETFL, O_NONBLOCK, F_SETFL, AF_INET6
-from rpcclient.structs.generic import sockaddr_in, sockaddr_un, ifaddrs, sockaddr, hostent, sockaddr_in6
+from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX, EPIPE, F_GETFL, F_SETFL, MSG_NOSIGNAL, O_NONBLOCK, \
+    SO_RCVTIMEO, SO_SNDTIMEO, SOCK_STREAM, SOL_SOCKET
+from rpcclient.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un
 from rpcclient.symbol import Symbol
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')

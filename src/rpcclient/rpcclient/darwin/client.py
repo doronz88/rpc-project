@@ -9,14 +9,14 @@ from functools import lru_cache
 from typing import Mapping
 
 from cached_property import cached_property
-from construct import Int64sl, Int32ul, Int8ul, Int64ul
-from tqdm import trange, tqdm
+from construct import Int8ul, Int32ul, Int64sl, Int64ul
+from tqdm import tqdm, trange
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
 from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.common import CfSerializable
-from rpcclient.darwin.consts import kCFAllocatorDefault, CFPropertyListFormat, CFPropertyListMutabilityOptions
+from rpcclient.darwin.consts import CFPropertyListFormat, CFPropertyListMutabilityOptions, kCFAllocatorDefault
 from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
 from rpcclient.darwin.fs import DarwinFs
@@ -34,8 +34,8 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
-from rpcclient.exceptions import MissingLibraryError, GettingObjectiveCClassError, CfSerializationError
-from rpcclient.protocol import arch_t, protocol_message_t, cmd_type_t
+from rpcclient.exceptions import CfSerializationError, GettingObjectiveCClassError, MissingLibraryError
+from rpcclient.protocol import arch_t, cmd_type_t, protocol_message_t
 from rpcclient.structs.consts import RTLD_NOW
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
