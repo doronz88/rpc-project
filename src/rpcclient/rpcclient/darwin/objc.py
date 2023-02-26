@@ -70,6 +70,18 @@ class Method:
         self.client.symbols.method_setImplementation(self.address, new_imp)
         self.imp = self.client.symbol(new_imp)
 
+    def always_return(self, value: bool) -> None:
+        """
+        Patch the method to always return the given value.
+        """
+        if value:
+            # Exported from rpcserver binary
+            ret_val = self.client.symbols.get_true
+        else:
+            # Exported from rpcserver binary
+            ret_val = self.client.symbols.get_false
+        self.set_implementation(ret_val)
+
     def __str__(self):
         if ':' in self.name:
             args_names = self.name.split(':')

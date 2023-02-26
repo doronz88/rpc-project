@@ -29,3 +29,9 @@ def test_set_implementation(client):
     client.objc_get_class('NSJSONSerialization').get_method('isValidJSONObject:').set_implementation(
         client.symbols.getpid)
     assert client.objc_get_class('NSJSONSerialization').isValidJSONObject_() == pid
+
+
+@pytest.mark.parametrize('value', [True, False])
+def test_always_return(client, value):
+    client.objc_get_class('NSJSONSerialization').get_method('isValidJSONObject:').always_return(value)
+    assert client.objc_get_class('NSJSONSerialization').isValidJSONObject_() == value
