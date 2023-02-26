@@ -39,6 +39,7 @@ def convert_encoded_property_attributes(encoded):
 class Method:
     name: str
     address: int = field(compare=False)
+    imp: int = field(compare=False)
     type_: str = field(compare=False)
     return_type: str = field(compare=False)
     is_class: bool = field(compare=False)
@@ -54,6 +55,7 @@ class Method:
         return Method(
             name=data['name'],
             address=client.symbol(data['address']),
+            imp=client.symbol(data['imp']),
             type_=data['type'],
             return_type=decode_type(data['return_type']),
             is_class=data['is_class'],
