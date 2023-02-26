@@ -21,3 +21,11 @@ def test_calling_property(client):
     d.setObject_forKey_(client.cf('value'), client.cf('key'))
     # call property
     assert '{\n    key = value;\n}' == d.description.py()
+
+
+def test_set_implementation(client):
+    pid = client.symbols.getpid()
+
+    client.objc_get_class('NSJSONSerialization').get_method('isValidJSONObject:').set_implementation(
+        client.symbols.getpid)
+    assert client.objc_get_class('NSJSONSerialization').isValidJSONObject_() == pid
