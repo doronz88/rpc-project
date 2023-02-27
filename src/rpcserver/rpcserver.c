@@ -864,6 +864,18 @@ error:
     return success;
 }
 
+// exported for client hooks
+bool get_true()
+{
+    return true;
+}
+
+// exported for client hooks
+bool get_false()
+{
+    return false;
+}
+
 #if __APPLE__
 
 void (^dummy_block)(void) = ^{
