@@ -1,0 +1,38 @@
+name: Sphinx docs to gh-pages
+
+on:
+  push:
+    branches:
+      - [ '**' ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./src/rpcclient
+
+    name: Sphinx docs to gh-pages
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install rpcclient
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -U .
+      - name: Install additional sphinx requirements
+        run: |
+          python3 -m pip install sphinx<5.0 myst_parser pydata_sphinx_theme sphinx_markdown_tables sphinx_rtd_theme sphinxcontrib-mermaid
+      - name: Running the Sphinx to gh-pages Action
+        uses: uibcdf/action-sphinx-docs-to-gh-pages@v1.0.0
+        with:
+          dir_docs: docs
+          sphinxapiopts: '--separate -o . ../'
+          sphinxapiexclude: ''
+          sphinxopts: ''
