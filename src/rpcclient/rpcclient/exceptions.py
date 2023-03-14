@@ -160,3 +160,13 @@ class RpcFailedLaunchingAppError(BadReturnValueError):
 class RpcAppleScriptError(BadReturnValueError):
     """ Failed to execute given AppleScript """
     pass
+
+
+class RpcXpcError(BadReturnValueError):
+    """ XPC-related error """
+    pass
+
+
+class RpcXpcSerializationError(RpcXpcError):
+    """ Failed to serialize/deserialize XPC message """
+    pass
