@@ -30,3 +30,9 @@ rpcserver: rpcserver.c $(EXTRA_O_FILES)
 
 clean:
 	rm -rf *.o rpcserver
+
+install: rpcserver
+	mv rpcserver /usr/local/bin
+
+uninstall:
+	rm /usr/local/bin/rpcserver
