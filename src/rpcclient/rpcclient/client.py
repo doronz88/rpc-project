@@ -517,6 +517,8 @@ class Client:
         XSH.ctx['_create_socket_cb'] = self._create_socket_cb
 
         try:
+            logging.getLogger('parso.python.diff').disabled = True
+            logging.getLogger('parso.cache').disabled = True
             xonsh_main(args)
         except SystemExit:
             self._logger.disabled = False
