@@ -4,7 +4,7 @@ NC='\033[0m' # No Color
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 
-for i in iphoneos,arm64 macosx,x86_64
+for i in iphoneos,arm64 macosx,x86_64 macosx,arm64
 do
     IFS=","
     set -- $i;

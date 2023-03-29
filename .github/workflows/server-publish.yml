@@ -47,8 +47,15 @@ jobs:
           path: ./src/rpcserver/rpcserver_iphoneos_arm64
 
       - if: matrix.os == 'macos-latest'
-        name: Upload macos server artifact
+        name: Upload macos,x86_64 server artifact
         uses: actions/upload-artifact@v3
         with:
           name: rpcserver_macosx_x86_64
           path: ./src/rpcserver/rpcserver_macosx_x86_64
+      
+      - if: matrix.os == 'macos-latest'
+        name: Upload macos,arm64 server artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rpcserver_macosx_arm64
+          path: ./src/rpcserver/rpcserver_macosx_arm64
