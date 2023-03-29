@@ -9,6 +9,17 @@
 
 #include "common.h"
 
+#ifdef __APPLE__
+#include <os/log.h>
+
+struct os_log_s
+{
+    int a;
+};
+
+struct os_log_s _os_log_default;
+#endif // __APPLE__
+
 bool g_stdout = false;
 bool g_syslog = false;
 FILE *g_file = NULL;
@@ -28,7 +39,7 @@ void print_backtrace()
         would produce similar output to the following: */
 
     strings = backtrace_symbols(buffer, nptrs);
-    if (strings == NULL) 
+    if (strings == NULL)
     {
         perror("backtrace_symbols");
         return;
@@ -66,7 +77,11 @@ void trace(const char *prefix, const char *fmt, ...)
     }
     if (g_syslog)
     {
+#ifdef __APPLE__
+        os_log(&_os_log_default, "%{public}s", prefixed_line);
+#else  // __APPLE__
         syslog(LOG_DEBUG, "%s", prefixed_line);
+#endif // !__APPLE__
     }
     if (g_file)
     {
