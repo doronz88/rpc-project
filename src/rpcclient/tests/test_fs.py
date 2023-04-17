@@ -1,5 +1,7 @@
 from stat import S_IMODE
 
+import pytest
+
 
 def test_chown(client, tmp_path):
     file = (tmp_path / 'temp.txt')
@@ -106,10 +108,13 @@ def test_walk(client, tmp_path):
         (f'{tmp_path}/dir_a', [], ['a1.txt', 'a2.txt'])
     ]
 
-    def test_xattr(client, tmp_path):
-        client.fs.setxattr(tmp_path, 'KEY', b'VALUE')
-        assert client.fs.getxattr(tmp_path, 'KEY') == b'VALUE'
-        assert client.fs.listxattr(tmp_path) == ['KEY']
-        assert client.fs.dictxattr(tmp_path) == {'KEY': b'VALUE'}
-        client.fs.removexattr(tmp_path, 'KEY')
-        assert client.fs.listxattr(tmp_path) == []
+
+@pytest.mark.darwin
+def test_xattr(client, tmp_path):
+    client.fs.setxattr(tmp_path, 'KEY', b'VALUE')
+    assert client.fs.getxattr(tmp_path, 'KEY') == b'VALUE'
+    assert client.fs.listxattr(tmp_path) == ['KEY']
+    assert client.fs.dictxattr(tmp_path) == {'KEY': b'VALUE'}
+    client.fs.removexattr(tmp_path, 'KEY')
+    assert client.fs.listxattr(tmp_path) == []
+
