@@ -2,6 +2,9 @@ from stat import S_IMODE
 
 import pytest
 
+from rpcclient.darwin.consts import UF_IMMUTABLE
+from rpcclient.exceptions import RpcPermissionError
+
 
 def test_chown(client, tmp_path):
     file = (tmp_path / 'temp.txt')
@@ -118,3 +121,19 @@ def test_xattr(client, tmp_path):
     client.fs.removexattr(tmp_path, 'KEY')
     assert client.fs.listxattr(tmp_path) == []
 
+
+@pytest.mark.darwin
+def test_chflags(client, tmp_path):
+    # create temporary file
+    file = tmp_path / 'file'
+    with client.fs.open(file, 'w'):
+        pass
+    # make it immutable
+    client.fs.chflags(file, UF_IMMUTABLE)
+    # verify we cannot remove it
+    with pytest.raises(RpcPermissionError):
+        client.fs.remove(file)
+    # restore its permissions
+    client.fs.chflags(file, 0)
+    # verify removal succeeds
+    client.fs.remove(file)

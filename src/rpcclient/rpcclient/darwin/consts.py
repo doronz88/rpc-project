@@ -922,3 +922,56 @@ class OsLogLevel(IntEnum):
     DEFAULT = 2
     INFO = 3
     DEBUG = 4
+
+
+# Definitions of flags stored in file flags word.
+# Super-user and owner changeable flags.
+
+UF_SETTABLE = 0x0000ffff  # mask of owner changeable flags
+UF_NODUMP = 0x00000001  # do not dump file
+UF_IMMUTABLE = 0x00000002  # file may not be changed
+UF_APPEND = 0x00000004  # writes to file may only append
+UF_OPAQUE = 0x00000008  # directory is opaque wrt. union
+
+# The following bit is reserved for FreeBSD.  It is not implemented
+# in Mac OS X.
+
+# UF_NOUNLINK =  0x00000010  # file may not be removed or renamed
+UF_COMPRESSED = 0x00000020  # file is compressed (some file-systems)
+
+# UF_TRACKED is used for dealing with document IDs.  We no longer issue
+#  notifications for deletes or renames for files which have UF_TRACKED set.
+UF_TRACKED = 0x00000040
+
+UF_DATAVAULT = 0x00000080  # entitlement required for reading
+# and writing
+
+# Bits 0x0100 through 0x4000 are currently undefined.
+UF_HIDDEN = 0x00008000  # hint that this item should not be
+# displayed in a GUI
+#
+# Super-user changeable flags.
+
+SF_SUPPORTED = 0x009f0000  # mask of superuser supported flags
+SF_SETTABLE = 0x3fff0000  # mask of superuser changeable flags
+SF_SYNTHETIC = 0xc0000000  # mask of system read-only synthetic flags
+SF_ARCHIVED = 0x00010000  # file is archived
+SF_IMMUTABLE = 0x00020000  # file may not be changed
+SF_APPEND = 0x00040000  # writes to file may only append
+SF_RESTRICTED = 0x00080000  # entitlement required for writing
+SF_NOUNLINK = 0x00100000  # Item may not be removed, renamed or mounted on
+
+# The following two bits are reserved for FreeBSD.  They are not
+# implemented in Mac OS X.
+
+# SF_SNAPSHOT =  0x00200000  # snapshot inode
+# NOTE: There is no SF_HIDDEN bit.
+
+SF_FIRMLINK = 0x00800000  # file is a firmlink
+
+# Synthetic flags.
+#
+# These are read-only.  We keep them out of SF_SUPPORTED so that
+# attempts to set them will fail.
+
+SF_DATALESS = 0x40000000  # file is dataless object
