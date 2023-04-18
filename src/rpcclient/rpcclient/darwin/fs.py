@@ -74,3 +74,9 @@ class DarwinFs(Fs):
             if 0 != self._client.symbols.statfs64(path, buf):
                 self._client.raise_errno_exception(f'statfs failed for: {path}')
             return statfs64.parse_stream(buf)
+
+    @path_to_str('path')
+    def chflags(self, path: str, flags: int) -> None:
+        """ call chflags(path, flags) at remote. see manpage for more info """
+        if 0 != self._client.symbols.chflags(path, flags):
+            self._client.raise_errno_exception(f'chflags failed for: {path}')
