@@ -40,3 +40,7 @@ class Time:
     def is_set_automatically(self):
         """ tell is time settings are set to automatic """
         return bool(self._client.symbols.TMIsAutomaticTimeZoneEnabled())
+
+    def boot_time(self) -> datetime:
+        timestamp = timeval.parse(self._client.sysctl.get_by_name('kern.boottime')).tv_sec
+        return datetime.fromtimestamp(timestamp)
