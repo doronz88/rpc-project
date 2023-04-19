@@ -62,4 +62,10 @@ class Keychain:
             if err != 0:
                 raise BadReturnValueError(f'SecItemCopyMatching() returned: {err}')
 
-            return p_result[0].py()
+            result = p_result[0]
+
+            # results contain a reference which isn't plist-serializable
+            removal_key = self._client.cf('v_Ref')
+            for i in range(result.objc_call('count')):
+                result.objc_call('objectAtIndex:', i).objc_call('removeObjectForKey:', removal_key)
+            return result.py()
