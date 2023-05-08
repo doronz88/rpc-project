@@ -170,3 +170,8 @@ class RpcXpcError(BadReturnValueError):
 class RpcXpcSerializationError(RpcXpcError):
     """ Failed to serialize/deserialize XPC message """
     pass
+
+
+class RpcSetDeveloperModeError(BadReturnValueError):
+    """ Failed to set Developer Mode """
+    pass
