@@ -3,6 +3,7 @@ import typing
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.darwin.reports import Reports
 from rpcclient.ios.accessibility import Accessibility
+from rpcclient.ios.amfi import Amfi
 from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
@@ -27,6 +28,7 @@ class IosClient(DarwinClient):
         self.accessibility = Accessibility(self)
         self.wifi = IosWifi(self)
         self.springboard = SpringBoard(self)
+        self.amfi = Amfi(self)
         self._radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
 
     @property
