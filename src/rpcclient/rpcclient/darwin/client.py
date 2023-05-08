@@ -27,6 +27,7 @@ from rpcclient.darwin.location import Location
 from rpcclient.darwin.media import DarwinMedia
 from rpcclient.darwin.network import DarwinNetwork
 from rpcclient.darwin.objective_c_symbol import ObjectiveCSymbol
+from rpcclient.darwin.power import Power
 from rpcclient.darwin.preferences import Preferences
 from rpcclient.darwin.processes import DarwinProcesses
 from rpcclient.darwin.structs import utsname
@@ -90,6 +91,7 @@ class DarwinClient(Client):
         self.core_graphics = CoreGraphics(self)
         self.keychain = Keychain(self)
         self.network = DarwinNetwork(self)
+        self.power = Power(self)
         self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
