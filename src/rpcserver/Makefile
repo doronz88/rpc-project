@@ -1,4 +1,4 @@
-SERVER_CC=gcc
+SERVER_CC=clang
 LDFLAGS=
 UNAME_S:=$(shell uname -s)
 EXTRA_O_FILES=common.o

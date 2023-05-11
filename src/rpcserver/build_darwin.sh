@@ -17,6 +17,10 @@ do
     CC="$(xcrun -f --sdk $SDK clang)"
     CFLAGS="-arch $ARCH --sysroot=$SYSROOT -DSAFE_READ_WRITES"
 
+    if test "$SDK" = 'iphoneos'; then
+        CFLAGS="$CFLAGS -miphoneos-version-min=5.0"
+    fi
+
     make clean
     make all SERVER_CC="$CC" SERVER_CFLAGS="$CFLAGS"
 
