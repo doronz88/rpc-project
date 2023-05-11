@@ -7,7 +7,7 @@ def test_modules(client):
     """
     :param rpcclient.client.Client client:
     """
-    assert '/usr/lib/libSystem.B.dylib' in client.modules
+    assert '/usr/lib/libSystem.B.dylib' in [module.name for module in client.images]
 
 
 def test_uname(client):
@@ -36,6 +36,6 @@ def test_load_all_libraries(client):
     """
     :param rpcclient.darwin.client.DarwinClient client:
     """
-    original_count = len(client.modules)
+    original_count = len(client.images)
     client.load_all_libraries()
-    assert len(client.modules) > original_count
+    assert len(client.images) > original_count
