@@ -1,11 +1,23 @@
 import datetime
+import logging
+import re
 from typing import List
+
+from cached_property import cached_property
 
 from rpcclient.darwin.cfpreferences import kCFPreferencesAnyHost
 from rpcclient.darwin.consts import OsLogLevel
+from rpcclient.darwin.processes import Process
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import BadReturnValueError
+from rpcclient.exceptions import BadReturnValueError, HarGlobalNotFoundError, MissingLibraryError
 from rpcclient.structs.consts import SIGKILL
+
+MOV_X0_X9 = b'\xE0\x03\x13\xAA'
+MOV_X1_0 = b'\x01\x00\x80\xD2'
+MOV_W2_0XA = b'\x42\x01\x80\x52'
+PATTERN = MOV_X0_X9 + MOV_X1_0 + MOV_W2_0XA
+
+logger = logging.getLogger(__name__)
 
 
 class OsLogPreferencesBase:
@@ -112,9 +124,68 @@ class Syslog:
     """" manage syslog """
 
     def __init__(self, client):
+        """
+        @type client: rpcclient.darwin.client.DarwinClient
+        """
         self._client = client
         self._load_logging_support_library()
         self.preferences_manager = OsLogPreferencesManager(self._client)
+
+    @cached_property
+    def _enable_har_global(self) -> int:
+        r"""
+        In order to find an unexported global variable, we use a sequence of instructions that we know comes after
+        the aforementioned variable is accessed.
+
+            88 07 2D D0                 ADRP            X8, #har_global@PAGE
+            08 41 55 39                 LDRB            W8, [X8,#har_global@PAGEOFF]
+            08 03 00 34                 CBZ             W8, loc_187DA1294
+            E0 03 13 AA                 MOV             X0, X19 ; __str
+            01 00 80 D2                 MOV             X1, #0  ; __endptr
+            42 01 80 52                 MOV             W2, #0xA ; __base
+
+        After getting the address of the instruction `mov x0,x19`, we need to rewind 2 instructions. Next, we verify
+        that the above 2 instructions are `adrp` && `ldrb` . Then, extract the page address + page offset and
+        calculate the affective address.
+        """
+
+        address = []
+        regex_hex = r'0x[0-9a-fA-F]+'
+
+        self._client.load_framework('CFNetwork')
+        cfnetwork = [image for image in self._client.images if
+                     image.name == '/System/Library/Frameworks/CFNetwork.framework/CFNetwork']
+        if len(cfnetwork) < 1:
+            raise MissingLibraryError()
+        pattern_addr = self._client.symbols.memmem(cfnetwork[0].base_address, 0xffffffff, PATTERN, len(PATTERN))
+        pattern_sym = self._client.symbol(pattern_addr)
+        disass = (pattern_sym - len(PATTERN)).disass(8)
+        if disass[0].mnemonic != 'adrp' and disass[1].mnemonic != 'ldrb':
+            raise HarGlobalNotFoundError()
+
+        for instruction in disass:
+            address.append(
+                int(re.findall(regex_hex, instruction.op_str)[0], 16)
+            )
+        return sum(address)
+
+    def set_harlogger_for_process(self, value: bool, pid: int) -> None:
+        process = self._client.processes.get_by_pid(value, pid)
+        self._set_harlogger_for_process(value, process)
+        self.set_har_capture_global(True)
+
+    def set_harlogger_for_all(self, value: bool, expression: str = None) -> None:
+        for p in self._client.processes.list():
+            if p.pid == 0:
+                continue
+            if expression and expression not in p.basename:
+                continue
+            try:
+                self._set_harlogger_for_process(value, p)
+                logger.info(f'{"Enabled" if value else "Disabled"} for {p.name}')
+            except BadReturnValueError:
+                logger.error(f'Failed To enabled for {p.name}')
+        self.set_har_capture_global(True)
 
     def set_unredacted_logs(self, enable: bool = True):
         """
@@ -157,3 +228,6 @@ class Syslog:
 
     def _load_logging_support_library(self) -> None:
         self._client.load_framework('LoggingSupport')
+
+    def _set_harlogger_for_process(self, value: bool, process: Process) -> None:
+        process.poke(self._enable_har_global, value.to_bytes(1, 'little'))
