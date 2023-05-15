@@ -35,6 +35,14 @@ class CFPropertyListMutabilityOptions(IntEnum):
     kCFPropertyListMutableContainersAndLeaves = 1 << 1,
 
 
+class IOPMUserActiveType(IntEnum):
+    kIOPMUserActiveLocal = 0  # User is local on the system
+    kIOPMUserActiveRemote = 1  # Remote User connected to the system
+
+
+kIOPMAssertionLevelOff = 0
+kIOPMAssertionLevelOn = 255
+
 # Types from MacTypes.h
 
 # Basic C types
