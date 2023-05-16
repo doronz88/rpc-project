@@ -5,6 +5,7 @@ import logging
 import plistlib
 import typing
 from collections import namedtuple
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Mapping
 
@@ -64,6 +65,12 @@ FRAMEWORKS_BLACKLIST = (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class DyldImage:
+    name: str
+    base_address: int
+
+
 class DarwinClient(Client):
     def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
         super().__init__(sock, sysname, arch, create_socket_cb)
@@ -97,10 +104,14 @@ class DarwinClient(Client):
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
     @property
-    def modules(self) -> typing.List[str]:
+    def images(self) -> typing.List[DyldImage]:
         m = []
         for i in range(self.symbols._dyld_image_count()):
-            m.append(self.symbols._dyld_get_image_name(i).peek_str())
+            module_name = self.symbols._dyld_get_image_name(i).peek_str()
+            base_address = self.symbols._dyld_get_image_header(i)
+            m.append(
+                DyldImage(module_name, base_address)
+            )
         return m
 
     @cached_property

@@ -73,6 +73,11 @@ class NoEntitlementsError(RpcClientException):
     pass
 
 
+class HarGlobalNotFoundError(RpcClientException):
+    """ Failed to find Harlogger global """
+    pass
+
+
 class ElementNotFoundError(RpcClientException):
     """ Failed to find element """
     pass
