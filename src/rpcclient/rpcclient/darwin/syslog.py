@@ -170,7 +170,7 @@ class Syslog:
         return sum(address)
 
     def set_harlogger_for_process(self, value: bool, pid: int) -> None:
-        process = self._client.processes.get_by_pid(value, pid)
+        process = self._client.processes.get_by_pid(pid)
         self._set_harlogger_for_process(value, process)
         self.set_har_capture_global(True)
 
