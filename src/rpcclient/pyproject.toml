@@ -29,6 +29,7 @@ dynamic = ["dependencies"]
 
 [project.optional-dependencies]
 test = ["pytest"]
+docs = ["toml", "myst_parser", "sphinx", "sphinx-rtd-theme"]
 
 [project.urls]
 "Homepage" = "https://github.com/doronz88/rpc-project"
