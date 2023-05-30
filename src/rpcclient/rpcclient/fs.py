@@ -302,6 +302,14 @@ class Fs:
             return buf.peek_str()
 
     @path_to_str('path')
+    def realpath(self, path: str) -> str:
+        """ realpath() at remote. read man for more details. """
+        with self._client.safe_malloc(MAXPATHLEN) as buf:
+            if self._client.symbols.realpath(path, buf) == 0:
+                self._client.raise_errno_exception(f'realpath failed for: {path}')
+            return buf.peek_str()
+
+    @path_to_str('path')
     def is_symlink(self, path: str) -> bool:
         try:
             self.readlink(path)

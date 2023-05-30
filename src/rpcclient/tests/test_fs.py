@@ -50,6 +50,10 @@ def test_symlink(client, tmp_path):
     assert client.fs.readlink(symlink) == str(file)
 
 
+def test_realpath(client, tmp_path):
+    assert client.fs.realpath(tmp_path / '././') == str(tmp_path)
+
+
 def test_link(client, tmp_path):
     client.fs.write_file(tmp_path / 'temp.txt', b'hello')
     client.fs.link((tmp_path / 'temp.txt'), (tmp_path / 'temp1.txt'))
