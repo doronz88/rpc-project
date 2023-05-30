@@ -5,6 +5,14 @@ from rpcclient.darwin.consts import IOPMUserActiveType
 pytestmark = pytest.mark.darwin
 
 
+def test_copy_assertions_status(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    assertions = client.power.copy_assertions_status()
+    assert len(assertions) > 0
+
+
 def test_copy_assertions_by_process(client):
     """
     :param rpcclient.darwin.client.DarwinClient client:

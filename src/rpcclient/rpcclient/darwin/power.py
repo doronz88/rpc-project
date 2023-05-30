@@ -76,7 +76,10 @@ class Power:
 
     def copy_assertions_status(self) -> Mapping[str, int]:
         """ Returns a list of available assertions and their system-wide levels """
-        return self._client.symbols.IOPMCopyAssertionsStatus().py()
+        with self._client.safe_malloc(8) as result:
+            if 0 != self._client.symbols.IOPMCopyAssertionsStatus(result):
+                raise BadReturnValueError('IOPMCopyAssertionsStatus() failed')
+            return result[0].py()
 
     def reboot(self) -> None:
         if self._client.symbols.reboot().c_int64 == -1:
