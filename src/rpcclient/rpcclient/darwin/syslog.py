@@ -176,7 +176,7 @@ class Syslog:
 
     def set_harlogger_for_all(self, value: bool, expression: str = None) -> None:
         for p in self._client.processes.list():
-            if p.pid == 0:
+            if p.pid == 0 or not p.path:
                 continue
             if expression and expression not in p.basename:
                 continue
