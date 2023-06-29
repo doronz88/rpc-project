@@ -1,6 +1,8 @@
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
+from typing import Optional
 
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
@@ -76,12 +78,18 @@ class ObjectiveCSymbol(DarwinSymbol):
         self.properties = properties_list
         self.class_ = class_wrapper
 
-    def show(self, recursive: bool = False):
+    def show(self, dump_to: Optional[str] = None, recursive: bool = False):
         """
         Print to terminal the highlighted class description.
+        :param dump_to: directory to dump.
         :param recursive: Show methods of super classes.
         """
-        print(highlight(self._to_str(recursive), ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+        formatted = self._to_str(recursive)
+        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+
+        if dump_to is None:
+            return
+        (Path(dump_to) / f'{self.class_.name}.m').expanduser().write_text(formatted)
 
     def objc_call(self, selector: str, *params, **kwargs):
         """

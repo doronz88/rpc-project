@@ -1,7 +1,7 @@
 from collections import namedtuple
 from functools import partial
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Optional
 
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
@@ -85,11 +85,17 @@ class Class:
             objc.Method.from_data(method, self._client) for method in class_description['methods']
         ]
 
-    def show(self):
+    def show(self, dump_to: Optional[str] = None):
         """
         Print to terminal the highlighted class description.
+        :param dump_to: directory to dump.
         """
-        print(highlight(str(self), ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+        formatted = str(self)
+        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+
+        if dump_to is None:
+            return
+        (Path(dump_to) / f'{self.name}.m').expanduser().write_text(formatted)
 
     def objc_call(self, sel: str, *args, **kwargs):
         """
