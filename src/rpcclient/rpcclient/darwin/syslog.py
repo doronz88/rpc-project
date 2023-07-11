@@ -182,9 +182,9 @@ class Syslog:
                 continue
             try:
                 self._set_harlogger_for_process(value, p)
-                logger.info(f'{"Enabled" if value else "Disabled"} for {p.name}')
+                logger.info(f'{"Enabled" if value else "Disabled"} for {p.basename}')
             except BadReturnValueError:
-                logger.error(f'Failed To enabled for {p.name}')
+                logger.error(f'Failed To enabled for {p}')
         self.set_har_capture_global(True)
 
     def set_unredacted_logs(self, enable: bool = True):
