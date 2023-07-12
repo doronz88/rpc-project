@@ -444,7 +444,7 @@ class Client:
             if symbol:
                 self.symbols.free(symbol)
 
-    def interactive(self):
+    def interactive(self, additional_namespace: typing.Mapping = None):
         """ Start an interactive shell """
         sys.argv = ['a']
         c = Config()
@@ -455,6 +455,8 @@ class Client:
         c.TerminalInteractiveShell.autoformatter = None
         namespace = globals()
         namespace.update({'p': self, 'symbols': self.symbols})
+        if additional_namespace is not None:
+            namespace.update(additional_namespace)
         print(USAGE)
         IPython.start_ipython(config=c, user_ns=namespace)
 
