@@ -103,6 +103,12 @@ class DarwinClient(Client):
         self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
+    def interactive(self, additional_namespace: typing.Mapping = None):
+        if additional_namespace is None:
+            additional_namespace = {}
+        additional_namespace['CFSTR'] = self.cf
+        super().interactive(additional_namespace=additional_namespace)
+
     @property
     def images(self) -> typing.List[DyldImage]:
         m = []
