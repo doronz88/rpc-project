@@ -54,7 +54,17 @@ The python client utilizes the ability to call native functions in order to prov
 
 and much more...
 
-## Installation
+## Local installation
+
+```shell
+# install the package
+python3 -m pip install -U rpcclient
+
+# enter shell
+rpclocal
+```
+
+## Remote installation
 
 Download and execute the latest server artifact, according to your platform and arch from here:
 
