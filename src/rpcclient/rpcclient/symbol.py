@@ -144,6 +144,11 @@ class Symbol(int):
         return ctypes.c_uint16(self).value
 
     @property
+    def c_bool(self) -> bool:
+        """ cast to c_bool """
+        return ctypes.c_bool(self).value
+
+    @property
     def dl_info(self) -> Container:
         dl_info = Dl_info(self._client)
         sizeof = dl_info.sizeof()

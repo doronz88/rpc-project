@@ -14,7 +14,8 @@ class Amfi:
         self._load_amfi()
 
     def set_developer_mode_status(self, enabled: bool) -> None:
-        cfreply = self._client.xpc.send_message('com.apple.amfi.xpc', {'action': int(not (enabled))}, False)['cfreply']
+        cfreply = self._client.xpc.send_message_using_cf_serialization(
+            'com.apple.amfi.xpc', {'action': int(not (enabled))}, False)['cfreply']
         raw_response = list(cfreply.values())[0]
         if b'success' not in raw_response:
             raise RpcSetDeveloperModeError()
