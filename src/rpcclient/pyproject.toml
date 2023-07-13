@@ -3,7 +3,7 @@ name = "rpcclient"
 version = "3.16.2"
 description = "rpcclient for connecting with the rpcserver"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = { file = "LICENSE" }
 keywords = ["ios", "macos", "linux", "automation", "remote-shell", "remote-control", "ipython"]
 authors = [
@@ -18,7 +18,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -36,7 +35,8 @@ docs = ["toml", "myst_parser", "sphinx", "sphinx-rtd-theme"]
 "Bug Reports" = "https://github.com/doronz88/rpc-project/issues"
 
 [project.scripts]
-rpcclient = "rpcclient.__main__:cli"
+rpcclient = "rpcclient.__main__:rpcclient"
+rpclocal = "rpcclient.__main__:rpclocal"
 
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*"]
