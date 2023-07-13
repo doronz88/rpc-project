@@ -8,6 +8,69 @@ from rpcclient.exceptions import MissingLibraryError, RpcXpcSerializationError
 from rpcclient.structs.consts import RTLD_NOW
 
 
+class XPCObject(DarwinSymbol):
+    @property
+    def type(self) -> int:
+        return self._client.symbols.xpc_get_type(self)
+
+
+class XPCDictionary(XPCObject):
+    def set_string(self, key: str, value: str) -> None:
+        self._client.symbols.xpc_dictionary_set_string(self, key, value)
+
+    def set_int64(self, key: str, value: int) -> None:
+        self._client.symbols.xpc_dictionary_set_int64(self, key, value)
+
+    def set_uint64(self, key: str, value: int) -> None:
+        self._client.symbols.xpc_dictionary_set_uint64(self, key, value)
+
+    def set_bool(self, key: str, value: bool) -> None:
+        self._client.symbols.xpc_dictionary_set_bool(self, key, value)
+
+    def set_data(self, key: str, value: bytes) -> None:
+        self._client.symbols.xpc_dictionary_set_data(self, key, value, len(value))
+
+    def set_fd(self, key: str, value: int) -> None:
+        self._client.symbols.xpc_dictionary_set_fd(self, key, value)
+
+    def set_uuid(self, key: str, value: str) -> None:
+        self._client.symbols.xpc_dictionary_set_uuid(self, key, value)
+
+    def set_dictionary(self, key: str, value: int) -> None:
+        self._client.symbols.xpc_dictionary_set_dictionary(self, key, value)
+
+    def set_object(self, obj: XPCObject) -> None:
+        self._client.symbols.xpc_dictionary_set_object(self, obj)
+
+    def get_string(self, key: str) -> str:
+        return self._client.symbols.xpc_dictionary_get_string(self, key).peek_str()
+
+    def get_int64(self, key: str) -> int:
+        return self._client.symbols.xpc_dictionary_get_int64(self, key).c_int64
+
+    def get_uint64(self, key: str) -> int:
+        return self._client.symbols.xpc_dictionary_get_uint64(self, key).c_uint64
+
+    def get_bool(self, key: str) -> None:
+        return self._client.symbols.xpc_dictionary_get_bool(self, key).c_bool
+
+    def get_data(self, key: str) -> bytes:
+        with self._client.safe_malloc(8) as p_length:
+            return self._client.symbols.xpc_dictionary_get_data(self, key, p_length).peek(p_length[0])
+
+    def get_fd(self, key: str) -> int:
+        return self._client.symbols.xpc_dictionary_get_fd(self, key)
+
+    def get_uuid(self, key: str) -> str:
+        return self._client.symbols.xpc_dictionary_get_uuid(self, key).peek_str()
+
+    def get_dictionary(self, key: str) -> 'XPCDictionary':
+        return XPCDictionary.create(self._client.symbols.xpc_dictionary_get_dictionary(self, key), self._client)
+
+    def get_object(self) -> XPCObject:
+        return XPCObject.create(self._client.symbols.xpc_dictionary_get_object(), self._client)
+
+
 class Xpc:
     def __init__(self, client):
         """
@@ -17,64 +80,80 @@ class Xpc:
         self._load_duet_activity_scheduler_manager()
         self.sharedScheduler = self._client.objc_get_class('_DASScheduler').sharedScheduler().objc_symbol
 
-    def send_message(self, service_name: str, message: CfSerializable, decode_cf: bool = True) -> CfSerializable:
+    def create_xpc_dictionary(self) -> XPCDictionary:
+        return XPCDictionary.create(self._client.symbols.xpc_dictionary_create(0, 0, 0), self._client)
+
+    def send_xpc_dictionary(self, service_name: str, message: XPCDictionary) -> XPCDictionary:
         """
-        Send a CFObject serialized over an XPC object to a XPC service synchronously and return result.
+        Send a native XPC dictionary to a XPC service synchronously and return result.
+
+        :param service_name: mach service name
+        :param message: xpc message to send
+        :return: received response
+        """
+        return XPCDictionary.create(self.send_message_raw(service_name, message), self._client)
+
+    def send_message_using_cf_serialization(
+            self, service_name: str, message: CfSerializable, decode_cf: bool = True) -> CfSerializable:
+        """
+        Send a CFObject serialized over an XPC object to a XPC service synchronously and return reply.
 
         :param service_name: mach service name
         :param message: xpc message to send
         :param decode_cf: should response be decoded as CFObject-over-XPCObject or a native XPC object
         :return: received response
         """
-        message_raw = self.to_xpc_message(message)
+        message_raw = self.encode_xpc_message_using_cf_serialization(message)
         if message_raw == 0:
             raise RpcXpcSerializationError()
         response = self.send_message_raw(service_name, message_raw)
         if response == 0:
             raise RpcXpcSerializationError()
-        return self.from_xpc_message(response) if decode_cf else self.from_xpc_object(response)
+        return self.decode_xpc_message_using_cf_serialization(
+            response) if decode_cf else self.decode_xpc_object_using_cf_serialization(response)
 
-    def send_object(self, service_name: str, message: CfSerializable) -> CfSerializable:
+    def send_object_using_cf_serialization(self, service_name: str, message: CfSerializable) -> CfSerializable:
         """
-        Send a native XPC message to a XPC service synchronously and return result.
+        Send a native XPC object serialized over a CFObject to a XPC service synchronously and return reply.
 
         :param service_name: mach service name
         :param message: xpc message to send
         :return: received response
         """
-        message_raw = self.to_xpc_object(message)
+        message_raw = self.encode_xpc_object_using_cf_serialization(message)
         if message_raw == 0:
             raise RpcXpcSerializationError()
         response = self.send_message_raw(service_name, message_raw)
         if response == 0:
             raise RpcXpcSerializationError()
-        return self.from_xpc_object(response)
+        return self.decode_xpc_object_using_cf_serialization(response)
 
-    def from_xpc_object(self, address: DarwinSymbol) -> CfSerializable:
+    def decode_xpc_object_using_cf_serialization(self, address: DarwinSymbol) -> CfSerializable:
         """
-        Convert XPC object to python object.
+        Convert XPC object to python object using CF serialization.
         """
         return self._client.symbols._CFXPCCreateCFObjectFromXPCObject(address).py()
 
-    def to_xpc_object(self, obj: CfSerializable) -> DarwinSymbol:
+    def encode_xpc_object_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbol:
         """
-        Convert python object to XPC object.
+        Convert python object to XPC object using CF conversion.
         """
         return self._client.symbols._CFXPCCreateXPCObjectFromCFObject(self._client.cf(obj))
 
-    def from_xpc_message(self, address: DarwinSymbol) -> CfSerializable:
+    def decode_xpc_message_using_cf_serialization(self, address: DarwinSymbol) -> CfSerializable:
         """
         Convert a CFObject serialized over an XPCObject to python object
         """
         return self._client.symbols._CFXPCCreateCFObjectFromXPCMessage(address).py()
 
-    def to_xpc_message(self, obj: CfSerializable) -> DarwinSymbol:
+    def encode_xpc_message_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbol:
         """
         Convert python object to a CFObject serialized over an XPCObject
         """
         return self._client.symbols._CFXPCCreateXPCMessageWithCFObject(self._client.cf(obj))
 
-    def send_message_raw(self, service_name, message_raw) -> DarwinSymbol:
+    def send_message_raw(self, service_name: str, message_raw: DarwinSymbol) -> DarwinSymbol:
+        """ Send a RAW xpc object to given service_name and wait reply. """
         conn = self._connect_to_mach_service(service_name)
         return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
 
