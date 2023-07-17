@@ -42,6 +42,9 @@ class XPCDictionary(XPCObject):
     def set_object(self, obj: XPCObject) -> None:
         self._client.symbols.xpc_dictionary_set_object(self, obj)
 
+    def set_value(self, obj: XPCObject) -> None:
+        self._client.symbols.xpc_dictionary_set_value(self, obj)
+
     def get_string(self, key: str) -> str:
         return self._client.symbols.xpc_dictionary_get_string(self, key).peek_str()
 
@@ -67,8 +70,11 @@ class XPCDictionary(XPCObject):
     def get_dictionary(self, key: str) -> 'XPCDictionary':
         return XPCDictionary.create(self._client.symbols.xpc_dictionary_get_dictionary(self, key), self._client)
 
-    def get_object(self) -> XPCObject:
-        return XPCObject.create(self._client.symbols.xpc_dictionary_get_object(), self._client)
+    def get_object(self, key: str) -> XPCObject:
+        return XPCObject.create(self._client.symbols.xpc_dictionary_get_object(self, key), self._client)
+
+    def get_value(self, key: str) -> XPCObject:
+        return XPCObject.create(self._client.symbols.xpc_dictionary_get_value(self, key), self._client)
 
 
 class Xpc:
