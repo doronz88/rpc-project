@@ -84,3 +84,20 @@ class Power:
     def reboot(self) -> None:
         if self._client.symbols.reboot().c_int64 == -1:
             raise BadReturnValueError()
+
+    def sleep(self) -> None:
+        """
+        Enter sustem sleep
+
+        See: https://gist.github.com/atr000/416796
+        """
+        with self._client.safe_malloc(8) as p_master:
+            err = self._client.symbols.IOMasterPort(self._client.symbols.bootstrap_port[0], p_master)
+            if err != 0:
+                raise BadReturnValueError(f'IOMasterPort didnt work, err is {err}')
+            pmcon = self._client.symbols.IOPMFindPowerManagement(p_master[0])
+            if pmcon == 0:
+                raise BadReturnValueError('IOPMFindPowerManagement coudlnt establish connection')
+            err = self._client.symbols.IOPMSleepSystem(pmcon)
+            if err != 0:
+                raise BadReturnValueError(f'IOPMSleepSystem didnt work. err is {err}')
