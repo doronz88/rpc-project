@@ -154,14 +154,20 @@ class Syslog:
 
         self._client.load_framework('CFNetwork')
         cfnetwork = [image for image in self._client.images if
-                     image.name == '/System/Library/Frameworks/CFNetwork.framework/CFNetwork']
+                     image.name.startswith('/System/Library/Frameworks/CFNetwork.framework')]
         if len(cfnetwork) < 1:
             raise MissingLibraryError()
-        pattern_addr = self._client.symbols.memmem(cfnetwork[0].base_address, 0xffffffff, PATTERN, len(PATTERN))
-        pattern_sym = self._client.symbol(pattern_addr)
-        disass = (pattern_sym - len(PATTERN)).disass(8)
-        if disass[0].mnemonic != 'adrp' and disass[1].mnemonic != 'ldrb':
-            raise HarGlobalNotFoundError()
+        start = cfnetwork[0].base_address
+        while True:
+            pattern_addr = self._client.symbols.memmem(start, 0xffffffff, PATTERN, len(PATTERN))
+            if pattern_addr == 0:
+                raise HarGlobalNotFoundError()
+            pattern_sym = self._client.symbol(pattern_addr)
+            disass = (pattern_sym - len(PATTERN)).disass(8)
+            if disass[0].mnemonic == 'adrp' and disass[1].mnemonic == 'ldrb':
+                break
+            # search next occurrence
+            start = pattern_addr + 1
 
         for instruction in disass:
             address.append(
