@@ -12,10 +12,15 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, HarGlobalNotFoundError, MissingLibraryError
 from rpcclient.structs.consts import SIGKILL
 
+MOV_RDI_RBX = b'\x48\x89\xdf'
+XOR_ESI_ESI = b'\x31\xf6'
+MOV_EDX_0A = b'\xba\x0a\x00\x00'
+INTEL_PATTERN = MOV_RDI_RBX + XOR_ESI_ESI + MOV_EDX_0A + b'\x00'
+
 MOV_X0_X9 = b'\xE0\x03\x13\xAA'
 MOV_X1_0 = b'\x01\x00\x80\xD2'
 MOV_W2_0XA = b'\x42\x01\x80\x52'
-PATTERN = MOV_X0_X9 + MOV_X1_0 + MOV_W2_0XA
+ARM_PATTERN = MOV_X0_X9 + MOV_X1_0 + MOV_W2_0XA
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +137,17 @@ class Syslog:
         self.preferences_manager = OsLogPreferencesManager(self._client)
 
     @cached_property
-    def _enable_har_global(self) -> int:
-        r"""
+    def _cfnetwork_base(self) -> int:
+        self._client.load_framework('CFNetwork')
+        cfnetwork = [image for image in self._client.images if
+                     image.name.startswith('/System/Library/Frameworks/CFNetwork.framework')]
+        if len(cfnetwork) < 1:
+            raise MissingLibraryError()
+        return cfnetwork[0].base_address
+
+    @cached_property
+    def _arm_enable_har_global(self) -> DarwinSymbol:
+        """
         In order to find an unexported global variable, we use a sequence of instructions that we know comes after
         the aforementioned variable is accessed.
 
@@ -151,19 +165,13 @@ class Syslog:
 
         address = []
         regex_hex = r'0x[0-9a-fA-F]+'
-
-        self._client.load_framework('CFNetwork')
-        cfnetwork = [image for image in self._client.images if
-                     image.name.startswith('/System/Library/Frameworks/CFNetwork.framework')]
-        if len(cfnetwork) < 1:
-            raise MissingLibraryError()
-        start = cfnetwork[0].base_address
+        start = self._cfnetwork_base
         while True:
-            pattern_addr = self._client.symbols.memmem(start, 0xffffffff, PATTERN, len(PATTERN))
+            pattern_addr = self._client.symbols.memmem(start, 0xffffffff, ARM_PATTERN, len(ARM_PATTERN))
             if pattern_addr == 0:
                 raise HarGlobalNotFoundError()
             pattern_sym = self._client.symbol(pattern_addr)
-            disass = (pattern_sym - len(PATTERN)).disass(8)
+            disass = (pattern_sym - len(ARM_PATTERN)).disass(8)
             if disass[0].mnemonic == 'adrp' and disass[1].mnemonic == 'ldrb':
                 break
             # search next occurrence
@@ -173,7 +181,42 @@ class Syslog:
             address.append(
                 int(re.findall(regex_hex, instruction.op_str)[0], 16)
             )
-        return sum(address)
+        return self._client.symbol(sum(address))
+
+    @cached_property
+    def _intel_enable_har_global(self) -> DarwinSymbol:
+        """
+        In order to find an unexported global variable, we use a sequence of instructions that we know comes before
+        the aforementioned variable is accessed.
+
+            48 89 DF                    mov     rdi, rbx        ; __str
+            31 F6                       xor     esi, esi        ; __endptr
+            BA 0A 00 00                 mov     edx, 0Ah        ; __base
+            00
+            E8 78 EE 10                 call    _strtol
+            00
+            48 89 C3                    mov     rbx, rax
+            88 1D 19 9C                 mov     cs:har_global_0, bl  <-----------------
+        """
+        op_str_pattern = 'byte ptr [rip +'
+        start = self._cfnetwork_base
+        while True:
+            pattern_addr = self._client.symbols.memmem(start, 0xffffffff, INTEL_PATTERN, len(INTEL_PATTERN))
+            if pattern_addr == 0:
+                raise HarGlobalNotFoundError()
+            pattern_sym = self._client.symbol(pattern_addr)
+            disass = (pattern_sym + len(INTEL_PATTERN)).disass(100)
+            if (disass[0].mnemonic == 'call' and disass[1].mnemonic == 'mov' and disass[2].mnemonic == 'mov' and
+                    disass[2].op_str.startswith(op_str_pattern)):
+                offset = int(disass[2].op_str.split(op_str_pattern, 1)[1].split(']')[0], 0)
+                return self._client.symbol(disass[2].address + offset)
+            start = pattern_addr + 1
+
+    @cached_property
+    def _enable_har_global(self) -> DarwinSymbol:
+        if self._client.uname.machine == 'x86_64':
+            return self._intel_enable_har_global
+        return self._arm_enable_har_global
 
     def set_harlogger_for_process(self, value: bool, pid: int) -> None:
         process = self._client.processes.get_by_pid(pid)
@@ -190,7 +233,7 @@ class Syslog:
                 self._set_harlogger_for_process(value, p)
                 logger.info(f'{"Enabled" if value else "Disabled"} for {p.basename}')
             except BadReturnValueError:
-                logger.error(f'Failed To enabled for {p}')
+                logger.error(f'Failed To enable for {p}')
         self.set_har_capture_global(True)
 
     def set_unredacted_logs(self, enable: bool = True):
