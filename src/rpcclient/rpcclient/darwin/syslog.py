@@ -67,7 +67,7 @@ class OsLogPreferencesBase:
         self._object.objc_call('reset')
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} {self._verbosity_description}>'
+        return f'<{self.__class__.__name__} NAME:{self.name} {self._verbosity_description}>'
 
 
 class OsLogPreferencesCategory(OsLogPreferencesBase):
