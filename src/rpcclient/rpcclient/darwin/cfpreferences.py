@@ -7,6 +7,7 @@ kCFPreferencesCurrentUser = 'kCFPreferencesCurrentUser'
 kCFPreferencesAnyUser = 'kCFPreferencesAnyUser'
 kCFPreferencesCurrentHost = 'kCFPreferencesCurrentHost'
 kCFPreferencesAnyHost = 'kCFPreferencesAnyHost'
+GLOBAL_DOMAIN = 'Apple Global Domain'
 
 
 class CFPreferences:

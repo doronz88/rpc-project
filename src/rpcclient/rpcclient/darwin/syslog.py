@@ -5,7 +5,7 @@ from typing import List
 
 from cached_property import cached_property
 
-from rpcclient.darwin.cfpreferences import kCFPreferencesAnyHost
+from rpcclient.darwin.cfpreferences import GLOBAL_DOMAIN, kCFPreferencesAnyHost
 from rpcclient.darwin.consts import OsLogLevel
 from rpcclient.darwin.processes import Process
 from rpcclient.darwin.symbol import DarwinSymbol
@@ -217,6 +217,14 @@ class Syslog:
         if self._client.uname.machine == 'x86_64':
             return self._intel_enable_har_global
         return self._arm_enable_har_global
+
+    def install_cfnetwork_diagnostics_profile(self) -> None:
+        self._client.preferences.cf.set('AppleCFNetworkDiagnosticLogging', 3, GLOBAL_DOMAIN,
+                                        username='kCFPreferencesAnyUser')
+
+    def remove_cfnetwork_diagnostics_profile(self) -> None:
+        self._client.preferences.cf.remove('AppleCFNetworkDiagnosticLogging', GLOBAL_DOMAIN,
+                                           username='kCFPreferencesAnyUser')
 
     def set_harlogger_for_process(self, value: bool, pid: int) -> None:
         process = self._client.processes.get_by_pid(pid)
