@@ -40,7 +40,7 @@ class OsLogPreferencesBase:
 
     @persisted_level.setter
     def persisted_level(self, value: OsLogLevel) -> None:
-        return self._object.objc_call('setPersistedLevel:', value)
+        self._object.objc_call('setPersistedLevel:', value)
 
     @property
     def default_persisted_level(self) -> OsLogLevel:
@@ -52,7 +52,7 @@ class OsLogPreferencesBase:
 
     @enabled_level.setter
     def enabled_level(self, value: OsLogLevel) -> None:
-        return self._object.objc_call('setEnabledLevel:', value)
+        self._object.objc_call('setEnabledLevel:', value)
 
     @property
     def default_enabled_level(self) -> OsLogLevel:
