@@ -235,12 +235,10 @@ class Backtrace:
 
     def __init__(self, vmu_backtrace: DarwinSymbol):
         backtrace = vmu_backtrace.objc_call('description').py()
-        match = re.match(r'VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time_start>.+?) - (?P<time_end>.+?) '
+        match = re.match(r'VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time>.+?) '
                          r'Process: (?P<pid>\d+) Thread: (?P<thread_id>.+?)  Dispatch queue serial num: '
                          r'(?P<dispatch_queue_serial_num>\d+)\)', backtrace)
         self.flavor = match.group('flavor')
-        self.time_start = float(match.group('time_start'))
-        self.time_end = float(match.group('time_end'))
         self.pid = int(match.group('pid'))
         self.thread_id = int(match.group('thread_id'), 16)
         self.dispatch_queue_serial_num = int(match.group('dispatch_queue_serial_num'))
@@ -547,7 +545,9 @@ class Process:
     @property
     def backtraces(self) -> List[Backtrace]:
         result = []
-        for bt in self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task).py():
+        backtraces = self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task)
+        for i in range(backtraces.objc_call('count')):
+            bt = backtraces.objc_call('objectAtIndex:', i)
             result.append(Backtrace(bt))
         return result
 
