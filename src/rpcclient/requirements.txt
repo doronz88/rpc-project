@@ -9,7 +9,7 @@ pygments
 objc_types_decoder
 pycrashreport>=1.0.2
 lief
-capstone
+capstone<5.0.0
 xonsh
 plumbum
 pygnuutils
