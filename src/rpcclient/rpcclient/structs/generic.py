@@ -3,7 +3,7 @@ from construct import Bytes, CString, Default, FlagsEnum, FormatField, If, Int8u
 
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX
 
-UNIX_PATH_MAX = 108
+UNIX_PATH_MAX = 104
 
 u_char = Int8ul
 uint8_t = Int8ul
@@ -36,7 +36,8 @@ sockaddr_in6 = Struct(
 )
 
 sockaddr_un = Struct(
-    'sun_family' / Default(Int16sl, AF_UNIX),
+    'sun_len' / Default(Int8ul, 0),
+    'sun_family' / Default(Int8ul, AF_UNIX),
     'sun_path' / PaddedString(UNIX_PATH_MAX, 'utf8'),
 )
 
