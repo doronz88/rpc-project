@@ -4,6 +4,7 @@ import logging
 import posixpath
 import re
 import struct
+import time
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +26,7 @@ from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibr
     RpcClientException, SymbolAbsentError
 from rpcclient.processes import Processes
 from rpcclient.protocol import arch_t
-from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGTERM
+from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGKILL, SIGTERM
 from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
 from rpcclient.sysctl import CTL, KERN
 
@@ -879,3 +880,11 @@ class DarwinProcesses(Processes):
                 pid = int(pid_buf[i])
                 result.append(Process(self._client, pid))
             return result
+
+    def disable_watchdog(self) -> None:
+        while True:
+            try:
+                self.get_by_basename('watchdogd').kill(SIGKILL)
+            except ArgumentError:
+                pass
+            time.sleep(1)
