@@ -485,7 +485,8 @@ SOCK_MAXADDRLEN = 255
 
 # we can't use sockaddr_un since the sun_path may contain utf8 invalid characters
 sockaddr_un_raw = Struct(
-    'sun_family' / Default(Int16sl, AF_UNIX),
+    'sun_len' / Int8ul,
+    'sun_family' / Default(Int8ul, AF_UNIX),
     '_sun_path' / Bytes(UNIX_PATH_MAX),
     'sun_path' / Computed(lambda x: x._sun_path.split(b'\x00', 1)[0].decode())
 )
