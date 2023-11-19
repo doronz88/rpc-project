@@ -234,7 +234,7 @@ class XonshRc:
         for cmd in ['wc', 'grep', 'egrep', 'sed', 'awk', 'print', 'yes', 'cat']:
             executable = shutil.which(cmd)
             if executable is not None:
-                self._register_arg_parse_alias(cmd, executable)
+                self._register_rpc_command(cmd, executable)
 
         # -- rpc
         self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
