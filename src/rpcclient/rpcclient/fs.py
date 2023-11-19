@@ -350,7 +350,7 @@ class Fs:
 
     @path_to_str('file')
     def write_file(self, file: str, buf: bytes, access: int = 0o777):
-        with self.open(file, 'w+', access=access) as f:
+        with self.open(file, 'w', access=access) as f:
             f.write(buf)
 
     @path_to_str('file')
