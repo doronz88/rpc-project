@@ -3,6 +3,7 @@ import json
 import os
 import plistlib
 import posixpath
+import shutil
 import sys
 import tempfile
 import time
@@ -204,7 +205,7 @@ class XonshRc:
         * VolDown: ControlShiftDown
         ''')
 
-    def _register_arg_parse_alias(self, name: str, handler: Callable):
+    def _register_arg_parse_alias(self, name: str, handler: Union[Callable, str]):
         handler = ArgParserAlias(func=handler, has_args=True, prog=name)
         self._commands[name] = handler
         if XSH.aliases.get(name):
@@ -227,6 +228,13 @@ class XonshRc:
         connect to remote rpcserver
         """
         self.client = create_client(XSH.ctx['_create_socket_cb'])
+
+        # clear all host commands except for some useful ones
+        XSH.env['PATH'].clear()
+        for cmd in ['wc', 'grep', 'egrep', 'sed', 'awk', 'print', 'yes', 'cat']:
+            executable = shutil.which(cmd)
+            if executable is not None:
+                self._register_arg_parse_alias(cmd, executable)
 
         # -- rpc
         self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
