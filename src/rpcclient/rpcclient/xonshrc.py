@@ -231,10 +231,10 @@ class XonshRc:
 
         # clear all host commands except for some useful ones
         XSH.env['PATH'].clear()
-        for cmd in ['wc', 'grep', 'egrep', 'sed', 'awk', 'print', 'yes', 'cat']:
+        for cmd in ['wc', 'grep', 'egrep', 'sed', 'awk', 'print', 'yes', 'cat', 'file']:
             executable = shutil.which(cmd)
             if executable is not None:
-                self._register_rpc_command(cmd, executable)
+                self._register_rpc_command(cmd.strip(), executable)
 
         # -- rpc
         self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
@@ -693,10 +693,10 @@ class XonshRc:
 
 # actual RC contents
 XSH.aliases['xontrib']('load z argcomplete coreutils fzf-widgets jedi'.split())
-XSH.env['fzf_history_binding'] = "c-r"  # Ctrl+R
-XSH.env['fzf_ssh_binding'] = "c-s"  # Ctrl+S
-XSH.env['fzf_file_binding'] = "c-t"  # Ctrl+T
-XSH.env['fzf_dir_binding'] = "c-g"  # Ctrl+G
+XSH.env['fzf_history_binding'] = ""  # Ctrl+R
+XSH.env['fzf_ssh_binding'] = ""  # Ctrl+S
+XSH.env['fzf_file_binding'] = ""  # Ctrl+T
+XSH.env['fzf_dir_binding'] = ""  # Ctrl+G
 
 rc = XonshRc()
 XSH.env['rpc'] = rc.client
