@@ -328,7 +328,7 @@ class Fs:
             'r+' - read and write. exception if file doesn't exist
             'rw' - read and write. create if it doesn't exist. also truncate.
             'w' - write only. create if it doesn't exist. also truncate.
-            'w+' - read and write. create if doesn't exist.
+            'w+' - read and write. create if it doesn't exist.
         :param access: access mode as octal value
         :return: a context manager file object
         """
