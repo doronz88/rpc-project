@@ -188,15 +188,15 @@ class DarwinMedia:
 
     @path_to_str('filename')
     def get_recorder(self, filename: str) -> Recorder:
-        url = self._client.objc_get_class('NSURL').fileURLWithPath_(self._client.cf(filename))
+        url = self._client.symbols.objc_getClass('NSURL').objc_call('fileURLWithPath:', self._client.cf(filename))
         settings = self._client.cf({
             'AVEncoderQualityKey': 100,
             'AVEncoderBitRateKey': 16,
             'AVNumberOfChannelsKey': 1,
             'AVSampleRateKey': 8000.0,
         })
-        AVAudioRecorder = self._client.objc_get_class('AVAudioRecorder')
-        recorder = AVAudioRecorder.alloc().objc_call('initWithURL:settings:error:', url, settings, 0)
+        AVAudioRecorder = self._client.symbols.objc_getClass('AVAudioRecorder')
+        recorder = AVAudioRecorder.objc_call('alloc').objc_call('initWithURL:settings:error:', url, settings, 0)
 
         return Recorder(self._client, self.session, recorder)
 

@@ -100,7 +100,7 @@ class DarwinClient(Client):
         self.network = DarwinNetwork(self)
         self.power = Power(self)
         self.loaded_objc_classes = []
-        self._NSPropertyListSerialization = self.objc_get_class('NSPropertyListSerialization')
+        self._NSPropertyListSerialization = self.symbols.objc_getClass('NSPropertyListSerialization')
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
     def interactive(self, additional_namespace: typing.Mapping = None):
@@ -189,8 +189,10 @@ class DarwinClient(Client):
 
         with self.safe_malloc(8) as p_error:
             p_error[0] = 0
-            objc_data = self._NSPropertyListSerialization.dataWithPropertyList_format_options_error_(
-                symbol, CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0, 0, p_error)
+            objc_data = self._NSPropertyListSerialization.objc_call('dataWithPropertyList:format:options:error:',
+                                                                    symbol,
+                                                                    CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0,
+                                                                    0, p_error)
             if p_error[0] != 0:
                 raise CfSerializationError()
         if objc_data == 0:
@@ -209,8 +211,11 @@ class DarwinClient(Client):
         plist_objc_bytes = self.symbols.CFDataCreate(kCFAllocatorDefault, plist_bytes, len(plist_bytes))
         with self.safe_malloc(8) as p_error:
             p_error[0] = 0
-            result = self._NSPropertyListSerialization.propertyListWithData_options_format_error_(
-                plist_objc_bytes, CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves, 0, p_error)
+            result = self._NSPropertyListSerialization.objc_call(
+                'propertyListWithData:options:format:error:',
+                plist_objc_bytes,
+                CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves,
+                0, p_error)
             if p_error[0] != 0:
                 raise CfSerializationError()
             return result

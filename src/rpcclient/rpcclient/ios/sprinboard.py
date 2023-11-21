@@ -38,6 +38,6 @@ class SpringBoard:
                 raise RpcFailedLaunchingAppError(
                     'cannot open url while screen is locked with passcode. you must unlock device first')
             raise RpcFailedLaunchingAppError('cannot open url while screen is locked, use unlock=True parameter')
-        cf_url_ref = self._client.objc_get_class('NSURL').URLWithString_(self._client.cf(url))
+        cf_url_ref = self._client.symbols.objc_getClass('NSURL').objc_call('URLWithString:', self._client.cf(url))
         if not self._client.symbols.SBSOpenSensitiveURLAndUnlock(cf_url_ref, unlock):
             raise RpcFailedLaunchingAppError('SBSOpenSensitiveURLAndUnlock failed')
