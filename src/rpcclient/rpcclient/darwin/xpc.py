@@ -84,7 +84,7 @@ class Xpc:
         """
         self._client = client
         self._load_duet_activity_scheduler_manager()
-        self.sharedScheduler = self._client.objc_get_class('_DASScheduler').sharedScheduler().objc_symbol
+        self.sharedScheduler = self._client.symbols.objc_getClass('_DASScheduler').objc_call('sharedScheduler')
 
     def create_xpc_dictionary(self) -> XPCDictionary:
         return XPCDictionary.create(self._client.symbols.xpc_dictionary_create(0, 0, 0), self._client)
@@ -164,7 +164,7 @@ class Xpc:
         return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
 
     def force_run_activities(self, activities: List[str]) -> None:
-        self.sharedScheduler.forceRunActivities_(self._client.cf(activities))
+        self.sharedScheduler.objc_call('forceRunActivities:', self._client.cf(activities))
 
     @property
     def loaded_activities(self) -> Mapping:
