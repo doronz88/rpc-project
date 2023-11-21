@@ -80,7 +80,7 @@ class DarwinClient(Client):
     def _init_process_specific(self):
         super(DarwinClient, self)._init_process_specific()
 
-        if 0 == self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW):
+        if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
 
         self.fs = DarwinFs(self)
