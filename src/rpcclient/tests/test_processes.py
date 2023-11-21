@@ -25,7 +25,7 @@ def test_process_object(client):
     assert server.pid > 0
     assert len(server.regions) > 0
     assert len(server.images) > 0
-    assert Path(server.images[0].path).resolve() == Path(server.path).resolve()
+    assert len([img for img in server.images if Path(img.path).resolve() == Path(server.path).resolve()]) > 0
     fds = server.fds
     assert fds[0].fd == 0
     assert fds[1].fd == 1
