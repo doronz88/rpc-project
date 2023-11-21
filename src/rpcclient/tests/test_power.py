@@ -17,8 +17,7 @@ def test_copy_assertions_by_process(client):
     """
     :param rpcclient.darwin.client.DarwinClient client:
     """
-    assertions = client.power.copy_assertions_by_process()
-    assert len(assertions) > 0
+    client.power.copy_assertions_by_process()
 
 
 def test_declare_user_activity(client):

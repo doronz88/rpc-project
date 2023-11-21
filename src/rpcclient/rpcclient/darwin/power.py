@@ -60,6 +60,8 @@ class Power:
             if self._client.symbols.IOPMCopyAssertionsByProcess(p_assertions) != 0:
                 raise BadReturnValueError('IOPMCopyAssertionsByProcess() failed')
             assertions = p_assertions[0]
+        if not assertions:
+            return {}
         result = {}
         key_enumerator = assertions.objc_call('keyEnumerator')
         while True:

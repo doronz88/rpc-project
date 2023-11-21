@@ -1,7 +1,7 @@
 import logging
 from typing import List, Mapping
 
-from rpcclient.exceptions import BadReturnValueError
+from rpcclient.exceptions import BadReturnValueError, RpcPermissionError
 from rpcclient.symbol import Symbol
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,9 @@ class Keychain:
                 raise BadReturnValueError(f'SecItemCopyMatching() returned: {err}')
 
             result = p_result[0]
+
+            if result == 0:
+                raise RpcPermissionError()
 
             # results contain a reference which isn't plist-serializable
             removal_key = self._client.cf('v_Ref')
