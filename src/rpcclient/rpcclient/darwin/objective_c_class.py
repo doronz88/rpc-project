@@ -46,6 +46,8 @@ class Class:
         :param class_name: Class name.
         """
         class_object = client.symbols.objc_getClass(class_name)
+        if not class_object:
+            raise GettingObjectiveCClassError()
         class_symbol = Class(client, class_object)
         if class_symbol.name != class_name:
             raise GettingObjectiveCClassError()
