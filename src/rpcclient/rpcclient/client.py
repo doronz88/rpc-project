@@ -31,7 +31,8 @@ from rpcclient.processes import Processes
 from rpcclient.protocol import MAGIC, SERVER_MAGIC_VERSION, arch_t, argument_type_t, call_response_t, \
     call_response_t_size, cmd_type_t, dummy_block_t, exec_chunk_t, exec_chunk_type_t, listdir_entry_t, \
     protocol_handshake_t, protocol_message_t, reply_protocol_message_t
-from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE
+from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE, \
+    RTLD_NEXT
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
@@ -97,14 +98,14 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable, dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
         self._create_socket_cb = create_socket_cb
         self._sock = sock
         self._old_settings = None
         self._endianness = '<'
         self._sysname = sysname
-        self._dlsym_global_handle = -1  # RTLD_NEXT
+        self._dlsym_global_handle = dlsym_global_handle
         self._protocol_lock = threading.Lock()
         self._logger = logging.getLogger(self.__module__)
         self._ipython_run_cell_hook_enabled = True
