@@ -38,7 +38,7 @@ from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import CfSerializationError, GettingObjectiveCClassError, MissingLibraryError
 from rpcclient.protocol import arch_t, cmd_type_t, protocol_message_t
-from rpcclient.structs.consts import RTLD_NOW
+from rpcclient.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 
@@ -73,9 +73,7 @@ class DyldImage:
 
 class DarwinClient(Client):
     def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
-        super().__init__(sock, sysname, arch, create_socket_cb)
-        self._dlsym_global_handle = -2  # RTLD_GLOBAL
-        self._init_process_specific()
+        super().__init__(sock, sysname, arch, create_socket_cb, dlsym_global_handle=RTLD_GLOBAL)
 
     def _init_process_specific(self):
         super(DarwinClient, self)._init_process_specific()
