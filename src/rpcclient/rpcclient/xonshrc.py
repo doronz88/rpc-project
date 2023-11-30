@@ -685,7 +685,7 @@ class XonshRc:
         return self.client.fs.listdir(path)
 
     def _pull(self, remote_filename, local_filename):
-        self.client.fs.pull(remote_filename, local_filename, onerror=lambda x: None)
+        self.client.fs.pull(remote_filename, local_filename, onerror=lambda x: None, with_progress=True)
 
     def _push(self, local_filename, remote_filename):
         self.client.fs.push(local_filename, remote_filename, onerror=lambda x: None)

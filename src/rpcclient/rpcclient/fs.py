@@ -2,9 +2,11 @@ import contextlib
 import os
 import posixpath
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 from typing import List
 
+from click import progressbar
 from parameter_decorators import path_to_str
 
 from rpcclient.allocated import Allocated
@@ -13,7 +15,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcClientException, RpcFileExistsError, \
     RpcFileNotFoundError, RpcIsADirectoryError
 from rpcclient.structs.consts import DT_DIR, DT_LNK, DT_REG, DT_UNKNOWN, O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, \
-    R_OK, S_IFDIR, S_IFLNK, S_IFMT, S_IFREG, SEEK_CUR
+    R_OK, S_IFDIR, S_IFLNK, S_IFMT, S_IFREG, SEEK_CUR, SEEK_END, SEEK_SET
 
 
 class DirEntry:
@@ -141,19 +143,27 @@ class File(Allocated):
             self._client.raise_errno_exception(f'read() failed for fd: {self.fd}')
         return buf.peek(err)
 
-    def read(self, size: int = -1, chunk_size: int = CHUNK_SIZE) -> bytes:
+    def read_using_chunk(self, chunk: DarwinSymbol, chunk_size: int, size: int) -> bytes:
+        buf = b''
+        while size == -1 or len(buf) < size:
+            read_chunk = self._read(chunk, chunk_size)
+            if not read_chunk:
+                # EOF
+                break
+            buf += read_chunk
+        return buf
+
+    def read(self, size: int = -1, chunk_size: int = CHUNK_SIZE, chunk: DarwinSymbol = None) -> bytes:
         """ read file at remote """
         if size != -1 and size < chunk_size:
             chunk_size = size
 
         buf = b''
-        with self._client.safe_malloc(chunk_size) as chunk:
-            while size == -1 or len(buf) < size:
-                read_chunk = self._read(chunk, chunk_size)
-                if not read_chunk:
-                    # EOF
-                    break
-                buf += read_chunk
+        if chunk:
+            return self.read_using_chunk(chunk, chunk_size, size)
+        else:
+            with self._client.safe_malloc(chunk_size) as temp_chunk:
+                return self.read_using_chunk(temp_chunk, chunk_size, size)
         return buf
 
     def pread(self, length: int, offset: int) -> bytes:
@@ -360,13 +370,28 @@ class Fs:
 
     @path_to_str('remote')
     @path_to_str('local')
-    def _pull_file(self, remote: str, local: str):
-        with open(local, 'wb') as local_file:
-            with self.open(remote, 'r') as remote_file:
-                buf = remote_file.read(File.CHUNK_SIZE)
+    def _pull_file(self, remote: str, local: str, with_progress: bool):
+        with open(local, 'wb') as local_file, self.open(remote, 'r') as remote_file, \
+                self._client.safe_malloc(File.CHUNK_SIZE) as chunk:
+            remote_file.seek(0, SEEK_END)
+            remote_file_size = remote_file.tell()
+            remote_file.seek(0, SEEK_SET)
+
+            if with_progress:
+                progress_bar = progressbar(length=remote_file_size)
+            else:
+                progress_bar = nullcontext()
+            progress_bar.length = remote_file_size
+
+            with progress_bar:
+                buf = remote_file.read(File.CHUNK_SIZE, File.CHUNK_SIZE, chunk)
+                if with_progress:
+                    progress_bar.update(len(buf))
                 while len(buf) > 0:
                     local_file.write(buf)
-                    buf = remote_file.read(File.CHUNK_SIZE)
+                    buf = remote_file.read(File.CHUNK_SIZE, File.CHUNK_SIZE, chunk)
+                    if with_progress:
+                        progress_bar.update(len(buf))
 
     @path_to_str('remote')
     @path_to_str('local')
@@ -376,10 +401,10 @@ class Fs:
 
     @path_to_str('remote')
     @path_to_str('local')
-    def pull(self, remote: str, local: str, onerror=None):
+    def pull(self, remote: str, local: str, onerror=None, with_progress=False):
         """ pull complete directory tree """
         if self.is_file(remote):
-            self._pull_file(remote, local)
+            self._pull_file(remote, local, with_progress)
             return
 
         cwd = os.getcwd()
@@ -395,7 +420,7 @@ class Fs:
                     Path(name).mkdir(exist_ok=True)
                 for name in files:
                     try:
-                        self._pull_file(os.path.join(root, name), name)
+                        self._pull_file(os.path.join(root, name), name, with_progress)
                     except RpcClientException as e:
                         if onerror:
                             onerror(e)
