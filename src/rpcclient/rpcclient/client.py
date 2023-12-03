@@ -508,7 +508,7 @@ class Client:
         with self._protocol_lock:
             self._close()
 
-    def shell(self):
+    def shell(self, reuse_client: bool = False):
         self._logger.disabled = True
         self._ipython_run_cell_hook_enabled = False
 
@@ -517,6 +517,9 @@ class Client:
         if home_rc.exists():
             args.append(str(home_rc.expanduser().absolute()))
         args.append(str((Path(rpcclient.__file__).parent / 'xonshrc.py').absolute()))
+
+        if reuse_client:
+            XSH.ctx['_client_to_reuse'] = self
         XSH.ctx['_create_socket_cb'] = self._create_socket_cb
 
         try:

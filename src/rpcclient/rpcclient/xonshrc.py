@@ -25,9 +25,12 @@ from xonsh.cli_utils import Annotated, Arg, ArgParserAlias
 from xonsh.events import events
 from xonsh.tools import print_color
 
-import rpcclient
+from rpcclient.client import Client
 from rpcclient.client_factory import create_client
 from rpcclient.exceptions import RpcClientException
+from rpcclient.ios.client import IosClient
+from rpcclient.linux.client import LinuxClient
+from rpcclient.macos.client import MacosClient
 from rpcclient.structs.consts import SIGTERM
 
 
@@ -184,13 +187,13 @@ class RpcLsStub(LsStub):
 
 class XonshRc:
     def __init__(self):
-        self.client: Union[None, rpcclient.client.Client, rpcclient.darwin.client.DarwinClient] = None
+        self.client: Union[None, Client, IosClient, MacosClient, LinuxClient] = XSH.ctx.get('_client_to_reuse')
         self._commands = {}
         self._orig_aliases = {}
         self._orig_prompt = XSH.env['PROMPT']
-        self._register_rpc_command('rpc-connect', self._rpc_connect)
+        self._register_rpc_command('rpc-connect', lambda: self._rpc_connect(self.client))
         self._register_rpc_command('rpc-list-commands', self._rpc_list_commands)
-        self._rpc_connect()
+        self._rpc_connect(self.client)
 
         print_color('''
         {BOLD_WHITE}Welcome to xonsh-rpc shell! 👋{RESET}
@@ -223,11 +226,11 @@ class XonshRc:
         for k, v in self._orig_aliases.items():
             XSH.aliases[k] = v
 
-    def _rpc_connect(self):
+    def _rpc_connect(self, client_to_reuse: Union[None, Client, IosClient, MacosClient, LinuxClient]):
         """
         connect to remote rpcserver
         """
-        self.client = create_client(XSH.ctx['_create_socket_cb'])
+        self.client = client_to_reuse or create_client(XSH.ctx['_create_socket_cb'])
 
         # clear all host commands except for some useful ones
         XSH.env['PATH'].clear()
