@@ -45,3 +45,5 @@ _CodeSignature
 .vscode
 .idea
 
+# Build
+**/_version.py
