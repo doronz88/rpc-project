@@ -1,11 +1,12 @@
 name: Server application
 
 on:
-  push:
-    branches: [ '**' ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
   build:
+    if: '! github.event.pull_request.draft'
     runs-on: ${{ matrix.os }}
 
     defaults:

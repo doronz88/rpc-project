@@ -1,11 +1,12 @@
 name: Uploading release artifacts
 
 on:
-  push:
-    branches: [ 'master' ]
+  release:
+    types: [created]
 
 jobs:
   build:
+    if: '! github.event.pull_request.draft'
     runs-on: ${{ matrix.os }}
 
     defaults:
