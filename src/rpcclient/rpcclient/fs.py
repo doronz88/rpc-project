@@ -88,7 +88,7 @@ class DirEntry:
 
         if result.errno != 0:
             self._client.errno = result.errno
-            self._client.raise_errno_exception(f'failed to stat: {self._entry.name}')
+            self._client.raise_errno_exception(f'failed to stat: {self._entry.d_name}')
         return result
 
     def __repr__(self):
@@ -338,7 +338,7 @@ class Fs:
             'r+' - read and write. exception if file doesn't exist
             'rw' - read and write. create if it doesn't exist. also truncate.
             'w' - write only. create if it doesn't exist. also truncate.
-            'w+' - read and write. create if it doesn't exist.
+            'w+' - read and write. create if doesn't exist.
         :param access: access mode as octal value
         :return: a context manager file object
         """
@@ -360,7 +360,7 @@ class Fs:
 
     @path_to_str('file')
     def write_file(self, file: str, buf: bytes, access: int = 0o777):
-        with self.open(file, 'w', access=access) as f:
+        with self.open(file, 'w+', access=access) as f:
             f.write(buf)
 
     @path_to_str('file')

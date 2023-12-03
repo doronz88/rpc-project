@@ -1,9 +1,11 @@
+import platform
 from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.client_factory import create_tcp_client
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.exceptions import BadReturnValueError
@@ -47,10 +49,12 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     skip_local_only = pytest.mark.skip(reason='remove --ci option to run')
     skip_not_darwin = pytest.mark.skip(reason='Darwin system is required for this test')
+    skip_not_arm = pytest.mark.skip(reason='Arm arch is required for this test')
     skip_not_local_machine = pytest.mark.skip(reason='Local machine is required for this test')
 
     with closing(create_tcp_client('127.0.0.1')) as c:
         is_darwin = isinstance(c, DarwinClient)
+        is_arm = c.arch == ARCH_ARM64
 
     for item in items:
         if 'local_only' in item.keywords and config.getoption('--ci'):
@@ -59,6 +63,9 @@ def pytest_collection_modifyitems(config, items):
         if 'darwin' in item.keywords and not is_darwin:
             # Skip test that require Darwin on non Darwin system
             item.add_marker(skip_not_darwin)
+        if 'arm' in item.keywords and not is_arm:
+            # Skip test that require Darwin on non Darwin system
+            item.add_marker(skip_not_arm)
         if 'local_machine' in item.keywords and not config.getoption('--local-machine'):
             # Skip test that require local_machine
             item.add_marker(skip_not_local_machine)

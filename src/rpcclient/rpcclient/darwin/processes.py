@@ -25,7 +25,7 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibraryError, ProcessSymbolAbsentError, \
     RpcClientException, SymbolAbsentError
 from rpcclient.processes import Processes
-from rpcclient.protocol import arch_t
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGKILL, SIGTERM
 from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
 from rpcclient.sysctl import CTL, KERN
@@ -313,7 +313,7 @@ class Process:
         self._client = client
         self._pid = pid
 
-        if self._client.arch == arch_t.ARCH_ARM64:
+        if self._client.arch == ARCH_ARM64:
             self._thread_class = ArmThread64
         else:
             self._thread_class = IntelThread64
@@ -355,7 +355,7 @@ class Process:
             raise BadReturnValueError('vm_write() failed')
 
     def get_symbol_name(self, address: int) -> str:
-        if self._client.arch != arch_t.ARCH_ARM64:
+        if self._client.arch != ARCH_ARM64:
             raise NotImplementedError('implemented only on ARCH_ARM64')
         x = self.vmu_object_identifier.objc_call('symbolForAddress:', address, return_raw=True).x
         if x[0] == 0 and x[1] == 0:
@@ -621,7 +621,7 @@ class Process:
 
     @cached_property
     def start_time(self) -> datetime:
-        if self._client.arch != arch_t.ARCH_ARM64:
+        if self._client.arch != ARCH_ARM64:
             raise NotImplementedError('implemented only on ARCH_ARM64')
         val = self.vmu_proc_info.objc_call('startTime', return_raw=True)
         tv_sec = val.x[0]

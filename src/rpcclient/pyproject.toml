@@ -7,11 +7,13 @@ license = { file = "LICENSE" }
 keywords = ["ios", "macos", "linux", "automation", "remote-shell", "remote-control", "ipython"]
 authors = [
     { name = "doronz88", email = "doron88@gmail.com" },
-    { name = "matan", email = "matan1008@gmail.com" }
+    { name = "matan", email = "matan1008@gmail.com" },
+    { name = "netanelc305", email = "netanelc305@pm.me" }
 ]
 maintainers = [
     { name = "doronz88", email = "doron88@gmail.com" },
-    { name = "matan", email = "matan1008@gmail.com" }
+    { name = "matan", email = "matan1008@gmail.com" },
+    { name = "netanelc305", email = "netanelc305@pm.me" }
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -27,7 +29,7 @@ classifiers = [
 dynamic = ["dependencies", "version"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "pytest-repeat"]
 docs = ["toml", "myst_parser", "sphinx", "sphinx-rtd-theme"]
 
 [project.urls]

@@ -3,7 +3,6 @@ import json
 import os
 import plistlib
 import posixpath
-import shutil
 import sys
 import tempfile
 import time
@@ -205,7 +204,7 @@ class XonshRc:
         * VolDown: ControlShiftDown
         ''')
 
-    def _register_arg_parse_alias(self, name: str, handler: Union[Callable, str]):
+    def _register_arg_parse_alias(self, name: str, handler: Callable):
         handler = ArgParserAlias(func=handler, has_args=True, prog=name)
         self._commands[name] = handler
         if XSH.aliases.get(name):
@@ -228,13 +227,6 @@ class XonshRc:
         connect to remote rpcserver
         """
         self.client = create_client(XSH.ctx['_create_socket_cb'])
-
-        # clear all host commands except for some useful ones
-        XSH.env['PATH'].clear()
-        for cmd in ['wc', 'grep', 'egrep', 'sed', 'awk', 'print', 'yes', 'cat', 'file']:
-            executable = shutil.which(cmd)
-            if executable is not None:
-                self._register_rpc_command(cmd.strip(), executable)
 
         # -- rpc
         self._register_arg_parse_alias('rpc-disconnect', self._rpc_disconnect)
@@ -693,10 +685,10 @@ class XonshRc:
 
 # actual RC contents
 XSH.aliases['xontrib']('load z argcomplete coreutils fzf-widgets jedi'.split())
-XSH.env['fzf_history_binding'] = ""  # Ctrl+R
-XSH.env['fzf_ssh_binding'] = ""  # Ctrl+S
-XSH.env['fzf_file_binding'] = ""  # Ctrl+T
-XSH.env['fzf_dir_binding'] = ""  # Ctrl+G
+XSH.env['fzf_history_binding'] = "c-r"  # Ctrl+R
+XSH.env['fzf_ssh_binding'] = "c-s"  # Ctrl+S
+XSH.env['fzf_file_binding'] = "c-t"  # Ctrl+T
+XSH.env['fzf_dir_binding'] = "c-g"  # Ctrl+G
 
 rc = XonshRc()
 XSH.env['rpc'] = rc.client

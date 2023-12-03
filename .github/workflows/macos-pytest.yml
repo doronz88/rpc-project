@@ -60,8 +60,12 @@ jobs:
       - name: Run server
         working-directory: ./src/rpcserver
         run: |
-          make SERVER_CFLAGS=-DSAFE_READ_WRITES
-          sudo nohup ./rpcserver &
+          brew install protobuf
+          mkdir build
+          cd build
+          cmake .. -DTARGET=OSX
+          make
+          sudo nohup ./rpcserver_macosx &
       - name: Install python package + pytest
         working-directory: ./src/rpcclient
         run: |

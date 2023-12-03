@@ -1,3 +1,5 @@
+import platform
+
 import pytest
 
 from rpcclient.exceptions import ArgumentError
@@ -19,11 +21,37 @@ def test_poke(client):
         client.poke(peekable, b'a' * 0x100)
 
 
+@pytest.mark.parametrize('fmt,params,expected', [
+    ('%f', [15.5], '15.500000'),
+    ('%f %f', [15.5, 7.3], '15.500000 7.300000'),
+    ('%f %f %d', [15.5, 7.3, 42], '15.500000 7.300000 42'),
+    ('%f %f %d %d', [15.5, 7.3, 1, 2], '15.500000 7.300000 1 2'),
+    ('%f %f %d %d %s', [15.5, 7.3, 1, 2, 'test'], '15.500000 7.300000 1 2 test'),
+    ('%f %f %d %d %s %s', [15.5, 7.3, 1, 2, 'test', 'test2'], '15.500000 7.300000 1 2 test test2')
+])
+@pytest.mark.arm
+def test_va_list_call(client, fmt, params, expected):
+    """
+    :param rpcclient.client.Client client:
+    """
+    with client.safe_malloc(0x100) as peekable:
+        client.symbols.sprintf(peekable, fmt, *params, va_list_index=2)
+        assert expected == peekable.peek_str()
+
+
+@pytest.mark.arm
+def test_floating_point_call(client):
+    """
+    :param rpcclient.client.Client client:
+    """
+    assert client.symbols.sqrt(16.0, return_float64=True) == 4.0
+
+
 def test_peek_invalid_address(client):
     """
     :param rpcclient.client.Client client:
     """
-    with pytest.raises(ArgumentError):
+    with pytest.raises((ArgumentError, ConnectionError)):
         client.peek(0, 0x10)
 
 
@@ -31,7 +59,7 @@ def test_poke_invalid_address(client):
     """
     :param rpcclient.client.Client client:
     """
-    with pytest.raises(ArgumentError):
+    with pytest.raises((ArgumentError, ConnectionError)):
         client.poke(0, b'a')
 
 

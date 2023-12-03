@@ -18,3 +18,9 @@ def test_allocate_file_fd_explicit_deallocate(client, tmp_path):
     assert fds_count + 1 == len(client.processes.get_by_pid(client.pid).fds)
     fd.deallocate()
     assert fds_count == len(client.processes.get_by_pid(client.pid).fds)
+
+
+def test_listdir_fd_release(client, tmp_path):
+    fds_count = len(client.processes.get_by_pid(client.pid).fds)
+    client.fs.listdir('/')
+    assert fds_count == len(client.processes.get_by_pid(client.pid).fds)

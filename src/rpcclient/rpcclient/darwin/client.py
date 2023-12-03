@@ -37,7 +37,7 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import CfSerializationError, GettingObjectiveCClassError, MissingLibraryError
-from rpcclient.protocol import arch_t, cmd_type_t, protocol_message_t
+from rpcclient.protos.rpc_pb2 import CmdShowObject, CmdShowClass, CmdGetClassList
 from rpcclient.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
@@ -72,7 +72,7 @@ class DyldImage:
 
 
 class DarwinClient(Client):
-    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+    def __init__(self, sock, sysname: str, arch, create_socket_cb: typing.Callable):
         super().__init__(sock, sysname, arch, create_socket_cb, dlsym_global_handle=RTLD_GLOBAL)
 
     def _init_process_specific(self):
@@ -134,47 +134,21 @@ class DarwinClient(Client):
         return ['/', '/var/root']
 
     def showobject(self, object_address: Symbol) -> Mapping:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_SHOWOBJECT,
-            'data': {'address': object_address},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            response_len = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-            response = self._recvall(response_len)
-        return json.loads(response)
+        command = CmdShowObject(address=object_address)
+        response = self._sock.send_recv(command)
+        return json.loads(response.description)
 
     def showclass(self, class_address: Symbol) -> Mapping:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_SHOWCLASS,
-            'data': {'address': class_address},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            response_len = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-            response = self._recvall(response_len)
-        return json.loads(response)
+        command = CmdShowClass(address=class_address)
+        response = self._sock.send_recv(command)
+        return json.loads(response.description)
 
     def get_class_list(self) -> typing.Mapping[str, objective_c_class.Class]:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_GET_CLASS_LIST,
-            'data': b'',
-        })
         result = {}
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            count = Int32ul.parse(self._recvall(Int32ul.sizeof()))
-            for _ in trange(count):
-                name_len = Int8ul.parse(self._recvall(Int8ul.sizeof()))
-                try:
-                    name = self._recvall(name_len).decode()
-                except UnicodeDecodeError:
-                    self._recvall(Int64ul.sizeof())
-                    continue
-
-                class_ = objective_c_class.Class(self, self.symbol(Int64ul.parse(self._recvall(Int64ul.sizeof()))),
-                                                 lazy=True)
-                result[name] = class_
+        command = CmdGetClassList()
+        response = self._sock.send_recv(command)
+        for _class in response.classes:
+            result[_class.name] = objective_c_class.Class(self, self.symbol(_class.address), lazy=True)
         return result
 
     def symbol(self, symbol: int):

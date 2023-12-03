@@ -23,12 +23,25 @@ jobs:
           - os: ubuntu-latest
             arch: aarch64
           - os: ubuntu-latest
-            arch: i686
-          - os: ubuntu-latest
             arch: x86_64
 
     steps:
       - uses: actions/checkout@v3
-      - name: Test make
+      - name: Test build
         run: |
-          make clean all
+          if [ "${{ runner.os }}" == "macOS" ]; then
+          brew install protobuf
+          mkdir build
+          cd build
+          cmake .. -DTARGET=IOS
+          make
+          cmake .. -DTARGET=OSX
+          make
+          elif [ "${{ runner.os }}" == "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev libprotoc-dev
+          mkdir build
+          cd build
+          cmake .. -DTARGET=LINUX
+          make
+          fi

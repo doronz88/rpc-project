@@ -3,13 +3,12 @@ import typing
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.darwin.reports import Reports
 from rpcclient.macos.apple_script import AppleScript
-from rpcclient.protocol import arch_t
 
 CRASH_REPORTS_DIR = 'Library/Logs/DiagnosticReports'
 
 
 class MacosClient(DarwinClient):
-    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+    def __init__(self, sock, sysname: str, arch, create_socket_cb: typing.Callable):
         super().__init__(sock, sysname, arch, create_socket_cb)
         self.reports = Reports(self, CRASH_REPORTS_DIR)
         self.apple_script = AppleScript(self)

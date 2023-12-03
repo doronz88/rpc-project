@@ -4,7 +4,7 @@ import click
 import coloredlogs
 
 from rpcclient.client_factory import create_local, create_tcp_client
-from rpcclient.protocol import DEFAULT_PORT
+DEFAULT_PORT = 5910
 
 coloredlogs.install(level=logging.DEBUG)
 
