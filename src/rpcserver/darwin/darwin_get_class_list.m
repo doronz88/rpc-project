@@ -10,11 +10,11 @@ int handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) {
     Rpc__ResponseGetClassList resp_class_list = RPC__RESPONSE_GET_CLASS_LIST__INIT;
     response.type_case = RPC__RESPONSE__TYPE_CLASS_LIST;
     Class *class_list = NULL;
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
 
     u32 count = objc_getClassList(NULL, 0);
     if (count < 0) {
-        return ret; // TODO: return error?
+        return ret;
     }
     TRACE("reporting class list: %d", count);
     resp_class_list.classes = malloc(sizeof(Rpc__ObjcClass *) * count);

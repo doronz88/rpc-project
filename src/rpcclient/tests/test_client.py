@@ -1,5 +1,3 @@
-import platform
-
 import pytest
 
 from rpcclient.exceptions import ArgumentError

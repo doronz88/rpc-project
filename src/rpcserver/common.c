@@ -10,7 +10,6 @@
 #include "common.h"
 
 #ifdef __APPLE__
-
 #include <os/log.h>
 
 struct os_log_s {
@@ -113,30 +112,11 @@ bool message_receive(int sockfd, char *buf, size_t *size) {
     return RPC_SUCCESS;
     error:
     return RPC_FAILURE;
-
 }
 
 bool recvall(int sockfd, char *buf, size_t len) {
     bool disconnected;
     return recvall_ext(sockfd, buf, len, &disconnected);
-}
-
-bool sendall(int sockfd, const char *buf, size_t len) {
-    size_t total_bytes = 0;
-    size_t bytes = 0;
-
-    while (len > 0) {
-        bytes = send(sockfd, buf + total_bytes, len, MSG_NOSIGNAL);
-        CHECK(bytes != -1);
-
-        total_bytes += bytes;
-        len -= bytes;
-    }
-
-    return true;
-
-    error:
-    return false;
 }
 
 bool send_response(int sockfd, const Rpc__Response *response) {

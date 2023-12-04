@@ -10,8 +10,7 @@ from functools import lru_cache
 from typing import Mapping
 
 from cached_property import cached_property
-from construct import Int8ul, Int32ul, Int64sl, Int64ul
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 from rpcclient.client import Client
 from rpcclient.darwin import objective_c_class
@@ -37,7 +36,7 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import CfSerializationError, GettingObjectiveCClassError, MissingLibraryError
-from rpcclient.protos.rpc_pb2 import CmdShowObject, CmdShowClass, CmdGetClassList
+from rpcclient.protos.rpc_pb2 import CmdGetClassList, CmdShowClass, CmdShowObject
 from rpcclient.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar

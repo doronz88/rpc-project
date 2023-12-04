@@ -1,12 +1,8 @@
 # RPCSERVER
-- Add `CHECK` when ever it possible.
 - Response error when ever it possible.
-- return RPC_SUCCESS/FAILURE on each function.
 
-# CMAKE
-- add linux comiplation
-- `externalproject_add` solve parllelizem?
-
+# RPCCLIENT
+- @pytest.mark.arm
 # CI/CD
 - make it work with cmake build system.
 - upload binaries to assets.

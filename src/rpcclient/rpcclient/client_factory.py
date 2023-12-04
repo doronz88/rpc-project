@@ -8,12 +8,12 @@ from socket import socket
 from zipfile import ZipFile
 
 import requests
+
 from rpcclient.client import Client
 from rpcclient.exceptions import FailedToConnectError
 from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
 from rpcclient.macos.client import MacosClient
-
 from rpcclient.protosocket import ProtoSocket
 
 PROJECT_URL = 'https://github.com/doronz88/rpc-project/archive/refs/heads/master.zip'

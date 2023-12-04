@@ -3545,7 +3545,7 @@ const ProtobufCMessageDescriptor rpc__response_get_class_list__descriptor =
   (ProtobufCMessageInit) rpc__response_get_class_list__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor rpc__response_error__field_descriptors[2] =
+static const ProtobufCFieldDescriptor rpc__response_error__field_descriptors[1] =
 {
   {
     "func_name",
@@ -3559,27 +3559,14 @@ static const ProtobufCFieldDescriptor rpc__response_error__field_descriptors[2] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "error_num",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Rpc__ResponseError, error_num),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned rpc__response_error__field_indices_by_name[] = {
-  1,   /* field[1] = error_num */
   0,   /* field[0] = func_name */
 };
 static const ProtobufCIntRange rpc__response_error__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor rpc__response_error__descriptor =
 {
@@ -3589,7 +3576,7 @@ const ProtobufCMessageDescriptor rpc__response_error__descriptor =
   "Rpc__ResponseError",
   "rpc",
   sizeof(Rpc__ResponseError),
-  2,
+  1,
   rpc__response_error__field_descriptors,
   rpc__response_error__field_indices_by_name,
   1,  rpc__response_error__number_ranges,

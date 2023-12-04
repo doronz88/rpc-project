@@ -23,7 +23,7 @@ if ("${TARGET_UPPERCASE}" MATCHES "IOS")
 elseif ("${TARGET_UPPERCASE}" MATCHES "OSX")
     set(OSX_TARGET ON)
     set(SDK macosx)
-    set(CMAKE_OSX_ARCHITECTURES arm64;x86_64 CACHE STRING "Build architecture" FORCE)
+    set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING "Build architecture" FORCE)
     set(TARGET_NAME "${TARGET_NAME}_macosx")
 elseif ("${TARGET_UPPERCASE}" MATCHES "LINUX")
     set(LINUX_TARGET ON)
@@ -121,7 +121,8 @@ if (APPLE)
 
 endif ()
 
-add_executable(${TARGET_NAME} rpcserver.c protos/rpc.pb-c.c common.c)
+add_executable(${TARGET_NAME} rpcserver.c protos/rpc.pb-c.c common.c
+        rpcserver.c)
 add_dependencies(${TARGET_NAME} protobuf-c)
 target_link_libraries(${TARGET_NAME} PRIVATE ${LIBPROTO_C}/libprotobuf-c.a ${apple_specific})
 

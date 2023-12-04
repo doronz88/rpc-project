@@ -1,14 +1,13 @@
-import platform
 from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.client_factory import create_tcp_client
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.exceptions import BadReturnValueError
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 
 
 @pytest.fixture
@@ -44,6 +43,7 @@ def pytest_configure(config):
     )
     config.addinivalue_line('markers', 'darwin: marks tests that require darwin platform to run')
     config.addinivalue_line('markers', 'local_machine: marks tests that require local_machine to run')
+    config.addinivalue_line('markers', 'arm: marks tests that require arm architecture to run')
 
 
 def pytest_collection_modifyitems(config, items):
@@ -64,7 +64,7 @@ def pytest_collection_modifyitems(config, items):
             # Skip test that require Darwin on non Darwin system
             item.add_marker(skip_not_darwin)
         if 'arm' in item.keywords and not is_arm:
-            # Skip test that require Darwin on non Darwin system
+            # Skip tests that require arm on non arm architecture
             item.add_marker(skip_not_arm)
         if 'local_machine' in item.keywords and not config.getoption('--local-machine'):
             # Skip test that require local_machine

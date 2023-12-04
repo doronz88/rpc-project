@@ -515,11 +515,10 @@ struct  Rpc__ResponseError
 {
   ProtobufCMessage base;
   char *func_name;
-  uint64_t error_num;
 };
 #define RPC__RESPONSE_ERROR__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&rpc__response_error__descriptor) \
-, (char *)protobuf_c_empty_string, 0 }
+, (char *)protobuf_c_empty_string }
 
 
 struct  Rpc__ResponseListdir

@@ -2,7 +2,6 @@
 #define _XOPEN_SOURCE (600)
 #define _GNU_SOURCE (1)
 #endif // __APPLE__
-
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -30,24 +29,16 @@
 #include "protos/rpc.pb-c.h"
 
 bool handle_showobject(int sockfd, Rpc__CmdShowObject *cmd);
-
 int handle_showclass(int sockfd, Rpc__CmdShowClass *cmd);
-
 int handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd);
 
 #ifdef __APPLE__
-
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
-
 #else
-
 bool handle_showobject(int sockfd, Rpc__CmdShowObject *cmd) { return 0; }
-
 int handle_showclass(int sockfd, Rpc__CmdShowClass *cmd) { return 0; }
-
 int handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
-
 #endif // __APPLE__
 
 #include "common.h"
@@ -186,13 +177,12 @@ void thread_waitpid(pid_t pid) {
     waitpid(pid, &err, 0);
 }
 
-
 bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
 
     u8 byte;
     pthread_t thread = 0;
-    thread_notify_client_spawn_error_t *thread_params = NULL;
+    thread_notify_client_spawn_error_t *thread_params = NULL;/**/
     pid_t pid = INVALID_PID;
     int master = -1;
     char **argv = NULL;
@@ -200,7 +190,6 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
     u32 argc;
     u32 envc;
     u8 background;
-
 
     CHECK(cmd->n_argv > 0);
     COPY_ARR_WITH_NULL(cmd->argv, argv, cmd->n_argv);
@@ -211,12 +200,11 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
 
     response.type_case = RPC__RESPONSE__TYPE_EXEC;
 
-
     CHECK(internal_spawn(cmd->background, argv, cmd->n_envp ? envp : environ, &pid, &master));
 
     resp_exec.pid = pid;
     response.exec = &resp_exec;
-    send_response(sockfd, &response);
+    CHECK(send_response(sockfd, &response));
 
     if (cmd->background) {
         CHECK(0 == pthread_create(&thread, NULL, (void *(*)(void *)) thread_waitpid, (void *) (intptr_t) pid));
@@ -257,7 +245,6 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
                 send_response(sockfd, &response);
 
             }
-
             if (FD_ISSET(sockfd, &readfds)) {
                 nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
                 if (nbytes < 1) {
@@ -275,7 +262,7 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
         resp_exec_chunk.type_case = RPC__RESPONSE_CMD_EXEC_CHUNK__TYPE_EXIT_CODE;
         resp_exec_chunk.exit_code = error;
         response.exec_chunk = &resp_exec_chunk;
-        send_response(sockfd, &response);
+        CHECK(send_response(sockfd, &response));
 
     }
 
@@ -303,8 +290,89 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
     return ret;
 }
 
+void create_response(Rpc__Response *response, Rpc__Response__TypeCase type) {
+    rpc__response__init(response);
+    switch (type) {
+        case RPC__RESPONSE__TYPE_EXEC:
+            response->type_case = RPC__RESPONSE__TYPE_EXEC;
+            rpc__response_cmd_exec__init(response->exec);
+            break;
+
+        case RPC__RESPONSE__TYPE_EXEC_CHUNK:
+            response->type_case = RPC__RESPONSE__TYPE_EXEC_CHUNK;
+            rpc__response_cmd_exec_chunk__init(response->exec_chunk);
+            break;
+
+        case RPC__RESPONSE__TYPE_DLOPEN:
+            response->type_case = RPC__RESPONSE__TYPE_DLOPEN;
+            rpc__response_dlopen__init(response->dlopen);
+            break;
+
+        case RPC__RESPONSE__TYPE_DLCLOSE:
+            response->type_case = RPC__RESPONSE__TYPE_DLCLOSE;
+            rpc__response_dlclose__init(response->dlclose);
+            break;
+
+        case RPC__RESPONSE__TYPE_DLSYM:
+            response->type_case = RPC__RESPONSE__TYPE_DLSYM;
+            rpc__response_dlsym__init(response->dlsym);
+            break;
+
+        case RPC__RESPONSE__TYPE_PEEK:
+            response->type_case = RPC__RESPONSE__TYPE_PEEK;
+            rpc__response_peek__init(response->peek);
+            break;
+
+        case RPC__RESPONSE__TYPE_POKE:
+            response->type_case = RPC__RESPONSE__TYPE_POKE;
+            rpc__response_poke__init(response->poke);
+            break;
+
+        case RPC__RESPONSE__TYPE_CALL:
+            response->type_case = RPC__RESPONSE__TYPE_CALL;
+            rpc__response_call__init(response->call);
+            break;
+
+        case RPC__RESPONSE__TYPE_ERROR:
+            response->type_case = RPC__RESPONSE__TYPE_ERROR;
+            rpc__response_error__init(response->error);
+            break;
+
+        case RPC__RESPONSE__TYPE_DUMMY_BLOCK:
+            response->type_case = RPC__RESPONSE__TYPE_DUMMY_BLOCK;
+            rpc__response_dummy_block__init(response->dummy_block);
+            break;
+
+        case RPC__RESPONSE__TYPE_SHOW_OBJECT:
+            response->type_case = RPC__RESPONSE__TYPE_SHOW_OBJECT;
+            rpc__response_show_object__init(response->show_object);
+            break;
+
+        case RPC__RESPONSE__TYPE_CLASS_LIST:
+            response->type_case = RPC__RESPONSE__TYPE_CLASS_LIST;
+            rpc__response_get_class_list__init(response->class_list);
+            break;
+
+        case RPC__RESPONSE__TYPE_SHOW_CLASS:
+            response->type_case = RPC__RESPONSE__TYPE_SHOW_CLASS;
+            rpc__response_show_class__init(response->show_class);
+            break;
+
+        case RPC__RESPONSE__TYPE_LIST_DIR:
+            response->type_case = RPC__RESPONSE__TYPE_LIST_DIR;
+            rpc__response_listdir__init(response->list_dir);
+            break;
+
+        default:
+            fprintf(stderr, "Unknown response type_case: %d\n", type);
+            break;
+    }
+}
+
+
+
 bool handle_dlopen(int sockfd, Rpc__CmdDlopen *cmd) {
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponseDlopen resp_dlopen = RPC__RESPONSE_DLOPEN__INIT;
     response.type_case = RPC__RESPONSE__TYPE_DLOPEN;
@@ -322,7 +390,7 @@ bool handle_dlopen(int sockfd, Rpc__CmdDlopen *cmd) {
 }
 
 bool handle_dlclose(int sockfd, Rpc__CmdDlclose *cmd) {
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponseDlclose resp_dlclose = RPC__RESPONSE_DLCLOSE__INIT;
     response.type_case = RPC__RESPONSE__TYPE_DLCLOSE;
@@ -340,7 +408,7 @@ bool handle_dlclose(int sockfd, Rpc__CmdDlclose *cmd) {
 }
 
 bool handle_dlsym(int sockfd, Rpc__CmdDlsym *cmd) {
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     uint64_t res = 0;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponseDlsym resp_dlsym = RPC__RESPONSE_DLSYM__INIT;
@@ -359,18 +427,6 @@ bool handle_dlsym(int sockfd, Rpc__CmdDlsym *cmd) {
 }
 
 #ifdef __ARM_ARCH_ISA_A64
-
-
-#define MAX_STACK_ARGS (16)
-#define MAX_REGS_ARGS (8)
-
-
-typedef struct {
-    uint64_t x[MAX_REGS_ARGS];
-    double d[MAX_REGS_ARGS];
-    uint64_t stack[MAX_STACK_ARGS];
-} arm_args_t;
-
 
 volatile bool call_function(intptr_t address, size_t va_list_index, size_t argc, Rpc__Argument **p_argv,
                             Rpc__ResponseCall *resp) {
@@ -529,7 +585,7 @@ volatile bool call_function(intptr_t address, size_t va_list_index, size_t argc,
 
 bool handle_call(int sockfd, Rpc__CmdCall *cmd) {
     TRACE("enter");
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponseCall resp_call = RPC__RESPONSE_CALL__INIT;
 #ifdef __ARM_ARCH_ISA_A64
@@ -551,7 +607,7 @@ bool handle_call(int sockfd, Rpc__CmdCall *cmd) {
 
 bool handle_peek(int sockfd, Rpc__CmdPeek *cmd) {
     TRACE("enter");
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     uint8_t *buffer = NULL;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponsePeek peek = RPC__RESPONSE_PEEK__INIT;
@@ -563,19 +619,18 @@ bool handle_peek(int sockfd, Rpc__CmdPeek *cmd) {
         peek.data.data = (uint8_t *) buffer;
         peek.data.len = size;
         response.peek = &peek;
-        send_response(sockfd, &response);
+        CHECK(send_response(sockfd, &response));
         CHECK(vm_deallocate(mach_task_self(), (vm_address_t) buffer, size) == KERN_SUCCESS);
         buffer = NULL;
     } else {
         RESPONSE_ERROR(response);
-        send_response(sockfd, &response);
+        CHECK(send_response(sockfd, &response))
     }
 #else  // __APPLE__
     peek.data.data = (uint8_t *) cmd->address;
     peek.data.len = cmd->size;
     response.peek = &peek;
     send_response(sockfd, &response);
-
 #endif // __APPLE__
     ret = RPC_SUCCESS;
 
@@ -587,7 +642,7 @@ bool handle_peek(int sockfd, Rpc__CmdPeek *cmd) {
 
 bool handle_poke(int sockfd, Rpc__CmdPoke *cmd) {
     TRACE("Enter");
-    int ret = RPC_FAILURE;
+    bool ret = RPC_FAILURE;
     char *data = NULL;
     Rpc__Response response = RPC__RESPONSE__INIT;
     Rpc__ResponsePoke poke = RPC__RESPONSE_POKE__INIT;
@@ -797,7 +852,7 @@ void handle_client(int sockfd) {
 #ifdef __ARM_ARCH_ISA_A64
     handshake.arch = RPC__ARCH__ARCH_ARM64;
 #endif
-    message_size = rpc__handshake__pack(&handshake, buffer); // TODO: CHCK MACRO
+    message_size = rpc__handshake__pack(&handshake, buffer);
     CHECK(message_send(sockfd, (const uint8_t *) &buffer, message_size));
 
     while (true) {
@@ -891,30 +946,6 @@ int main(int argc, const char *argv[]) {
     int opt;
     bool worker_spawn = false;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
-#ifdef DEBUG
-    uint8_t test[10] = {0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41};
-    Rpc__CmdCall cmdcall = RPC__CMD_CALL__INIT;
-    cmdcall.address = (uint64_t) printf;
-    cmdcall.va_list_index = 1;
-    cmdcall.n_argv = 10;
-    cmdcall.argv = (Rpc__Argument **) malloc(cmdcall.n_argv * sizeof(Rpc__Argument *));
-    for (int i = 0; i < cmdcall.n_argv; i++) {
-        cmdcall.argv[i] = (Rpc__Argument *) malloc(cmdcall.n_argv * sizeof(Rpc__Argument));
-        cmdcall.argv[i]->type_case = RPC__ARGUMENT__TYPE_V_INT;
-        cmdcall.argv[i]->v_int = i;
-    }
-    printf("Expected:\n");
-
-    cmdcall.argv[0]->type_case = RPC__ARGUMENT__TYPE_V_STR;
-    cmdcall.argv[0]->v_str = "printf test %d %d %d %d %d %d %d %d %d %d\n";
-
-    handle_call(1, &cmdcall);
-    for (int i = 0; i < cmdcall.n_argv; i++) {
-        SAFE_FREE(cmdcall.argv[i]);
-    }
-    SAFE_FREE(cmdcall.argv);
-    exit(0);
-#endif
 
     while ((opt = getopt(argc, (char *const *) argv, "hp:o:w")) != -1) {
         switch (opt) {
@@ -970,9 +1001,7 @@ int main(int argc, const char *argv[]) {
     hints.ai_family = AF_INET6;  // IPv4 addresses will be like ::ffff:127.0.0.1
 
     struct addrinfo *servinfo;
-
     CHECK(0 == getaddrinfo(NULL, port, &hints, &servinfo));
-
 
     struct addrinfo *servinfo2 = servinfo; // servinfo->ai_next;
     char ipstr[INET6_ADDRSTRLEN];
@@ -1010,10 +1039,10 @@ int main(int argc, const char *argv[]) {
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 #ifdef DEBUG
         handle_client(client_fd);
+        continue;
 #else
         CHECK(spawn_worker_server(client_fd, argv, argc));
 #endif
-
     }
 
     error:

@@ -716,16 +716,13 @@ class ResponseError(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     FUNC_NAME_FIELD_NUMBER: builtins.int
-    ERROR_NUM_FIELD_NUMBER: builtins.int
     func_name: builtins.str
-    error_num: builtins.int
     def __init__(
         self,
         *,
         func_name: builtins.str = ...,
-        error_num: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing_extensions.Literal["error_num", b"error_num", "func_name", b"func_name"]) -> None: ...
+    def ClearField(self, field_name: typing_extensions.Literal["func_name", b"func_name"]) -> None: ...
 
 global___ResponseError = ResponseError
 

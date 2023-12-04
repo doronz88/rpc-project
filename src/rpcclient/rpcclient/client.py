@@ -30,11 +30,11 @@ from rpcclient.processes import Processes
 from rpcclient.protos.rpc_pb2 import Argument, CmdCall, CmdDlclose, CmdDlopen, CmdDlsym, CmdDummyBlock, CmdExec, \
     CmdListDir, CmdPeek, CmdPoke, Response
 from rpcclient.protosocket import ProtoSocket
-from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE
+from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE, \
+    RTLD_NEXT
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
-from rpcclient.structs.consts import RTLD_NEXT
 
 tty_support = False
 try:
@@ -97,7 +97,8 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock: ProtoSocket, sysname: str, arch, create_socket_cb: typing.Callable, dlsym_global_handle=RTLD_NEXT):
+    def __init__(self, sock: ProtoSocket, sysname: str, arch, create_socket_cb: typing.Callable,
+                 dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
         self._create_socket_cb = create_socket_cb
         self._sock = sock
@@ -153,7 +154,7 @@ class Client:
             ret = self.symbol(response.handle)
         except AttributeError:
             ret = 0
-        except ServerResponseError as e:
+        except ServerResponseError:
             ret = 0
         return ret
 
@@ -169,7 +170,7 @@ class Client:
         try:
             response = self._sock.send_recv(command)
             ret = response.ptr
-        except ServerResponseError as e:
+        except ServerResponseError:
             ret = 0
         return ret
 

@@ -186,7 +186,6 @@ message ResponseGetClassList{
 
 message ResponseError{
   string func_name = 1;
-  uint64 error_num=2;
 }
 
 message ResponseListdir{

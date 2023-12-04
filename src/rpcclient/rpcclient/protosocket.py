@@ -1,8 +1,8 @@
 import struct
 import threading
 
-from rpcclient.exceptions import InvalidServerVersionMagicError, ResponseNotFoundError
-from rpcclient.exceptions import ServerDiedError, ServerResponseError
+from rpcclient.exceptions import InvalidServerVersionMagicError, ResponseNotFoundError, ServerDiedError, \
+    ServerResponseError
 from rpcclient.protos.rpc_pb2 import CmdClose, Command, Handshake, Response
 
 # field[0] is MAGIC - skip
