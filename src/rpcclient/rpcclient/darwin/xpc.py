@@ -1,8 +1,10 @@
 from datetime import datetime
 from functools import lru_cache
 from typing import List, Mapping
+from uuid import UUID
 
 from rpcclient.darwin.common import CfSerializable
+from rpcclient.darwin.consts import XPC_ARRAY_APPEND
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import MissingLibraryError, RpcXpcSerializationError
 from rpcclient.structs.consts import RTLD_NOW
@@ -12,6 +14,14 @@ class XPCObject(DarwinSymbol):
     @property
     def type(self) -> int:
         return self._client.symbols.xpc_get_type(self)
+
+
+class XPCArray(XPCObject):
+    def set_data(self, buf: bytes, index: int = XPC_ARRAY_APPEND) -> None:
+        """
+        See https://developer.apple.com/documentation/xpc/1505937-xpc_array_set_data?language=objc
+        """
+        self._client.symbols.xpc_array_set_data(self, index, buf, len(buf))
 
 
 class XPCDictionary(XPCObject):
@@ -33,8 +43,8 @@ class XPCDictionary(XPCObject):
     def set_fd(self, key: str, value: int) -> None:
         self._client.symbols.xpc_dictionary_set_fd(self, key, value)
 
-    def set_uuid(self, key: str, value: str) -> None:
-        self._client.symbols.xpc_dictionary_set_uuid(self, key, value)
+    def set_uuid(self, key: str, value: UUID) -> None:
+        self._client.symbols.xpc_dictionary_set_uuid(self, key, value.bytes)
 
     def set_dictionary(self, key: str, value: int) -> None:
         self._client.symbols.xpc_dictionary_set_dictionary(self, key, value)
@@ -42,8 +52,8 @@ class XPCDictionary(XPCObject):
     def set_object(self, obj: XPCObject) -> None:
         self._client.symbols.xpc_dictionary_set_object(self, obj)
 
-    def set_value(self, obj: XPCObject) -> None:
-        self._client.symbols.xpc_dictionary_set_value(self, obj)
+    def set_value(self, key: str, obj: XPCObject) -> None:
+        self._client.symbols.xpc_dictionary_set_value(self, key, obj)
 
     def get_string(self, key: str) -> str:
         return self._client.symbols.xpc_dictionary_get_string(self, key).peek_str()
@@ -88,6 +98,9 @@ class Xpc:
 
     def create_xpc_dictionary(self) -> XPCDictionary:
         return XPCDictionary.create(self._client.symbols.xpc_dictionary_create(0, 0, 0), self._client)
+
+    def create_xpc_array(self) -> XPCArray:
+        return XPCArray.create(self._client.symbols.xpc_array_create_empty(), self._client)
 
     def send_xpc_dictionary(self, service_name: str, message: XPCDictionary) -> XPCDictionary:
         """
