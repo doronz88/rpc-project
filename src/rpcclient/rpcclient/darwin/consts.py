@@ -2,6 +2,7 @@ from enum import Enum, IntEnum, IntFlag, auto
 
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0
+XPC_ARRAY_APPEND = 0xffffffffffffffff
 
 
 class AVAudioSessionRouteSharingPolicy(IntEnum):

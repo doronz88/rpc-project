@@ -18,7 +18,6 @@ from pathlib import Path
 
 import toml
 
-
 # -- Project information -----------------------------------------------------
 
 project = 'rpc-project'
