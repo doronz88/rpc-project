@@ -24,6 +24,7 @@ message Command {
     CmdClose close = 13;
     CmdGetClassList class_list = 14;
     CmdExecChunk exec_chunk = 15;
+    CmdCustom custom = 16;
   }
 }
 message Response {
@@ -42,6 +43,7 @@ message Response {
     ResponseGetClassList class_list = 12;
     ResponseShowClass show_class = 13;
     ResponseListdir list_dir = 14;
+    ResponseCustom custom = 15;
   }
 }
 
@@ -219,3 +221,10 @@ message DirEntryStat {
 
 
 message CmdClose{}
+
+message CmdCustom {
+    bytes content = 1;
+}
+message ResponseCustom {
+    bytes content = 1;
+}
