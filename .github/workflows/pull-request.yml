@@ -39,6 +39,8 @@ jobs:
         # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
         if: matrix.python-version != 3.12
         run: |
+          python3 -m pip install mypy-protobuf protobuf grpcio-tools
+          make -C ../protos/ python_protos
           python -m pip install build
           python3 -m build
       - name: Install
@@ -72,9 +74,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Run clang-format style.
+        run: |
+          if  clang-format -n ../protos/*.proto *.h *.c | grep -q " code should be clang-formatted" ; then
+            echo "Code is not formatted correctly. Please run clang-format on these files."
+            exit 1
+          fi
       - name: Test make
         run: |
-          make clean all
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev libprotoc-dev protobuf-c-compiler
+          make -C ../protos/ c_protos
+          
+          
+          mkdir build
+          cd build
+          cmake .. -DTARGET=LINUX
+          make
 
   pytest:
     if: '! github.event.pull_request.draft'
@@ -131,11 +147,18 @@ jobs:
       - name: Run server
         working-directory: ./src/rpcserver
         run: |
-          make SERVER_CFLAGS=-DSAFE_READ_WRITES
-          sudo nohup ./rpcserver &
+          brew install protobuf protobuf-c
+          make -C ../protos/ c_protos
+          mkdir build
+          cd build
+          cmake .. -DTARGET=OSX
+          make
+          sudo nohup ./rpcserver_macosx &
       - name: Install python package + pytest
         working-directory: ./src/rpcclient
         run: |
+          python3 -m pip install mypy-protobuf protobuf grpcio-tools
+          make -C ../protos/ python_protos
           python -m pip install --upgrade pip
           python -m pip install -U pytest
           python -m pip install -U .

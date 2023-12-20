@@ -7,7 +7,7 @@ from typing import List
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
 
-from rpcclient.protocol import arch_t
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.structs.generic import Dl_info
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
@@ -107,7 +107,7 @@ class Symbol(int):
 
     def disass(self, size=40) -> List[CsInsn]:
         """ peek disassembled lines of 'size' bytes """
-        if self._client.arch == arch_t.ARCH_ARM64:
+        if self._client.arch == ARCH_ARM64:
             return list(Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN).disasm(self.peek(size), self))
         else:
             # assume x86_64 by default

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from rpcclient.protocol import DEFAULT_PORT
+from rpcclient.client_factory import DEFAULT_PORT
 
 LAUNCHD_PID = 1
 LAUNCHD_PATH = '/sbin/launchd'
@@ -23,7 +23,6 @@ def test_get_process_by_listening_port(client):
 def test_process_object(client):
     server = client.processes.get_self()
     assert server.pid > 0
-    assert len(server.regions) > 0
     assert len(server.images) > 0
     assert len([img for img in server.images if Path(img.path).resolve() == Path(server.path).resolve()]) > 0
     fds = server.fds

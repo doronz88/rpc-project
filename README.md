@@ -68,9 +68,9 @@ rpclocal
 
 Download and execute the latest server artifact, according to your platform and arch from here:
 
-- [rpcserver_iphoneos_arm64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_iphoneos_arm64.zip)
-- [rpcserver_macosx_x86_64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_macosx_x86_64.zip)
-- [rpcserver_ubuntu_x86_64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_ubuntu_x86_64.zip)
+- [rpcserver_ios.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_ios.zip)
+- [rpcserver_macosx.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_macosx.zip)
+- [rpcserver_linux.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_linux.zip)
 
 If your specific platform and arch isn't listed, you can also [build it yourself](#building).
 
@@ -82,20 +82,39 @@ python3 -m pip install -U rpcclient
 
 ## Building
 
-macOS & Linux:
+**Note:** Cross-platform support is currently not available.
 
-```shell
+### macOS/iOS
+For macOS/iOS (Ensure that Xcode is installed):
+
+```bash
+brew install protobuf protobuf-c
+python3 -m pip install mypy-protobuf protobuf grpcio-tools
 git clone git@github.com:doronz88/rpc-project.git
+cd rpc-project
+make -C src/protos/ all
 cd src/rpcserver
+mkdir build
+cd build
+cmake .. -DTARGET=OSX
+make
+cmake .. -DTARGET=IOS 
 make
 ```
 
-iOS (Make sure to have XCode installed):
+### Linux
 
-```shell
+```bash
+sudo apt-get install -y protobuf-compiler libprotobuf-dev libprotoc-dev protobuf-c-compiler
+python3 -m pip mypy-protobuf protobuf grpcio-tools
 git clone git@github.com:doronz88/rpc-project.git
+cd rpc-project
+make -C src/protos/ all
 cd src/rpcserver
-./build_darwin.sh
+mkdir build
+cd build
+cmake .. -DTARGET=LINUX
+make
 ```
 
 ## Quickstart
