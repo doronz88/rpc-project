@@ -1,24 +1,23 @@
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <syslog.h>
 #include <execinfo.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/socket.h>
+#include <syslog.h>
+#include <unistd.h>
 
 #include "common.h"
 
 #ifdef __APPLE__
 #include <os/log.h>
 
-struct os_log_s
-{
+struct os_log_s {
     int a;
 };
 
 struct os_log_s _os_log_default;
-#endif // __APPLE__
+#endif// __APPLE__
 
 bool g_stdout = false;
 bool g_syslog = false;
@@ -26,8 +25,7 @@ FILE *g_file = NULL;
 
 #define BT_BUF_SIZE (100)
 
-void print_backtrace()
-{
+void print_backtrace() {
     int nptrs;
     void *buffer[BT_BUF_SIZE];
     char **strings;
@@ -39,24 +37,20 @@ void print_backtrace()
         would produce similar output to the following: */
 
     strings = backtrace_symbols(buffer, nptrs);
-    if (strings == NULL)
-    {
+    if (strings == NULL) {
         perror("backtrace_symbols");
         return;
     }
 
-    for (int j = 0; j < nptrs; j++)
-    {
+    for (int j = 0; j < nptrs; j++) {
         trace("BACKTRACE:\t", "%s", strings[j]);
     }
 
     free(strings);
 }
 
-void trace(const char *prefix, const char *fmt, ...)
-{
-    if (!g_stdout && !g_syslog)
-    {
+void trace(const char *prefix, const char *fmt, ...) {
+    if (!g_stdout && !g_syslog) {
         return;
     }
 
@@ -70,34 +64,30 @@ void trace(const char *prefix, const char *fmt, ...)
 
     sprintf(prefixed_line, "%s: %s", prefix, line);
 
-    if (g_stdout)
-    {
+    if (g_stdout) {
         puts(prefixed_line);
         fflush(stdout);
     }
-    if (g_syslog)
-    {
+    if (g_syslog) {
 #ifdef __APPLE__
         os_log(&_os_log_default, "%{public}s", prefixed_line);
-#else  // __APPLE__
+#else // __APPLE__
         syslog(LOG_DEBUG, "%s", prefixed_line);
-#endif // !__APPLE__
+#endif// !__APPLE__
     }
-    if (g_file)
-    {
+    if (g_file) {
         fprintf(g_file, "%s\n", prefixed_line);
         fflush(g_file);
     }
 }
 
-bool recvall_ext(int sockfd, char *buf, size_t len, bool *disconnected)
-{
+bool recvall(int sockfd, char *buf, size_t len) {
+    bool ret = false;
     size_t total_bytes = 0;
     size_t bytes = 0;
     *disconnected = false;
 
-    while (len > 0)
-    {
+    while (len > 0) {
         bytes = recv(sockfd, buf + total_bytes, len, 0);
         if (0 == bytes)
         {
@@ -106,7 +96,6 @@ bool recvall_ext(int sockfd, char *buf, size_t len, bool *disconnected)
             return false;
         }
         CHECK(bytes > 0);
-
         total_bytes += bytes;
         len -= bytes;
     }
@@ -143,13 +132,11 @@ error:
     return false;
 }
 
-bool writeall(int fd, const char *buf, size_t len)
-{
+bool writeall(int fd, const char *buf, size_t len) {
     size_t total_bytes = 0;
     size_t bytes = 0;
 
-    while (len > 0)
-    {
+    while (len > 0) {
         bytes = write(fd, buf + total_bytes, len);
         CHECK(bytes != -1);
 

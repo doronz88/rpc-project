@@ -72,6 +72,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Run clang-format style.
+        run: |
+          if  clang-format -n ../protos/*.proto *.h *.c | grep -q " code should be clang-formatted" ; then
+            echo "Code is not formatted correctly. Please run clang-format on these files."
+            exit 1
+          fi
       - name: Test make
         run: |
           make clean all

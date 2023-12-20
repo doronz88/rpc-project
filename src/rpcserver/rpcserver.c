@@ -8,29 +8,30 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
+#include <spawn.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
-#include <pthread.h>
-#include <stdarg.h>
-#include <spawn.h>
-#include <dlfcn.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <sys/utsname.h>
-#include <dirent.h>
 
 int handle_showobject(int sockfd);
 int handle_showclass(int sockfd);
 int handle_get_class_list(int sockfd);
 
 #ifdef __APPLE__
+
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
 #else
@@ -43,8 +44,8 @@ int handle_get_class_list(int sockfd) { return 0; }
 #include "protocol.h"
 
 #define DEFAULT_PORT ("5910")
-#define DEFAULT_SHELL ("/bin/sh")
-#define USAGE ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] \n\
+#define USAGE \
+    ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] \n\
 -h  show this help message \n\
 -o  output. can be all of the following: stdout, syslog and file:filename. can be passed multiple times \n\
 \n\
@@ -62,7 +63,9 @@ extern char **environ;
 
 void *get_in_addr(struct sockaddr *sa) // get sockaddr, IPv4 or IPv6:
 {
-    return sa->sa_family == AF_INET ? (void *)&(((struct sockaddr_in *)sa)->sin_addr) : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
+    return sa->sa_family == AF_INET
+        ? (void *) &(((struct sockaddr_in *) sa)->sin_addr)
+        : (void *) &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
 bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t *pid, int *master_fd)
@@ -72,8 +75,8 @@ bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t
     *master_fd = -1;
     *pid = INVALID_PID;
 
-    // call setsid() on child so Ctrl-C and all other control characters are set in a different terminal
-    // and process group
+    // call setsid() on child so Ctrl-C and all other control characters are set
+    // in a different terminal and process group
     posix_spawnattr_t attr;
     CHECK(0 == posix_spawnattr_init(&attr));
     CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID));
@@ -81,11 +84,10 @@ bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t
     posix_spawn_file_actions_t actions;
     CHECK(0 == posix_spawn_file_actions_init(&actions));
 
-    if (!background)
-    {
-        // We need a new pseudoterminal to avoid bufferring problems. The 'atos' tool
-        // in particular detects when it's talking to a pipe and forgets to flush the
-        // output stream after sending a response.
+    if (!background) {
+        // We need a new pseudoterminal to avoid bufferring problems. The 'atos'
+        // tool in particular detects when it's talking to a pipe and forgets to
+        // flush the output stream after sending a response.
         *master_fd = posix_openpt(O_RDWR);
         CHECK(-1 != *master_fd);
         CHECK(0 == grantpt(*master_fd));
@@ -104,9 +106,7 @@ bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t
         CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
         CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
         CHECK(0 == posix_spawn_file_actions_addclose(&actions, *master_fd));
-    }
-    else
-    {
+    } else {
         CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0));
         CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0));
         CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0));
@@ -121,8 +121,7 @@ bool internal_spawn(bool background, char *const *argv, char *const *envp, pid_t
     success = true;
 
 error:
-    if (slave_fd != -1)
-    {
+    if (slave_fd != -1) {
         close(slave_fd);
     }
     if (!success)
@@ -143,8 +142,7 @@ bool spawn_worker_server(int client_socket, const char *argv[], int argc)
     // append -w to original argv
     int new_argc = argc + 1;
     const char **new_argv = malloc((new_argc + 1) * sizeof(char *));
-    for (int i = 0; i < argc; ++i)
-    {
+    for (int i = 0; i < argc; ++i) {
         new_argv[i] = argv[i];
     }
     new_argv[new_argc - 1] = "-w";
@@ -271,19 +269,16 @@ bool handle_exec(int sockfd)
 
         fd_set errfds;
 
-        while (true)
-        {
+        while (true) {
             FD_ZERO(&readfds);
             FD_SET(master, &readfds);
             FD_SET(sockfd, &readfds);
 
             CHECK(select(maxfd + 1, &readfds, NULL, &errfds, NULL) != -1);
 
-            if (FD_ISSET(master, &readfds))
-            {
+            if (FD_ISSET(master, &readfds)) {
                 nbytes = read(master, buf, BUFFERSIZE);
-                if (nbytes < 1)
-                {
+                if (nbytes < 1) {
                     TRACE("read master failed. break");
                     break;
                 }
@@ -297,17 +292,12 @@ bool handle_exec(int sockfd)
                 CHECK(sendall(sockfd, (char *)&chunk, sizeof(chunk)));
                 CHECK(sendall(sockfd, buf, chunk.size));
             }
-
-            if (FD_ISSET(sockfd, &readfds))
-            {
+            if (FD_ISSET(sockfd, &readfds)) {
                 nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
-                if (nbytes < 1)
-                {
+                if (nbytes < 1) {
                     break;
                 }
-
                 TRACE("sock->master");
-
                 CHECK(writeall(master, buf, nbytes));
             }
         }
@@ -332,10 +322,8 @@ error:
         free(thread_params);
     }
 
-    if (INVALID_PID == pid)
-    {
+    if (INVALID_PID == pid) {
         TRACE("invalid pid");
-
         // failed to create process somewhere in the prolog, at least notify
         sendall(sockfd, (char *)&pid, sizeof(u32));
     }
@@ -367,8 +355,7 @@ error:
     if (-1 != master)
     {
         TRACE("close master: %d", master);
-        if (0 != close(master))
-        {
+        if (0 != close(master)) {
             perror("close");
         }
     }
@@ -865,10 +852,7 @@ error:
 }
 
 // exported for client hooks
-bool get_true()
-{
-    return true;
-}
+bool get_true() { return true; }
 
 // exported for client hooks
 bool get_false()
@@ -890,14 +874,14 @@ error:
     return false;
 }
 
-#else // !__APPLE__
+#else// !__APPLE__
 
 bool handle_get_dummy_block(int sockfd)
 {
     return true;
 }
 
-#endif // __APPLE__
+#endif// __APPLE__
 
 bool handle_listdir(int sockfd)
 {
@@ -937,10 +921,10 @@ bool handle_listdir(int sockfd)
         u64 lstat_error = 0;
         u64 stat_error = 0;
 
-        if (!lstat(fullpath, &system_lstat)) {
+        if (lstat(fullpath, &system_lstat)) {
             lstat_error = errno;
         }
-        if (!stat(fullpath, &system_stat)) {
+        if (stat(fullpath, &system_stat)) {
             stat_error = errno;
         }
 
@@ -997,8 +981,7 @@ bool handle_listdir(int sockfd)
     result = true;
 
 error:
-    if (dirp)
-    {
+    if (dirp) {
         closedir(dirp);
     }
 
@@ -1112,13 +1095,11 @@ error:
     close(sockfd);
 }
 
-void signal_handler(int sig)
-{
+void signal_handler(int sig) {
     int status;
     pid_t pid;
 
-    if (SIGCHLD == sig)
-    {
+    if (SIGCHLD == sig) {
         pid = waitpid(-1, &status, 0);
         TRACE("PID: %d exited with status: %d", pid, status);
         return;
@@ -1127,44 +1108,34 @@ void signal_handler(int sig)
     TRACE("entered with signal code: %d", sig);
 }
 
-int main(int argc, const char *argv[])
-{
+int main(int argc, const char *argv[]) {
     int opt;
     bool worker_spawn = false;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *)argv, "hp:o:w")) != -1)
-    {
-        switch (opt)
-        {
-        case 'p':
-        {
+    while ((opt = getopt(argc, (char *const *) argv, "hp:o:w")) != -1) {
+        switch (opt) {
+        case 'p': {
             strncpy(port, optarg, sizeof(port) - 1);
             break;
         }
-        case 'o':
-        {
-            if (0 == strcmp(optarg, "stdout"))
-            {
+        case 'o': {
+            if (0 == strcmp(optarg, "stdout")) {
                 g_stdout = true;
             }
-            if (0 == strcmp(optarg, "syslog"))
-            {
+            if (0 == strcmp(optarg, "syslog")) {
                 g_syslog = true;
             }
             char *file = strstr(optarg, "file:");
-            if (file)
-            {
+            if (file) {
                 g_file = fopen(file + 5, "wb");
-                if (!g_file)
-                {
+                if (!g_file) {
                     printf("failed to open %s for writing\n", optarg);
                 }
             }
             break;
         }
-        case 'w':
-        {
+        case 'w': {
             worker_spawn = true;
             break;
         }
@@ -1180,8 +1151,7 @@ int main(int argc, const char *argv[])
 
     signal(SIGPIPE, signal_handler);
 
-    if (worker_spawn)
-    {
+    if (worker_spawn) {
         TRACE("New worker spawned");
         handle_client(WORKER_CLIENT_SOCKET_FD);
         exit(EXIT_SUCCESS);
@@ -1199,12 +1169,14 @@ int main(int argc, const char *argv[])
     struct addrinfo *servinfo;
     CHECK(0 == getaddrinfo(NULL, port, &hints, &servinfo));
 
-    struct addrinfo *servinfo2 = servinfo; // servinfo->ai_next;
+    struct addrinfo *servinfo2 = servinfo;// servinfo->ai_next;
     char ipstr[INET6_ADDRSTRLEN];
-    CHECK(inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr, sizeof(ipstr)));
+    CHECK(inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr,
+                    sizeof(ipstr)));
     TRACE("Waiting for connections on [%s]:%s", ipstr, port);
 
-    server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype, servinfo2->ai_protocol);
+    server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype,
+                       servinfo2->ai_protocol);
     CHECK(server_fd >= 0);
     CHECK(-1 != fcntl(server_fd, F_SETFD, FD_CLOEXEC));
 
@@ -1218,21 +1190,23 @@ int main(int argc, const char *argv[])
 
 #ifdef __APPLE__
     pthread_t runloop_thread;
-    CHECK(0 == pthread_create(&runloop_thread, NULL, (void *(*)(void *))CFRunLoopRun, NULL));
-#endif // __APPLE__
+    CHECK(0 == pthread_create(&runloop_thread, NULL, (void *(*) (void *) ) CFRunLoopRun, NULL));
+#endif// __APPLE__
 
     signal(SIGCHLD, signal_handler);
 
-    while (1)
-    {
-        struct sockaddr_storage their_addr; // connector's address information
+    while (1) {
+        struct sockaddr_storage their_addr;// connector's address information
         socklen_t addr_size = sizeof(their_addr);
-        int client_fd = accept(server_fd, (struct sockaddr *)&their_addr, &addr_size);
+        int client_fd =
+            accept(server_fd, (struct sockaddr *) &their_addr, &addr_size);
         CHECK(client_fd >= 0);
         CHECK(-1 != fcntl(client_fd, F_SETFD, FD_CLOEXEC));
 
         char ipstr[INET6_ADDRSTRLEN];
-        CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), ipstr, sizeof(ipstr)));
+        CHECK(inet_ntop(their_addr.ss_family,
+                        get_in_addr((struct sockaddr *) &their_addr), ipstr,
+                        sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
 
         CHECK(spawn_worker_server(client_fd, argv, argc));
@@ -1242,8 +1216,7 @@ error:
     err = 1;
 
 clean:
-    if (-1 != server_fd)
-    {
+    if (-1 != server_fd) {
         close(server_fd);
     }
 
