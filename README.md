@@ -1,11 +1,10 @@
-[![Server application](https://img.shields.io/github/actions/workflow/status/doronz88/rpc-project/server-app.yml?branch=master&label=python%20package&style=plastic)](https://github.com/doronz88/rpc-project/actions/workflows/server-app.yml "Server application action")
-[![Python application](https://img.shields.io/github/actions/workflow/status/doronz88/rpc-project/python-app.yml?branch=master&label=server%20build&style=plastic)](https://github.com/doronz88/rpc-project/actions/workflows/python-app.yml "Python application action")
-[![Documentation Status](https://readthedocs.org/projects/rpc-project/badge/?version=latest)](https://rpc-project.readthedocs.io/en/latest/?badge=latest)
-
 - [rpc-project](#rpc-project)
   - [Description](#description)
-  - [Installation](#installation)
+  - [Local installation](#local-installation)
+  - [Remote installation](#remote-installation)
   - [Building](#building)
+    - [macOS/iOS](#macosios)
+    - [Linux](#linux)
   - [Quickstart](#quickstart)
   - [Calling native functions](#calling-native-functions)
     - [Globalized symbols](#globalized-symbols)
@@ -66,11 +65,7 @@ rpclocal
 
 ## Remote installation
 
-Download and execute the latest server artifact, according to your platform and arch from here:
-
-- [rpcserver_ios.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_ios.zip)
-- [rpcserver_macosx.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_macosx.zip)
-- [rpcserver_linux.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_linux.zip)
+Download and execute the latest server artifact, according to your platform and arch from the latest [GitHub action execution](https://github.com/doronz88/rpc-project/actions/workflows/server-publish.yml).
 
 If your specific platform and arch isn't listed, you can also [build it yourself](#building).
 
