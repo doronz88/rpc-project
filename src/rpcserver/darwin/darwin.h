@@ -5,7 +5,6 @@
 #include <Foundation/Foundation.h>
 #include <objc/objc.h>
 #include <objc/runtime.h>
-#include "../protocol.h"
 
 void addProtocolsToDictionary(Class objcClass, NSDictionary *outDictionary);
 void addIvarsToDictionary(Class objcClass, NSDictionary *outDictionary, id objcObject);

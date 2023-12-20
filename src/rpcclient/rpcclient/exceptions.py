@@ -8,6 +8,18 @@ class InvalidServerVersionMagicError(RpcClientException):
     pass
 
 
+class ResponseNotFoundError(RpcClientException):
+    """ Response not found """
+    pass
+
+
+class ServerResponseError(RpcClientException):
+    """ Server returned error """
+    def __init__(self, error):
+        super().__init__()
+        self.error = error
+
+
 class ServerDiedError(RpcClientException):
     """ server became disconnected during an operation """
     pass

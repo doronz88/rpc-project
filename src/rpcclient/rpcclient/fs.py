@@ -88,7 +88,7 @@ class DirEntry:
 
         if result.errno != 0:
             self._client.errno = result.errno
-            self._client.raise_errno_exception(f'failed to stat: {self._entry.name}')
+            self._client.raise_errno_exception(f'failed to stat: {self._entry.d_name}')
         return result
 
     def __repr__(self):

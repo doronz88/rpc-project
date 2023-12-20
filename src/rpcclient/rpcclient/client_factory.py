@@ -10,28 +10,18 @@ from zipfile import ZipFile
 import requests
 
 from rpcclient.client import Client
-from rpcclient.exceptions import FailedToConnectError, InvalidServerVersionMagicError
+from rpcclient.exceptions import FailedToConnectError
 from rpcclient.ios.client import IosClient
 from rpcclient.linux.client import LinuxClient
 from rpcclient.macos.client import MacosClient
-from rpcclient.protocol import DEFAULT_PORT, SERVER_MAGIC_VERSION, protocol_handshake_t
+from rpcclient.protosocket import ProtoSocket
 
 PROJECT_URL = 'https://github.com/doronz88/rpc-project/archive/refs/heads/master.zip'
 RPCSERVER_SUBDIR = 'rpc-project-master/src/rpcserver'
 HOMEDIR = Path('~/.rpc-project').expanduser()
 
 logger = logging.getLogger(__name__)
-
-
-def recvall(sock, size: int) -> bytes:
-    buf = b''
-    while size:
-        chunk = sock.recv(size)
-        if not chunk:
-            raise FailedToConnectError()
-        size -= len(chunk)
-        buf += chunk
-    return buf
+DEFAULT_PORT = 5910
 
 
 def create_local() -> typing.Union[Client, IosClient, MacosClient, LinuxClient]:
@@ -76,23 +66,20 @@ def create_tcp_client(hostname: str, port: int = DEFAULT_PORT) -> \
 
 def create_client(create_socket_cb: typing.Callable) -> typing.Union[Client, IosClient, MacosClient, LinuxClient]:
     sock = create_socket_cb()
-    handshake = protocol_handshake_t.parse(recvall(sock, protocol_handshake_t.sizeof()))
+    proto_sock = ProtoSocket(sock)
 
-    if handshake.magic != SERVER_MAGIC_VERSION:
-        raise InvalidServerVersionMagicError(f'got {handshake.magic:x} instead of {SERVER_MAGIC_VERSION:x}')
-
-    sysname = handshake.sysname.lower()
-    machine = handshake.machine.lower()
-    arch = handshake.arch
+    sysname = proto_sock.handshake.sysname.lower()
+    machine = proto_sock.handshake.machine.lower()
+    arch = proto_sock.handshake.arch
 
     logging.info(f'connection uname.sysname: {sysname} uname.machine: {machine}')
 
     if sysname == 'darwin':
         if machine.startswith('iphone'):
-            return IosClient(sock, sysname, arch, create_socket_cb)
+            return IosClient(proto_sock, sysname, arch, create_socket_cb)
         else:
-            return MacosClient(sock, sysname, arch, create_socket_cb)
+            return MacosClient(proto_sock, sysname, arch, create_socket_cb)
     elif sysname == 'linux':
-        return LinuxClient(sock, sysname, arch, create_socket_cb)
+        return LinuxClient(proto_sock, sysname, arch, create_socket_cb)
 
-    return Client(sock, sysname, arch, create_socket_cb)
+    return Client(proto_sock, sysname, arch, create_socket_cb)

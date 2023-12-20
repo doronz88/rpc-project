@@ -11,13 +11,12 @@ from rpcclient.ios.screen_capture import ScreenCapture
 from rpcclient.ios.sprinboard import SpringBoard
 from rpcclient.ios.telephony import Telephony
 from rpcclient.ios.wifi import IosWifi
-from rpcclient.protocol import arch_t
 
 CRASH_REPORTS_DIR = 'Library/Logs/CrashReporter'
 
 
 class IosClient(DarwinClient):
-    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable):
+    def __init__(self, sock, sysname: str, arch, create_socket_cb: typing.Callable):
         super().__init__(sock, sysname, arch, create_socket_cb)
         self.backlight = Backlight(self)
         self.reports = Reports(self, CRASH_REPORTS_DIR)

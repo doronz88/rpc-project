@@ -1,36 +1,35 @@
 import ast
 import builtins
 import contextlib
+import ctypes
 import dataclasses
+import enum
 import logging
 import os
 import sys
 import threading
 import typing
 from collections import namedtuple
-from enum import Enum
 from pathlib import Path
 from select import select
+from typing import Any
 
 import IPython
-from construct import Float16l, Float32l, Float64l, Int64sl, Int64ul
 from traitlets.config import Config
 from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
 import rpcclient
-from rpcclient.darwin.structs import exitcode_t, pid_t
-from rpcclient.exceptions import ArgumentError, BadReturnValueError, InvalidServerVersionMagicError, \
-    RpcBrokenPipeError, RpcConnectionRefusedError, RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, \
-    RpcNotADirectoryError, RpcNotEmptyError, RpcPermissionError, RpcResourceTemporarilyUnavailableError, \
-    ServerDiedError, SpawnError, SymbolAbsentError
+from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcBrokenPipeError, RpcConnectionRefusedError, \
+    RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, RpcNotADirectoryError, RpcNotEmptyError, \
+    RpcPermissionError, RpcResourceTemporarilyUnavailableError, ServerResponseError, SpawnError, SymbolAbsentError
 from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
-from rpcclient.protocol import MAGIC, SERVER_MAGIC_VERSION, arch_t, argument_type_t, call_response_t, \
-    call_response_t_size, cmd_type_t, dummy_block_t, exec_chunk_t, exec_chunk_type_t, listdir_entry_t, \
-    protocol_handshake_t, protocol_message_t, reply_protocol_message_t
+from rpcclient.protos.rpc_pb2 import Argument, CmdCall, CmdDlclose, CmdDlopen, CmdDlsym, CmdDummyBlock, CmdExec, \
+    CmdListDir, CmdPeek, CmdPoke, Response
+from rpcclient.protosocket import ProtoSocket
 from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE, \
     RTLD_NEXT
 from rpcclient.symbol import Symbol
@@ -98,7 +97,8 @@ class Client:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock, sysname: str, arch: arch_t, create_socket_cb: typing.Callable, dlsym_global_handle=RTLD_NEXT):
+    def __init__(self, sock: ProtoSocket, sysname: str, arch, create_socket_cb: typing.Callable,
+                 dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
         self._create_socket_cb = create_socket_cb
         self._sock = sock
@@ -148,183 +148,101 @@ class Client:
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLOPEN,
-            'data': {'filename': filename, 'mode': mode},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            address = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return self.symbol(address)
+        command = CmdDlopen(filename=filename, mode=mode)
+        response = self._sock.send_recv(command)
+        return self.symbol(response.handle)
 
     def dlclose(self, lib: int):
         """ call dlclose() at remote and return its handle. see the man page for more details. """
-        lib &= 0xffffffffffffffff
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLCLOSE,
-            'data': {'lib': lib},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            err = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return err
+        command = CmdDlclose(handle=ctypes.c_uint64(lib).value)
+        response = self._sock.send_recv(command)
+        return response.res
 
     def dlsym(self, lib: int, symbol_name: str):
         """ call dlsym() at remote and return its handle. see the man page for more details. """
-        lib &= 0xffffffffffffffff
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_DLSYM,
-            'data': {'lib': lib, 'symbol_name': symbol_name},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            address = Int64sl.parse(self._recvall(Int64sl.sizeof()))
-        return address
+        command = CmdDlsym(handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)
+        response = self._sock.send_recv(command)
+        return response.ptr
 
     def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False,
-             return_float16=False, return_raw=False, va_list_index: int = 0xffff) -> Symbol:
+             return_raw=False, va_list_index: int = 0xffff) -> typing.Union[float, Symbol, Any]:
         """ call a remote function and retrieve its return value as Symbol object """
-        fixed_argv = []
-        free_list = []
-
+        args = []
         for arg in argv:
-            if isinstance(arg, Enum):
-                # if it's a python enum, then first get its real value and only then attempt to convert
-                arg = arg.value
-
-            tmp = arg
-
-            if isinstance(arg, bool):
-                tmp = int(arg)
-
+            if isinstance(arg, float):
+                args.append(Argument(v_double=arg))
             elif isinstance(arg, str):
-                tmp = self.symbols.malloc(len(arg) + 1)
-                tmp.poke(arg.encode() + b'\0')
-                free_list.append(tmp)
-
+                args.append(Argument(v_str=arg))
+            elif isinstance(arg, int):
+                args.append(Argument(v_int=ctypes.c_uint64(arg).value))
             elif isinstance(arg, bytes):
-                tmp = self.symbols.malloc(len(arg))
-                tmp.poke(arg)
-                free_list.append(tmp)
-
-            if isinstance(tmp, int):
-                tmp &= 0xffffffffffffffff
-                fixed_argv.append({'type': argument_type_t.Integer, 'value': tmp})
-
-            elif isinstance(tmp, float):
-                fixed_argv.append({'type': argument_type_t.Double, 'value': tmp})
-
+                args.append(Argument(v_bytes=arg))
+            elif isinstance(arg, enum.Enum):
+                args.append(Argument(v_int=ctypes.c_uint64(arg.value).value))
             else:
-                [self.symbols.free(f) for f in free_list]
-                raise ArgumentError(f'invalid parameter type: {arg}')
+                raise ArgumentError()
 
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_CALL,
-            'data': {'address': address, 'va_list_index': va_list_index, 'argv': fixed_argv},
-        })
-
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            response = call_response_t.parse(self._recvall(call_response_t_size))
-
-        for f in free_list:
-            self.symbols.free(f)
-
-        if self.arch == arch_t.ARCH_ARM64:
-            double_buf = Float64l.build(response.return_values.arm_registers.d[0])
-            float16_err = Float16l.parse(double_buf)
-            float32_err = Float32l.parse(double_buf)
-            float64_err = response.return_values.arm_registers.d[0]
-
-            if return_float16:
-                return float16_err
-
+        command = CmdCall(address=address, va_list_index=va_list_index, argv=args)
+        response = self._sock.send_recv(command)
+        if response.HasField('arm_registers'):
+            double = response.arm_registers.d0
             if return_float32:
-                return float32_err
-
+                return ctypes.c_float(double).value
             if return_float64:
-                return float64_err
-
+                return double
             if return_raw:
-                return response.return_values.arm_registers
-
-            return self.symbol(response.return_values.arm_registers.x[0])
-
-        return self.symbol(response.return_values.return_value)
+                return response.arm_registers
+            return self.symbol(response.arm_registers.x0)
+        return self.symbol(response.return_value)
 
     def peek(self, address: int, size: int) -> bytes:
         """ peek data at given address """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_PEEK,
-            'data': {'address': address, 'size': size},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
-            if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
-                raise ArgumentError(f'failed to read {size} bytes from {address}')
-            return self._recvall(size)
+        command = CmdPeek(address=address, size=size)
+        try:
+            return self._sock.send_recv(command).data
+        except ServerResponseError:
+            raise ArgumentError()
 
     def poke(self, address: int, data: bytes):
         """ poke data at given address """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_POKE,
-            'data': {'address': address, 'size': len(data), 'data': data},
-        })
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            reply = protocol_message_t.parse(self._recvall(reply_protocol_message_t.sizeof()))
-            if reply.cmd_type == cmd_type_t.CMD_REPLY_ERROR:
-                raise ArgumentError(f'failed to write {len(data)} bytes to {address}')
+        command = CmdPoke(address=address, data=data)
+        try:
+            self._sock.send_recv(command)
+        except ServerResponseError:
+            raise ArgumentError()
 
     def get_dummy_block(self) -> Symbol:
         """ get an address for a stub block containing nothing """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_GET_DUMMY_BLOCK,
-            'data': None,
-        })
-
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            result = dummy_block_t.parse(self._recvall(dummy_block_t.sizeof()))
-
-        return self.symbol(result)
+        command = CmdDummyBlock()
+        response = self._sock.send_recv(command)
+        return self.symbol(response.address)
 
     def listdir(self, filename: str):
         """ get an address for a stub block containing nothing """
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_LISTDIR,
-            'data': {'filename': filename},
-        })
-
+        command = CmdListDir(path=filename)
         entries = []
-        with self._protocol_lock:
-            self._sock.sendall(message)
-            dirp = Int64ul.parse(self._recvall(Int64ul.sizeof()))
-            while dirp:
-                magic = Int64ul.parse(self._recvall(Int64ul.sizeof()))
-                if magic != MAGIC:
-                    break
-                entry = listdir_entry_t.parse(self._recvall(listdir_entry_t.sizeof()))
-                name = self._recvall(entry.d_namlen).decode()
-                lstat = ProtocolDitentStat(
-                    errno=entry.lstat.errno, st_blocks=entry.lstat.st_blocks, st_blksize=entry.lstat.st_blksize,
-                    st_atime=entry.lstat.st_atime, st_ctime=entry.lstat.st_ctime, st_mtime=entry.lstat.st_mtime,
-                    st_nlink=entry.lstat.st_nlink, st_mode=entry.lstat.st_mode, st_rdev=entry.lstat.st_rdev,
-                    st_size=entry.lstat.st_size, st_dev=entry.lstat.st_dev, st_gid=entry.lstat.st_gid,
-                    st_ino=entry.lstat.st_ino, st_uid=entry.lstat.st_uid)
-                stat = ProtocolDitentStat(
-                    errno=entry.stat.errno, st_blocks=entry.stat.st_blocks, st_blksize=entry.stat.st_blksize,
-                    st_atime=entry.stat.st_atime, st_ctime=entry.stat.st_ctime, st_mtime=entry.stat.st_mtime,
-                    st_nlink=entry.stat.st_nlink, st_mode=entry.stat.st_mode, st_rdev=entry.stat.st_rdev,
-                    st_size=entry.stat.st_size, st_dev=entry.stat.st_dev, st_gid=entry.stat.st_gid,
-                    st_ino=entry.stat.st_ino, st_uid=entry.stat.st_uid)
-                entries.append(ProtocolDirent(d_inode=entry.lstat.st_ino, d_type=entry.d_type, d_name=name, lstat=lstat,
-                                              stat=stat))
-
-        if not dirp:
+        try:
+            response = self._sock.send_recv(command)
+        except ServerResponseError:
             self.raise_errno_exception(f'failed to listdir: {filename}')
 
+        for entry in response.dir_entries:
+            lstat = ProtocolDitentStat(
+                errno=entry.lstat.errno1, st_blocks=entry.lstat.st_blocks, st_blksize=entry.lstat.st_blksize,
+                st_atime=entry.lstat.st_atime1, st_ctime=entry.lstat.st_ctime1, st_mtime=entry.lstat.st_mtime1,
+                st_nlink=entry.lstat.st_nlink, st_mode=entry.lstat.st_mode, st_rdev=entry.lstat.st_rdev,
+                st_size=entry.lstat.st_size, st_dev=entry.lstat.st_dev, st_gid=entry.lstat.st_gid,
+                st_ino=entry.lstat.st_ino, st_uid=entry.lstat.st_uid)
+            stat = ProtocolDitentStat(
+                errno=entry.stat.errno1, st_blocks=entry.stat.st_blocks, st_blksize=entry.stat.st_blksize,
+                st_atime=entry.stat.st_atime1, st_ctime=entry.stat.st_ctime1, st_mtime=entry.stat.st_mtime1,
+                st_nlink=entry.stat.st_nlink, st_mode=entry.stat.st_mode, st_rdev=entry.stat.st_rdev,
+                st_size=entry.stat.st_size, st_dev=entry.stat.st_dev, st_gid=entry.stat.st_gid,
+                st_ino=entry.stat.st_ino, st_uid=entry.stat.st_uid)
+            entries.append(
+                ProtocolDirent(d_inode=entry.lstat.st_ino, d_type=entry.d_type, d_name=entry.d_name,
+                               lstat=lstat,
+                               stat=stat))
         return entries
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
@@ -362,7 +280,7 @@ class Client:
                 self._prepare_terminal()
             try:
                 # the socket must be non-blocking for using select()
-                self._sock.setblocking(False)
+                self._sock.raw_socket.setblocking(False)
                 error = self._execution_loop(stdin, stdout)
             except Exception:  # noqa: E722
                 # this is important to really catch every exception here, even exceptions not inheriting from Exception
@@ -371,7 +289,7 @@ class Client:
                     self._restore_terminal()
                 raise
             finally:
-                self._sock.setblocking(True)
+                self._sock.raw_socket.setblocking(True)
 
         if raw_tty:
             self._restore_terminal()
@@ -496,17 +414,8 @@ class Client:
                         symbol
                     )
 
-    def _close(self):
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_CLOSE,
-            'data': None,
-        })
-        self._sock.sendall(message)
-        self._sock.close()
-
     def close(self):
-        with self._protocol_lock:
-            self._close()
+        self._sock.close()
 
     def shell(self, reuse_client: bool = False):
         self._logger.disabled = True
@@ -534,26 +443,17 @@ class Client:
         """ close current socket and attempt to reconnect """
         with self.reconnect_lock:
             with self._protocol_lock:
-                self._close()
-                self._sock = self._create_socket_cb()
-                handshake = protocol_handshake_t.parse(self._recvall(protocol_handshake_t.sizeof()))
-
-            if handshake.magic != SERVER_MAGIC_VERSION:
-                raise InvalidServerVersionMagicError()
-
+                self.close()
+                self._sock = ProtoSocket(self._create_socket_cb())
             # new clients are handled in new processes so all symbols may reside in different addresses
             self._init_process_specific()
 
     def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
-        message = protocol_message_t.build({
-            'cmd_type': cmd_type_t.CMD_EXEC,
-            'data': {'background': background, 'argv': argv, 'envp': envp},
-        })
-        self._sock.sendall(message)
-        pid = pid_t.parse(self._sock.recv(pid_t.sizeof()))
-        if pid == INVALID_PID:
+        command = CmdExec(background=background, argv=argv, envp=envp)
+        try:
+            return self._sock.send_recv(command).pid
+        except ServerResponseError:
             raise SpawnError(f'failed to spawn: {argv}')
-        return pid
 
     def _restore_terminal(self):
         if not tty_support:
@@ -567,34 +467,22 @@ class Client:
         self._old_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
 
-    def _recvall(self, size: int) -> bytes:
-        buf = b''
-        while size:
-            try:
-                chunk = self._sock.recv(size)
-            except BlockingIOError:
-                continue
-            if self._sock.gettimeout() == 0 and not chunk:
-                # TODO: replace self._sock.gettimeout() == 0 on -> self._sock.getblocking() on python37+
-                raise ServerDiedError()
-            size -= len(chunk)
-            buf += chunk
-        return buf
-
     def _execution_loop(self, stdin: io_or_str = sys.stdin, stdout=sys.stdout):
         """
         if stdin is a file object, we need to select between the fds and give higher priority to stdin.
         otherwise, we can simply write all stdin contents directly to the process
         """
         fds = []
+        raw_socket = self._sock.raw_socket
         if hasattr(stdin, 'fileno'):
             fds.append(stdin)
         else:
             # assume it's just raw bytes
-            self._sock.sendall(stdin.encode())
-        fds.append(self._sock)
+            raw_socket.sendall(stdin.encode())
+        fds.append(raw_socket)
 
         while True:
+            response = Response()
             rlist, _, _ = select(fds, [], [])
 
             for fd in rlist:
@@ -603,23 +491,20 @@ class Client:
                         buf = os.read(stdin.fileno(), CHUNK_SIZE)
                     else:
                         buf = stdin.read(CHUNK_SIZE)
-                    self._sock.sendall(buf)
-                elif fd == self._sock:
+                    raw_socket.sendall(buf)
+                elif fd == raw_socket:
                     try:
-                        buf = self._recvall(exec_chunk_t.sizeof())
+                        size, buf = self._sock._receive()
+                        response.ParseFromString(buf)
                     except ConnectionResetError:
                         print('Bye. 👋')
                         return
-
-                    exec_chunk = exec_chunk_t.parse(buf)
-                    data = self._recvall(exec_chunk.size)
-
-                    if exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_STDOUT:
-                        stdout.write(data.decode())
+                    _type = response.exec_chunk.WhichOneof('type')
+                    if _type == 'buffer':
+                        stdout.write(response.exec_chunk.buffer.decode())
                         stdout.flush()
-                    elif exec_chunk.chunk_type == exec_chunk_type_t.CMD_EXEC_CHUNK_TYPE_ERRORCODE:
-                        # WEXITSTATUS(x)
-                        return exitcode_t.parse(data) >> 8
+                    elif _type == 'exit_code':
+                        return response.exec_chunk.exit_code
 
     def raise_errno_exception(self, message: str):
         message += f' ({self.last_error})'
