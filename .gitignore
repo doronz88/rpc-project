@@ -49,7 +49,5 @@ _CodeSignature
 **/_version.py
 src/rpcserver/protos/
 src/rpcclient/rpcclient/protos/
+src/rpcserver/build/
 cmake-build-debug
-
-# Third party
-src/rpcserver/protobuf-c/

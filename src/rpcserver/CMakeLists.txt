@@ -50,18 +50,7 @@ endif ()
 
 ### Check if protobuf-c source not found and download if necessary
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/protobuf-c)
-    message(STATUS "protobuf-c not found, downloading...")
-    ExternalProject_Add(
-            protobuf-c-download
-            PREFIX "protobuf-c-download"
-            GIT_REPOSITORY https://github.com/protobuf-c/protobuf-c.git
-            GIT_TAG v1.5.0
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/protobuf-c/
-            # Disable all other steps
-            CONFIGURE_COMMAND ""
-            BUILD_COMMAND ""
-            INSTALL_COMMAND ""
-    )
+    message(FATAL " protobuf-c not found, please execute 'git submodule update --init --recursive'")
 endif ()
 # Build protobuf-c after downloading
 set(LIBPROTO_C "${CMAKE_BINARY_DIR}/protobuf-c-build")
