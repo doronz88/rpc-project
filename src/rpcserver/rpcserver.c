@@ -589,9 +589,13 @@ bool handle_listdir(int sockfd, Rpc__CmdListDir *cmd) {
     Rpc__ResponseListdir resp_list_dir = RPC__RESPONSE_LISTDIR__INIT;
     Rpc__DirEntry *d_entry = NULL;
     Rpc__DirEntryStat *d_stat = NULL, *l_stat = NULL;
+    Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
 
     dirp = opendir(cmd->path);
-    CHECK(dirp != NULL);
+    if (NULL == dirp) {
+        CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
+        return true;
+    }
     for (entry = readdir(dirp); entry != NULL; entry = readdir(dirp)) {
         entry_count++;
     }
