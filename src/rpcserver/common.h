@@ -55,7 +55,7 @@ bool send_message(int sockfd, const uint8_t *buf, size_t len);
 
 bool send_response(int sockfd, ProtobufCMessage *resp);
 
-bool receive_message(int sockfd, char *buf, size_t *size);
+bool receive_message(int sockfd, char **buf, size_t *size);
 
 void safe_free(void **ptr);
 

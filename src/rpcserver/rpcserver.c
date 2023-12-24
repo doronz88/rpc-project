@@ -720,11 +720,13 @@ void handle_client(int sockfd) {
 
     while (true) {
         Rpc__Command *cmd;
+        char *recv_buff = NULL;
         message_size = 0;
-        CHECK(receive_message(sockfd, (char *) &buffer, &message_size))
+        CHECK(receive_message(sockfd, &recv_buff, &message_size))
 
         TRACE("recv");
-        cmd = rpc__command__unpack(NULL, message_size, buffer);
+        cmd = rpc__command__unpack(NULL, message_size, (uint8_t *) recv_buff);
+        CHECK(cmd != NULL);
         TRACE("client fd: %d, cmd type: %d", sockfd, cmd->type_case);
         CHECK(cmd->magic == MAGIC);
 
@@ -785,6 +787,7 @@ void handle_client(int sockfd) {
         }
         }
         rpc__command__free_unpacked(cmd, NULL);
+        safe_free((void **) &recv_buff);
     }
 
 error:
