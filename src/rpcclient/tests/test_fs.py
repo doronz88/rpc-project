@@ -1,9 +1,10 @@
+from pathlib import Path
 from stat import S_IMODE
 
 import pytest
 
 from rpcclient.darwin.consts import UF_IMMUTABLE
-from rpcclient.exceptions import RpcPermissionError
+from rpcclient.exceptions import RpcFileNotFoundError, RpcPermissionError
 
 
 def test_chown(client, tmp_path):
@@ -64,6 +65,29 @@ def test_listdir(client, tmp_path):
     assert not client.fs.listdir(tmp_path)
     client.fs.touch(tmp_path / 'temp.txt')
     assert client.fs.listdir(tmp_path) == ['temp.txt']
+
+
+def test_listdir_non_exists(client):
+    with pytest.raises(RpcFileNotFoundError):
+        client.fs.listdir('/non_exists_path')
+
+
+@pytest.mark.parametrize('file_size', [1024, 10240, 102400])
+def test_push_pull_with_different_sizes(client, tmp_path, file_size):
+    assert not client.fs.listdir(tmp_path)
+    local = Path('/tmp/temp.bin')
+    local_pull = Path('/tmp/temp2.bin')
+    remote = tmp_path / 'temp.bin'
+
+    with open(local, 'wb') as f:
+        f.write(b'\0' * file_size)
+
+    client.fs.push(local, remote)
+    assert client.fs.lstat(remote).st_size == file_size
+    client.fs.pull(remote, local_pull)
+    assert local_pull.stat().st_size == file_size
+    local.unlink(missing_ok=True)
+    local_pull.unlink(missing_ok=True)
 
 
 def test_scandir_sanity(client, tmp_path):

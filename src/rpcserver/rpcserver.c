@@ -589,9 +589,13 @@ bool handle_listdir(int sockfd, Rpc__CmdListDir *cmd) {
     Rpc__ResponseListdir resp_list_dir = RPC__RESPONSE_LISTDIR__INIT;
     Rpc__DirEntry *d_entry = NULL;
     Rpc__DirEntryStat *d_stat = NULL, *l_stat = NULL;
+    Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
 
     dirp = opendir(cmd->path);
-    CHECK(dirp != NULL);
+    if (NULL == dirp) {
+        CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
+        return true;
+    }
     for (entry = readdir(dirp); entry != NULL; entry = readdir(dirp)) {
         entry_count++;
     }
@@ -716,11 +720,13 @@ void handle_client(int sockfd) {
 
     while (true) {
         Rpc__Command *cmd;
+        char *recv_buff = NULL;
         message_size = 0;
-        CHECK(receive_message(sockfd, (char *) &buffer, &message_size))
+        CHECK(receive_message(sockfd, &recv_buff, &message_size))
 
         TRACE("recv");
-        cmd = rpc__command__unpack(NULL, message_size, buffer);
+        cmd = rpc__command__unpack(NULL, message_size, (uint8_t *) recv_buff);
+        CHECK(cmd != NULL);
         TRACE("client fd: %d, cmd type: %d", sockfd, cmd->type_case);
         CHECK(cmd->magic == MAGIC);
 
@@ -781,6 +787,7 @@ void handle_client(int sockfd) {
         }
         }
         rpc__command__free_unpacked(cmd, NULL);
+        safe_free((void **) &recv_buff);
     }
 
 error:

@@ -100,11 +100,13 @@ void safe_free(void **ptr) {
     *ptr = NULL;
 }
 
-bool receive_message(int sockfd, char *buf, size_t *size) {
+bool receive_message(int sockfd, char **buf, size_t *size) {
     bool ret = false;
-    recv(sockfd, size, sizeof(size_t), 0);
-    CHECK(*size != 0);
-    CHECK(recvall(sockfd, buf, *size));
+    CHECK(sizeof(size_t) == recv(sockfd, size, sizeof(size_t), 0));
+    CHECK(*size > 0);
+    *buf = (char *) malloc(*size * sizeof(char));
+    CHECK(NULL != *buf);
+    CHECK(recvall(sockfd, *buf, *size));
     ret = true;
 error:
     return ret;
