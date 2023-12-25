@@ -543,17 +543,43 @@ class XonshRc:
         with self._remote_file(filename) as f:
             os.system(f'bat "{f}"')
 
-    def _rpc_pull(self, remote: Annotated[str, Arg(completer=path_completer)], local: str):
+    def _rpc_pull(
+            self, files: Annotated[List[str],
+                                   Arg(nargs='+', completer=path_completer)],
+            recursive: bool = False, force: bool = False):
         """
-        pull a file from remote
-        """
-        return self._pull(remote, local)
+        pull files from remote
 
-    def _rpc_push(self, local: str, remote: Annotated[str, Arg(completer=path_completer)]):
+        Parameters
+        ----------
+        files :
+            remote files
+        recursive : -r, --recursive
+            remove recursively
+        force : -f, --force
+            ignore errors
         """
-        push a file into remote
+        local = files.pop()
+        return self._pull(files, local, recursive, force)
+
+    def _rpc_push(
+            self, files: Annotated[List[str],
+                                   Arg(nargs='+', completer=path_completer)],
+            recursive: bool = False, force: bool = False):
         """
-        return self._push(local, remote)
+        push files to remote
+
+        Parameters
+        ----------
+        files :
+            remote files
+        recursive : -r, --recursive
+            remove recursively
+        force : -f, --force
+            ignore errors
+        """
+        remote = files.pop()
+        return self._push(files, remote, recursive, force)
 
     def _rpc_chmod(self, mode: str, filename: Annotated[str, Arg(completer=path_completer)], recursive=False):
         """
@@ -687,11 +713,11 @@ class XonshRc:
     def _listdir(self, path: str) -> List[str]:
         return self.client.fs.listdir(path)
 
-    def _pull(self, remote_filename, local_filename):
-        self.client.fs.pull(remote_filename, local_filename, onerror=lambda x: None, with_progress=True)
+    def _pull(self, remote_filename, local_filename, recursive: bool = False, force: bool = False):
+        self.client.fs.pull(remote_filename, local_filename, recursive, force)
 
-    def _push(self, local_filename, remote_filename):
-        self.client.fs.push(local_filename, remote_filename, onerror=lambda x: None)
+    def _push(self, local_filename, remote_filename, recursive: bool = False, force: bool = False):
+        self.client.fs.push(local_filename, remote_filename, recursive, force)
 
 
 # actual RC contents

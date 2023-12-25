@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from stat import S_IMODE
 
@@ -83,11 +84,32 @@ def test_push_pull_with_different_sizes(client, tmp_path, file_size):
         f.write(b'\0' * file_size)
 
     client.fs.push(local, remote)
+
     assert client.fs.lstat(remote).st_size == file_size
     client.fs.pull(remote, local_pull)
     assert local_pull.stat().st_size == file_size
     local.unlink(missing_ok=True)
     local_pull.unlink(missing_ok=True)
+
+
+def test_pull(client, tmp_path):
+    client.fs.touch(tmp_path / 'a')
+    with tempfile.TemporaryDirectory() as local_dir:
+        local_dir = Path(local_dir)
+        client.fs.pull(tmp_path / 'a', local_dir)
+        assert (local_dir / 'a').exists()
+    with tempfile.TemporaryDirectory() as local_dir:
+        local_dir = Path(local_dir)
+        client.fs.pull(tmp_path / 'a', local_dir / 'a')
+        assert (local_dir / 'a').exists()
+
+    client.fs.mkdir(tmp_path / 'b')
+    with tempfile.TemporaryDirectory() as local_dir:
+        local_dir = Path(local_dir)
+        client.fs.pull(tmp_path / 'b', local_dir, recursive=True)
+        assert (local_dir / 'b').exists()
+        client.fs.pull(tmp_path / 'b', local_dir / 'b', recursive=True)
+        assert (local_dir / 'b' / 'b').exists()
 
 
 def test_scandir_sanity(client, tmp_path):
