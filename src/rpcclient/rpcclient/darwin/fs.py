@@ -1,9 +1,10 @@
-from typing import List, Mapping
+from pathlib import Path
+from typing import Any, List, Mapping
 
 from parameter_decorators import path_to_str
 
 from rpcclient.darwin.structs import stat64, statfs64
-from rpcclient.fs import Fs
+from rpcclient.fs import Fs, RemotePath
 
 
 def do_stat(client, stat_name, filename: str):
@@ -13,6 +14,20 @@ def do_stat(client, stat_name, filename: str):
         if err != 0:
             client.raise_errno_exception(f'failed to stat(): {filename}')
         return stat64.parse_stream(buf)
+
+
+class DarwinRemotePath(RemotePath):
+    def __init__(self, path: str, client) -> None:
+        super().__init__(path, client)
+
+    def stat(self):
+        return do_stat(self._client, 'stat64', self._path)
+
+    def lstat(self):
+        return do_stat(self._client, 'lstat64', self._path)
+
+    def __truediv__(self, key: Path) -> Any:
+        return DarwinRemotePath(str(super().__truediv__(key)), self._client)
 
 
 class DarwinFs(Fs):
@@ -80,3 +95,6 @@ class DarwinFs(Fs):
         """ call chflags(path, flags) at remote. see manpage for more info """
         if 0 != self._client.symbols.chflags(path, flags):
             self._client.raise_errno_exception(f'chflags failed for: {path}')
+
+    def _remote_path(self, path: str) -> DarwinRemotePath:
+        return DarwinRemotePath(path, self._client)
