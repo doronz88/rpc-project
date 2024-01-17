@@ -357,10 +357,10 @@ class Process:
     def get_symbol_name(self, address: int) -> str:
         if self._client.arch != ARCH_ARM64:
             raise NotImplementedError('implemented only on ARCH_ARM64')
-        x = self.vmu_object_identifier.objc_call('symbolForAddress:', address, return_raw=True).x
-        if x[0] == 0 and x[1] == 0:
+        result = self.vmu_object_identifier.objc_call('symbolForAddress:', address, return_raw=True)
+        if result.x0 == 0 and result.x1 == 0:
             raise SymbolAbsentError()
-        return self._client.symbols.CSSymbolGetName(x[0], x[1]).peek_str()
+        return self._client.symbols.CSSymbolGetName(result.x0, result.x1).peek_str()
 
     def get_symbol_image(self, name: str) -> Image:
         for image in self.images:
@@ -624,8 +624,8 @@ class Process:
         if self._client.arch != ARCH_ARM64:
             raise NotImplementedError('implemented only on ARCH_ARM64')
         val = self.vmu_proc_info.objc_call('startTime', return_raw=True)
-        tv_sec = val.x[0]
-        tv_nsec = val.x[1]
+        tv_sec = val.x0
+        tv_nsec = val.x1
         return datetime.fromtimestamp(tv_sec + (tv_nsec / (10 ** 9)))
 
     @property
