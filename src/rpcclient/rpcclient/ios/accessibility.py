@@ -155,8 +155,8 @@ class AXElement(DarwinSymbol):
     @property
     def frame(self) -> CGRect:
         """ get element's frame """
-        d = self.objc_call('frame', return_raw=True).d
-        return CGRect(origin=CGPoint(x=d[0], y=d[1]), size=CGSize(width=d[2], height=d[3]))
+        result = self.objc_call('frame', return_raw=True)
+        return CGRect(origin=CGPoint(x=result.d0, y=result.d1), size=CGSize(width=result.d2, height=result.d3))
 
     @property
     def label(self) -> Optional[str]:

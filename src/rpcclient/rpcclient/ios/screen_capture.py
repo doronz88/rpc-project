@@ -17,8 +17,8 @@ class ScreenCapture:
 
     @property
     def bounds(self) -> CGRect:
-        d = self.main_display.objc_call('bounds', return_raw=True).d
-        return CGRect(x0=d[0], y0=d[1], x1=d[2], y1=d[3])
+        result = self.main_display.objc_call('bounds', return_raw=True)
+        return CGRect(x0=result.d0, y0=result.d1, x1=result.d2, y1=result.d3)
 
     @property
     def screenshot(self) -> bytes:
