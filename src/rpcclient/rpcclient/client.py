@@ -434,6 +434,7 @@ class Client:
         try:
             logging.getLogger('parso.python.diff').disabled = True
             logging.getLogger('parso.cache').disabled = True
+            logging.getLogger('asyncio').disabled = True
             xonsh_main(args)
         except SystemExit:
             self._logger.disabled = False

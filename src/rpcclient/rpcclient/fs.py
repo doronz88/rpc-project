@@ -205,11 +205,16 @@ class File(Allocated):
 
 class RemotePath(PosixPath):
     def __init__(self, path: str, client) -> None:
-        super().__init__()
+        try:
+            super().__init__(path)  # solution from python3.12 since signature has changed
+        except TypeError:
+            super().__init__()
+
         self._path = path
         self._client = client
 
     def __new__(cls, path: str, client):
+        # this will not be needed once python3.11 is deprecated since it is now possible to subclass normally
         return super().__new__(cls, *[path])
 
     def chmod(self, mode: int):
@@ -285,7 +290,7 @@ class Fs:
         dest_exists = dest.exists()
         is_dest_dir = dest_exists and dest.is_dir()
 
-        if ((not dest_exists or not is_dest_dir) and len(sources) > 1):
+        if (not dest_exists or not is_dest_dir) and (len(sources) > 1):
             raise ArgumentError(f'target {dest} is not a directory')
 
         if recursive:
@@ -481,21 +486,23 @@ class Fs:
     def _remote_path(self, path: str) -> RemotePath:
         return RemotePath(path, self._client)
 
-    @path_to_str('remotes')
     @path_to_str('local')
-    def pull(self, remotes: Union[List[str], str], local: str, recursive: bool = False, force: bool = False):
+    def pull(self, remotes: Union[List[Union[str, Path]], Union[str, Path]], local: str, recursive: bool = False,
+             force: bool = False):
         """ pull complete directory tree """
         if not isinstance(remotes, list):
             remotes = [remotes]
-        self._cp([self._remote_path(remote) for remote in remotes], Path(str(local)), recursive, force)
+        remotes_str = [str(remote) for remote in remotes]
+        self._cp([self._remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
 
-    @path_to_str('locals')
     @path_to_str('remote')
-    def push(self, locals: Union[List[str], str], remote: str, recursive: bool = False, force: bool = False):
+    def push(self, locals: Union[List[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
+             force: bool = False):
         """ push complete directory tree """
         if not isinstance(locals, list):
             locals = [locals]
-        self._cp([Path(str(local)) for local in locals], self._remote_path(remote), recursive, force)
+        locals_str = [str(local) for local in locals]
+        self._cp([Path(str(local)) for local in locals_str], self._remote_path(remote), recursive, force)
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = None):
