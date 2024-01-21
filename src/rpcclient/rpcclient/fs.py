@@ -481,7 +481,6 @@ class Fs:
     def _remote_path(self, path: str) -> RemotePath:
         return RemotePath(path, self._client)
 
-    @path_to_str('remotes')
     @path_to_str('local')
     def pull(self, remotes: Union[List[str], str], local: str, recursive: bool = False, force: bool = False):
         """ pull complete directory tree """
