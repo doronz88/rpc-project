@@ -42,21 +42,15 @@ jobs:
           python -m pip install isort
           isort . -m HANGING_INDENT -l 120 --check-only
       - name: Build
-        # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
-        if: matrix.python-version != 3.12
         run: |
           python3 -m pip install mypy-protobuf protobuf grpcio-tools
           make -C ../protos/ python_protos
           python -m pip install build
           python3 -m build
       - name: Install
-        # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
-        if: matrix.python-version != 3.12
         run: |
           python3 -m pip install .
       - name: Run help
-        # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
-        if: matrix.python-version != 3.12
         run: |
           python3 -m rpcclient --help
 
@@ -124,10 +118,9 @@ jobs:
           - os: macos-latest
             arch: arm64
             python-version: "3.11"
-          # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
-          # - os: macos-latest
-          #   arch: arm64
-          #   python-version: "3.12"
+          - os: macos-latest
+            arch: arm64
+            python-version: "3.12"
           
           - os: macos-latest
             arch: x86_64
@@ -141,10 +134,9 @@ jobs:
           - os: macos-latest
             arch: x86_64
             python-version: "3.11"
-          # TODO: remove when lief releases the 3.12 wheel (https://github.com/lief-project/LIEF/issues/990)
-          # - os: macos-latest
-          #   arch: x86_64
-          #   python-version: "3.12"
+          - os: macos-latest
+            arch: x86_64
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
