@@ -285,7 +285,7 @@ class Fs:
         dest_exists = dest.exists()
         is_dest_dir = dest_exists and dest.is_dir()
 
-        if ((not dest_exists or not is_dest_dir) and len(sources) > 1):
+        if (not dest_exists or not is_dest_dir) and (len(sources) > 1):
             raise ArgumentError(f'target {dest} is not a directory')
 
         if recursive:
@@ -482,19 +482,20 @@ class Fs:
         return RemotePath(path, self._client)
 
     @path_to_str('local')
-    def pull(self, remotes: Union[List[str], str], local: str, recursive: bool = False, force: bool = False):
+    def pull(self, remotes: Union[List[Union[str, Path]], Union[str, Path]], local: str, recursive: bool = False,
+             force: bool = False):
         """ pull complete directory tree """
         if not isinstance(remotes, list):
             remotes = [remotes]
         self._cp([self._remote_path(remote) for remote in remotes], Path(str(local)), recursive, force)
 
-    @path_to_str('locals')
     @path_to_str('remote')
-    def push(self, locals: Union[List[str], str], remote: str, recursive: bool = False, force: bool = False):
+    def push(self, local_files: Union[List[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
+             force: bool = False):
         """ push complete directory tree """
-        if not isinstance(locals, list):
-            locals = [locals]
-        self._cp([Path(str(local)) for local in locals], self._remote_path(remote), recursive, force)
+        if not isinstance(local_files, list):
+            local_files = [local_files]
+        self._cp([Path(str(local)) for local in local_files], self._remote_path(remote), recursive, force)
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = None):
