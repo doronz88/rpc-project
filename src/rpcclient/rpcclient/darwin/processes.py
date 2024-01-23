@@ -8,19 +8,23 @@ import time
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
-from typing import List, Mapping, Optional
+from typing import Generator, List, Mapping, Optional
 
 from cached_property import cached_property
 from construct import Array, Container, Int32ul
 from parameter_decorators import path_to_str
 
-from rpcclient.darwin.consts import TASK_DYLD_INFO, VM_FLAGS_ANYWHERE, ARMThreadFlavors, x86_THREAD_STATE64
+from rpcclient.darwin.consts import EXC_MASK_ALL, EXC_TYPES_COUNT, MACH_PORT_TYPE_ALL_RIGHTS, \
+    MACH_PORT_TYPE_DEAD_NAME, MACH_PORT_TYPE_DNREQUEST, MACH_PORT_TYPE_PORT_SET, MACH_PORT_TYPE_RECEIVE, \
+    MACH_PORT_TYPE_SEND, MACH_PORT_TYPE_SEND_ONCE, TASK_DYLD_INFO, TASK_FLAVOR_READ, THREAD_IDENTIFIER_INFO, \
+    VM_FLAGS_ANYWHERE, ARMThreadFlavors, x86_THREAD_STATE64
 from rpcclient.darwin.structs import ARM_THREAD_STATE64_COUNT, FAT_CIGAM, FAT_MAGIC, LOAD_COMMAND_TYPE, MAXPATHLEN, \
     PROC_PIDFDPIPEINFO, PROC_PIDFDSOCKETINFO, PROC_PIDFDVNODEPATHINFO, PROC_PIDLISTFDS, PROC_PIDTASKALLINFO, \
     PROX_FDTYPE_KQUEUE, PROX_FDTYPE_PIPE, PROX_FDTYPE_SOCKET, PROX_FDTYPE_VNODE, TASK_DYLD_INFO_COUNT, \
-    all_image_infos_t, arm_thread_state64_t, dyld_image_info_t, fat_header, mach_header_t, pid_t, pipe_info, \
-    proc_fdinfo, proc_taskallinfo, procargs2_t, so_family_t, so_kind_t, socket_fdinfo, task_dyld_info_data_t, \
-    vnode_fdinfowithpath, x86_thread_state64_t
+    THREAD_IDENTIFIER_INFO_COUNT, all_image_infos_t, arm_thread_state64_t, dyld_image_info_t, fat_header, \
+    ipc_info_name_t, mach_header_t, mach_port_t, pid_t, pipe_info, proc_fdinfo, proc_taskallinfo, procargs2_t, \
+    so_family_t, so_kind_t, socket_fdinfo, task_dyld_info_data_t, thread_identifier_info, vnode_fdinfowithpath, \
+    x86_thread_state64_t
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibraryError, ProcessSymbolAbsentError, \
     RpcClientException, SymbolAbsentError
@@ -304,6 +308,31 @@ class ProcessSymbol(Symbol):
 
     def __call__(self, *args, **kwargs):
         raise RpcClientException('ProcessSymbol is not callable')
+
+
+@dataclasses.dataclass
+class MachPortThreadInfo:
+    thread_ids: List[int]
+
+
+@dataclasses.dataclass
+class MachPortInfo:
+    task: int
+    pid: int
+    name: int
+    rights: List[str]
+    ipc_object: int
+    dead: bool
+    proc_name: Optional[str] = None
+    thread_info: Optional[MachPortThreadInfo] = None
+
+    @property
+    def has_recv_right(self) -> bool:
+        return 'recv' in self.rights
+
+    @property
+    def has_send_right(self) -> bool:
+        return 'send' in self.rights
 
 
 class Process:
@@ -888,3 +917,165 @@ class DarwinProcesses(Processes):
             except ArgumentError:
                 pass
             time.sleep(1)
+
+    def get_mach_ports(self, include_thread_info: bool = False) -> Generator[MachPortInfo, None, None]:  # noqa: C901
+        """ Enumerate all mach ports (heavily inspired by lsmp) """
+        thread_info = None
+        mach_task_self = self._client.symbols.mach_task_self()
+
+        p_psets = self._client.symbols.malloc(8)
+        p_pset_count = self._client.symbols.malloc(8)
+        p_pset_priv = self._client.symbols.malloc(8)
+        p_tasks = self._client.symbols.malloc(8)
+        p_task_count = self._client.symbols.malloc(8)
+        p_count = self._client.symbols.malloc(4)
+        ports_info = self._client.symbols.malloc(4 * 2 * EXC_TYPES_COUNT)
+        masks = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
+        behaviors = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
+        flavors = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
+        p_thread_count = self._client.symbols.malloc(4)
+        p_thread_ports = self._client.symbols.malloc(8)
+        info = self._client.symbols.malloc(200)
+        p_pid = self._client.symbols.malloc(4)
+        th_info = self._client.symbols.malloc(thread_identifier_info.sizeof())
+        p_th_kobject = self._client.symbols.malloc(4)
+        p_th_kotype = self._client.symbols.malloc(4)
+        p_th_info_count = self._client.symbols.malloc(4)
+        p_th_voucher = self._client.symbols.calloc(4, 1)
+        p_table = self._client.symbols.malloc(8)
+        unused = self._client.symbols.malloc(200)
+        proc_name = self._client.symbols.malloc(100)
+        p_kotype = self._client.symbols.malloc(4)
+
+        p_pid.item_size = 4
+        p_count.item_size = 4
+        p_thread_count.item_size = 4
+        p_th_info_count.item_size = 4
+        p_th_voucher.item_size = 4
+        p_th_info_count[0] = THREAD_IDENTIFIER_INFO_COUNT
+        p_kotype.item_size = 4
+
+        if self._client.symbols.getuid() == 0:
+            # if privileged, get the info for all tasks so we can match ports up
+            if self._client.symbols.host_processor_sets(self._client.symbols.mach_host_self(), p_psets,
+                                                        p_pset_count) != 0:
+                raise BadReturnValueError('host_processor_sets() failed')
+            if p_pset_count[0] != 1:
+                raise BadReturnValueError('Assertion Failure: pset count greater than one')
+
+            # convert the processor-set-name port to a privileged port
+            if self._client.symbols.host_processor_set_priv(self._client.symbols.mach_host_self(), p_psets[0][0],
+                                                            p_pset_priv) != 0:
+                raise BadReturnValueError('host_processor_set_priv() failed')
+
+            self._client.symbols.mach_port_deallocate(mach_task_self, p_psets[0][0])
+            self._client.symbols.vm_deallocate(mach_task_self, p_psets[0], p_pset_count[0] * mach_port_t.sizeof())
+
+            # convert the processor-set-priv to a list of task read ports for the processor set
+            if self._client.symbols.processor_set_tasks_with_flavor(p_pset_priv[0], TASK_FLAVOR_READ, p_tasks,
+                                                                    p_task_count) != 0:
+                raise BadReturnValueError('processor_set_tasks_with_flavor() failed')
+
+            self._client.symbols.vm_deallocate(mach_task_self, p_pset_priv[0])
+
+            # swap my current instances port to be last to collect all threads and exception port info
+            my_task_position = None
+            task_count = p_task_count[0]
+            tasks = list(struct.unpack(f'<{int(task_count)}I', p_tasks[0].peek(task_count * 4)))
+
+            for i in range(task_count):
+                if self._client.symbols.mach_task_is_self(tasks[i]):
+                    my_task_position = i
+                    break
+            if my_task_position is not None:
+                swap_holder = tasks[task_count - 1]
+                tasks[task_count - 1] = tasks[my_task_position]
+                tasks[my_task_position] = swap_holder
+        else:
+            logger.warning('should run as root for best output (cross-ref to other tasks\' ports)')
+            # just the one process
+            task_count = 1
+            with self._client.safe_malloc(8) as p_task:
+                ret = self._client.symbols.task_read_for_pid(mach_task_self, self.pid, p_task)
+                if ret != 0:
+                    raise BadReturnValueError('task_read_for_pid() failed')
+                tasks = [p_task[0]]
+
+        for task in tasks:
+            self._client.symbols.pid_for_task(task, p_pid)
+            pid = p_pid[0].c_uint32
+
+            if self._client.symbols.task_get_exception_ports_info(task, EXC_MASK_ALL, masks, p_count, ports_info,
+                                                                  behaviors, flavors) != 0:
+                raise BadReturnValueError('task_get_exception_ports_info() failed')
+
+            if include_thread_info:
+                # collect threads port as well
+                if 0 != self._client.symbols.task_threads(task, p_thread_ports, p_thread_count):
+                    raise BadReturnValueError('task_threads() failed')
+
+                # collect the thread information
+                thread_count = p_thread_count[0].c_uint32
+                thread_ports = struct.unpack(f'<{thread_count}I', p_thread_ports[0].peek(4 * thread_count))
+                thread_ids = []
+                for thread_port in thread_ports:
+                    ret = self._client.symbols.thread_get_exception_ports_info(
+                        thread_port, EXC_MASK_ALL, masks, p_count, ports_info, behaviors, flavors)
+                    if 0 != ret:
+                        raise BadReturnValueError(
+                            f'thread_get_exception_ports_info() failed: '
+                            f'{self._client.symbols.mach_error_string(ret).peek_str()}')
+
+                    if 0 == self._client.symbols.mach_port_kernel_object(mach_task_self, thread_port, p_th_kotype,
+                                                                         p_th_kobject):
+                        if 0 == self._client.symbols.thread_info(mach_task_self, thread_port,
+                                                                 THREAD_IDENTIFIER_INFO, th_info, p_th_info_count[0]):
+                            thread_id = thread_identifier_info.parse(
+                                th_info.peek(thread_identifier_info.sizeof())).thread_id
+                            thread_ids.append(thread_id)
+
+                    self._client.symbols.mach_port_deallocate(mach_task_self, thread_port)
+                thread_info = MachPortThreadInfo(thread_ids=thread_ids)
+
+            if 0 != self._client.symbols.mach_port_space_info(task, info, p_table, p_count, unused, unused):
+                raise BadReturnValueError('mach_port_space_info() failed')
+
+            if 0 != self._client.symbols.proc_name(pid, proc_name, 100):
+                proc_name_str = proc_name.peek_str()
+            else:
+                proc_name_str = None
+
+            count = p_count[0].c_uint32
+            table_struct = Array(count, ipc_info_name_t)
+
+            parsed_table = table_struct.parse(p_table[0].peek(table_struct.sizeof()))
+
+            for entry in parsed_table:
+                dnreq = False
+                rights = []
+
+                if entry.iin_type & MACH_PORT_TYPE_ALL_RIGHTS == 0:
+                    # skip empty slots in the table
+                    continue
+
+                if entry.iin_type == MACH_PORT_TYPE_PORT_SET:
+                    continue
+
+                if entry.iin_type & MACH_PORT_TYPE_SEND:
+                    rights.append('send')
+
+                if entry.iin_type & MACH_PORT_TYPE_DNREQUEST:
+                    dnreq = True
+
+                if entry.iin_type & MACH_PORT_TYPE_RECEIVE:
+                    rights.append('recv')
+
+                elif entry.iin_type == MACH_PORT_TYPE_DEAD_NAME:
+                    continue
+
+                if entry.iin_type == MACH_PORT_TYPE_SEND_ONCE:
+                    pass
+
+                yield MachPortInfo(
+                    task=task, pid=pid, name=entry.iin_name, rights=rights, ipc_object=entry.iin_object, dead=dnreq,
+                    proc_name=proc_name_str, thread_info=thread_info)
