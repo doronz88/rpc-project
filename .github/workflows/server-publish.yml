@@ -69,3 +69,13 @@ jobs:
         with:
           name: rpcserver_macosx
           path: ./src/rpcserver/build/rpcserver_macosx
+          
+      - name: Upload server artifacts to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            src/rpcserver/build/rpcserver_linux
+            src/rpcserver/build/rpcserver_ios
+            src/rpcserver/build/rpcserver_macosx
+          token: ${{ secrets.GITHUB_TOKEN }}
