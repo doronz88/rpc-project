@@ -335,6 +335,14 @@ class MachPortInfo:
         return 'send' in self.rights
 
 
+@dataclasses.dataclass
+class MachPortCrossRefInfo:
+    name: int
+    ipc_object: int
+    recv_right_pid: int
+    recv_right_proc_name: str
+
+
 class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
@@ -786,6 +794,26 @@ class Process:
                         output_file.seek(crypt_offset, SEEK_SET)
                         output_file.flush()
                         output_file.write((image.address + crypt_offset).peek(crypt_size))
+
+    def get_mach_port_cross_ref_info(self) -> List[MachPortCrossRefInfo]:
+        """ Get all allocated mach ports and cross-refs to get the recv right owner """
+        result = []
+        own_ports = []
+        cross_refs_info = {}
+        for port in self._client.processes.get_mach_ports():
+            if port.pid == self.pid:
+                own_ports.append(port)
+            if port.ipc_object not in cross_refs_info:
+                cross_refs_info[port.ipc_object] = []
+            cross_refs_info[port.ipc_object].append(port)
+
+        for port in own_ports:
+            for cross_ref_port_info in cross_refs_info[port.ipc_object]:
+                if cross_ref_port_info.has_recv_right:
+                    result.append(MachPortCrossRefInfo(name=port.name, ipc_object=port.ipc_object,
+                                                       recv_right_pid=cross_ref_port_info.pid,
+                                                       recv_right_proc_name=cross_ref_port_info.proc_name))
+        return result
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
