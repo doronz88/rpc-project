@@ -38,6 +38,11 @@ vm_behavior_t = Int32ul
 mach_vm_address_t = Int64ul
 mach_vm_size_t = Int64ul
 integer_t = Int32sl
+natural_t = Int32ul
+mach_port_name_t = natural_t
+integer_t = Int32sl
+mach_port_type_t = natural_t
+mach_port_urefs_t = natural_t
 
 timespec = Struct(
     'tv_sec' / long,
@@ -624,7 +629,6 @@ vm_region_basic_info_64 = Struct(
 
 VM_REGION_BASIC_INFO_COUNT_64 = vm_region_basic_info_64.sizeof() // 4
 vm_region_basic_info_data_t = vm_region_basic_info
-natural_t = Int32ul
 
 task_dyld_info = Struct(
     'all_image_info_addr' / mach_vm_address_t,
@@ -890,4 +894,23 @@ fat_header = Struct(
     'magic' / Hex(Int32ul),
     'nfat_arch' / Hex(Int32ub),
     'archs' / Array(this.nfat_arch, fat_arch)
+)
+
+thread_identifier_info = Struct(
+    'thread_id' / Int64ul,  # system-wide unique 64-bit thread id
+    'thread_handle' / Int64ul,  # handle to be used by libproc
+    'dispatch_qaddr' / Int64ul,  # libdispatch queue address
+)
+
+THREAD_IDENTIFIER_INFO_COUNT = thread_identifier_info.sizeof() / natural_t.sizeof()
+
+
+ipc_info_name_t = Struct(
+    'iin_name' / mach_port_name_t,              # port name, including gen number
+    'iin_collision' / integer_t,   # collision at this entry?
+    'iin_type' / mach_port_type_t,      # straight port type
+    'iin_urefs' / mach_port_urefs_t,    # user-references
+    'iin_object' / natural_t,           # object pointer/identifier
+    'iin_next' / natural_t,             # marequest/next in free list
+    'iin_hash' / natural_t,             # hash index
 )
