@@ -1,5 +1,4 @@
-from pathlib import Path
-from typing import Any, List, Mapping
+from typing import List, Mapping
 
 from parameter_decorators import path_to_str
 
@@ -25,9 +24,6 @@ class DarwinRemotePath(RemotePath):
 
     def lstat(self):
         return do_stat(self._client, 'lstat64', self._path)
-
-    def __truediv__(self, key: Path) -> Any:
-        return DarwinRemotePath(str(super().__truediv__(key)), self._client)
 
 
 class DarwinFs(Fs):

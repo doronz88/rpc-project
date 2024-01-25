@@ -5,7 +5,7 @@ import posixpath
 import stat
 import tempfile
 from pathlib import Path, PosixPath
-from typing import Any, List, Union
+from typing import Generator, List, Union
 
 from parameter_decorators import path_to_str
 
@@ -209,7 +209,6 @@ class RemotePath(PosixPath):
             super().__init__(path)  # solution from python3.12 since signature has changed
         except TypeError:
             super().__init__()
-
         self._path = path
         self._client = client
 
@@ -236,8 +235,8 @@ class RemotePath(PosixPath):
     def lstat(self):
         return self._client.fs.lstat(self._path)
 
-    def mkdir(self, mode: int):
-        self._client.fs.mkdir(self._path, mode)
+    def mkdir(self, mode: int, exist_ok=False):
+        self._client.fs.mkdir(self._path, mode, exist_ok)
 
     def read_bytes(self) -> bytes:
         with self._open('r') as f:
@@ -256,8 +255,18 @@ class RemotePath(PosixPath):
     def _open(self, mode: str, access: int = 0o777) -> File:
         return self._client.fs.open(self._path, mode, access)
 
-    def __truediv__(self, key: Path) -> Any:
-        return RemotePath(str(super().__truediv__(key)), self._client)
+    def iterdir(self) -> Generator['RemotePath', None, None]:
+        for entry in self._client.fs.listdir(self._path):
+            yield self.__class__(f'{self._path}/{entry}', self._client)
+
+    def touch(self, mode: int = 438, exist_ok: bool = True) -> None:
+        try:
+            return self._client.fs.touch(self._path, mode, exist_ok)
+        except RpcFileExistsError:
+            raise FileExistsError()
+
+    def __truediv__(self, key: Path) -> 'RemotePath':
+        return self.__class__(f'{self._path}/{key}', self._client)
 
 
 class Fs:
@@ -270,10 +279,10 @@ class Fs:
         if not dest.exists():
             dest.mkdir(source.lstat().st_mode)
 
-        files = self.listdir(str(source))
-        for file in files:
-            src_file = source / file
-            dest_file = dest / file
+        files = source.iterdir()
+
+        for src_file in files:
+            dest_file = dest / src_file.name
 
             src_lstat = src_file.lstat()
             if stat.S_ISDIR(src_lstat.st_mode):
@@ -505,8 +514,14 @@ class Fs:
         self._cp([Path(str(local)) for local in locals_str], self._remote_path(remote), recursive, force)
 
     @path_to_str('file')
-    def touch(self, file: str, mode: int = None):
+    def touch(self, file: str, mode: int = None, exist_ok=True):
         """ simulate unix touch command for given file """
+        if not exist_ok:
+            try:
+                self.stat(file)
+                raise RpcFileExistsError()
+            except RpcFileNotFoundError:
+                pass
         with self.open(file, 'w+'):
             pass
         if mode is not None:
