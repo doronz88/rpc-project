@@ -262,6 +262,11 @@ class RemotePath(PosixPath):
 
     def __truediv__(self, key: Path) -> Any:
         return RemotePath(str(super().__truediv__(key)), self._client)
+    def touch(self, mode: int = 438, exist_ok: bool = True) -> None:
+        try:
+            return self._client.fs.touch(self._path, mode, exist_ok)
+        except RpcFileExistsError:
+            raise FileExistsError()
 
 
 class Fs:
@@ -509,8 +514,14 @@ class Fs:
         self._cp([Path(str(local)) for local in locals_str], self._remote_path(remote), recursive, force)
 
     @path_to_str('file')
-    def touch(self, file: str, mode: int = None):
+    def touch(self, file: str, mode: int = None, exist_ok=True):
         """ simulate unix touch command for given file """
+        if not exist_ok:
+            try:
+                self.stat(file)
+                raise RpcFileExistsError()
+            except RpcFileNotFoundError:
+                pass
         with self.open(file, 'w+'):
             pass
         if mode is not None:
