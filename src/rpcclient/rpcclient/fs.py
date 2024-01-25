@@ -5,7 +5,7 @@ import posixpath
 import stat
 import tempfile
 from pathlib import Path, PosixPath
-from typing import Any, List, Union
+from typing import Any, Generator, List, Union
 
 from parameter_decorators import path_to_str
 
@@ -255,6 +255,10 @@ class RemotePath(PosixPath):
 
     def _open(self, mode: str, access: int = 0o777) -> File:
         return self._client.fs.open(self._path, mode, access)
+
+    def iterdir(self) -> Generator['RemotePath', None, None]:
+        for entry in self._client.fs.listdir(self._path):
+            yield self.__class__(f'{self._path}/{entry}', self._client)
 
     def __truediv__(self, key: Path) -> Any:
         return RemotePath(str(super().__truediv__(key)), self._client)
