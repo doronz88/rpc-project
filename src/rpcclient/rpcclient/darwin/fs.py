@@ -1,5 +1,4 @@
-from pathlib import Path
-from typing import Any, List, Mapping
+from typing import List, Mapping
 
 from parameter_decorators import path_to_str
 

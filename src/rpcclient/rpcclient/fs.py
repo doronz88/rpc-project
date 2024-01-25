@@ -5,7 +5,7 @@ import posixpath
 import stat
 import tempfile
 from pathlib import Path, PosixPath
-from typing import Any, Generator, List, Union
+from typing import Generator, List, Union
 
 from parameter_decorators import path_to_str
 

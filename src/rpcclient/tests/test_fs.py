@@ -122,7 +122,7 @@ def test_push_pull_dir(client, tmp_path: Path):
         local_dir = Path(local_dir)
         (local_dir / 'b').touch()
         client.fs.push(local_dir, tmp_path, recursive=True)
-        a = tmp_path / local_dir.name / "b"
+        a = tmp_path / local_dir.name / 'b'
         assert a.exists()
 
 

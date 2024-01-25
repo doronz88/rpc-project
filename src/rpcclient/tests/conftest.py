@@ -1,5 +1,4 @@
 from contextlib import closing
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
