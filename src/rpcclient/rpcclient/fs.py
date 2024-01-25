@@ -235,8 +235,8 @@ class RemotePath(PosixPath):
     def lstat(self):
         return self._client.fs.lstat(self._path)
 
-    def mkdir(self, mode: int):
-        self._client.fs.mkdir(self._path, mode)
+    def mkdir(self, mode: int, exist_ok=False):
+        self._client.fs.mkdir(self._path, mode, exist_ok)
 
     def read_bytes(self) -> bytes:
         with self._open('r') as f:
@@ -280,8 +280,10 @@ class Fs:
             dest.mkdir(source.lstat().st_mode)
 
         files = source.iterdir()
+
         for src_file in files:
             dest_file = dest / src_file.name
+
             src_lstat = src_file.lstat()
             if stat.S_ISDIR(src_lstat.st_mode):
                 self._cp_dir(src_file, dest_file, force)
