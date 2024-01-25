@@ -112,6 +112,20 @@ def test_pull(client, tmp_path):
         assert (local_dir / 'b' / 'b').exists()
 
 
+def test_push_pull_dir(client, tmp_path: Path):
+    (tmp_path / 'a').touch()
+    with tempfile.TemporaryDirectory() as local_dir:
+        local_dir = Path(local_dir)
+        client.fs.pull(tmp_path, local_dir, recursive=True)
+        assert (local_dir / tmp_path.name / 'a').exists()
+    with tempfile.TemporaryDirectory() as local_dir:
+        local_dir = Path(local_dir)
+        (local_dir / 'b').touch()
+        client.fs.push(local_dir, tmp_path, recursive=True)
+        a = tmp_path / local_dir.name / "b"
+        assert a.exists()
+
+
 def test_scandir_sanity(client, tmp_path):
     entries = [e for e in client.fs.scandir(tmp_path)]
     assert not entries
