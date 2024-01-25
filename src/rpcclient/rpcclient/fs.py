@@ -209,7 +209,6 @@ class RemotePath(PosixPath):
             super().__init__(path)  # solution from python3.12 since signature has changed
         except TypeError:
             super().__init__()
-
         self._path = path
         self._client = client
 
@@ -260,13 +259,14 @@ class RemotePath(PosixPath):
         for entry in self._client.fs.listdir(self._path):
             yield self.__class__(f'{self._path}/{entry}', self._client)
 
-    def __truediv__(self, key: Path) -> Any:
-        return RemotePath(str(super().__truediv__(key)), self._client)
     def touch(self, mode: int = 438, exist_ok: bool = True) -> None:
         try:
             return self._client.fs.touch(self._path, mode, exist_ok)
         except RpcFileExistsError:
             raise FileExistsError()
+
+    def __truediv__(self, key: Path) -> 'RemotePath':
+        return self.__class__(f'{self._path}/{key}', self._client)
 
 
 class Fs:

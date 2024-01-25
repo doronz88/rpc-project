@@ -26,9 +26,6 @@ class DarwinRemotePath(RemotePath):
     def lstat(self):
         return do_stat(self._client, 'lstat64', self._path)
 
-    def __truediv__(self, key: Path) -> Any:
-        return DarwinRemotePath(str(super().__truediv__(key)), self._client)
-
 
 class DarwinFs(Fs):
     @path_to_str('path')
