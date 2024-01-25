@@ -279,11 +279,9 @@ class Fs:
         if not dest.exists():
             dest.mkdir(source.lstat().st_mode)
 
-        files = self.listdir(str(source))
-        for file in files:
-            src_file = source / file
-            dest_file = dest / file
-
+        files = source.iterdir()
+        for src_file in files:
+            dest_file = dest / src_file.name
             src_lstat = src_file.lstat()
             if stat.S_ISDIR(src_lstat.st_mode):
                 self._cp_dir(src_file, dest_file, force)
