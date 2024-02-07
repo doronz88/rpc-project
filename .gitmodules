@@ -1,3 +1,0 @@
-[submodule "src/rpcserver/protobuf-c"]
-	path = src/rpcserver/protobuf-c
-	url = https://github.com/protobuf-c/protobuf-c.git
