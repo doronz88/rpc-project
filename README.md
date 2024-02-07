@@ -85,7 +85,7 @@ For macOS/iOS (Ensure that Xcode is installed):
 ```bash
 brew install protobuf protobuf-c
 python3 -m pip install mypy-protobuf protobuf grpcio-tools
-git clone git@github.com:doronz88/rpc-project.git --recurse-submodules
+git clone git@github.com:doronz88/rpc-project.git
 cd rpc-project
 make -C src/protos/ all
 cd src/rpcserver

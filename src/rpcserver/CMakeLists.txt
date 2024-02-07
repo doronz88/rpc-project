@@ -48,10 +48,6 @@ if (APPLE)
     message(STATUS "CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
 endif ()
 
-### Check if protobuf-c source not found and download if necessary
-if (NOT EXISTS ${CMAKE_SOURCE_DIR}/protobuf-c)
-    message(FATAL " protobuf-c not found, please execute 'git submodule update --init --recursive'")
-endif ()
 # Build protobuf-c after downloading
 set(LIBPROTO_C "${CMAKE_BINARY_DIR}/protobuf-c-build")
 # When compiling for multiple architectures in CMake, replace ; with $<SEMICOLON> (e.g., "arm64$<SEMICOLON>x86_64")
