@@ -126,8 +126,9 @@ message ResponseDlsym { uint64 ptr = 1; }
 
 message CmdExec {
     bool background = 1;
-    repeated string argv = 2;
-    repeated string envp = 3;
+    bool start_suspended = 2;
+    repeated string argv = 3;
+    repeated string envp = 4;
 }
 
 message ResponseCmdExec { uint32 pid = 1; }

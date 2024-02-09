@@ -246,7 +246,7 @@ class Client:
         return entries
 
     def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
-              stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:
+              stdout=sys.stdout, raw_tty=False, background=False, start_suspended=False) -> SpawnResult:
         """
         spawn a new process and forward its stdin, stdout & stderr
 
@@ -256,6 +256,7 @@ class Client:
         :param stdout: a file object to write both stdout and stderr to. None if background is requested
         :param raw_tty: should enable raw tty mode
         :param background: should execute process in background
+        :param start_suspended: start the process as suspended
         :return: a SpawnResult. error is None if background is requested
         """
         if argv is None:
@@ -266,7 +267,7 @@ class Client:
 
         with self._protocol_lock:
             try:
-                pid = self._execute(argv, envp, background=background)
+                pid = self._execute(argv, envp, background=background, start_suspended=start_suspended)
             except SpawnError:
                 # depends on where the error occurred, the socket might be closed
                 raise
@@ -449,8 +450,8 @@ class Client:
             # new clients are handled in new processes so all symbols may reside in different addresses
             self._init_process_specific()
 
-    def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
-        command = CmdExec(background=background, argv=argv, envp=envp)
+    def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False, start_suspended=False) -> int:
+        command = CmdExec(background=background, argv=argv, envp=envp, start_suspended=start_suspended)
         try:
             return self._sock.send_recv(command).pid
         except ServerResponseError:

@@ -55,7 +55,7 @@ bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define MAGIC (0x12345679)
+#define MAGIC (0x1234567a)
 #define MAX_CONNECTIONS (1024)
 
 #define MAX_OPTION_LEN (256)
@@ -81,12 +81,17 @@ void *get_in_addr(struct sockaddr *sa)// get sockaddr, IPv4 or IPv6:
         : (void *) &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
-bool internal_spawn(bool background, char **argv, char **envp, pid_t *pid,
+bool internal_spawn(bool background, bool start_suspended, char **argv, char **envp, pid_t *pid,
                     int *master_fd) {
     bool ret = false;
     int slave_fd = -1;
     *master_fd = -1;
     *pid = INVALID_PID;
+
+    short flags = POSIX_SPAWN_SETSID;
+    if (start_suspended) {
+        flags |= POSIX_SPAWN_START_SUSPENDED;
+    }
 
     // call setsid() on child so Ctrl-C and all other control characters are set
     // in a different terminal and process group
@@ -202,7 +207,7 @@ bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
     CHECK(copy_arr_with_null(&argv, cmd->argv, cmd->n_argv));
     CHECK(copy_arr_with_null(&envp, cmd->envp, cmd->n_envp));
 
-    CHECK(internal_spawn(cmd->background, argv, cmd->n_envp ? envp : environ, &pid, &master));
+    CHECK(internal_spawn(cmd->background, cmd->start_suspended, argv, cmd->n_envp ? envp : environ, &pid, &master));
 
     resp_exec.pid = pid;
     CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_exec));

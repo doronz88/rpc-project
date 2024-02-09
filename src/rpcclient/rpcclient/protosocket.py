@@ -9,7 +9,7 @@ from rpcclient.protos.rpc_pb2 import CmdClose, Command, Handshake, Response
 # field[0] is MAGIC - skip
 COMMAND_MAPPING = {field.message_type.name: field.name for field in Command.DESCRIPTOR.fields[1:]}
 SERVER_MAGIC_VERSION = 0x88888808
-MAGIC = 0x12345679
+MAGIC = 0x1234567a
 MAX_PATH_LEN = 1024
 
 
