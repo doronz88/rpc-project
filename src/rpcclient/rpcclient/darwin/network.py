@@ -5,6 +5,7 @@ from rpcclient.network import Network
 from rpcclient.structs.consts import SIGKILL
 
 PINNING_RULED_DB = '/private/var/protected/trustd/pinningrules.sqlite3'
+SYSTEM_CONFIGURATION_PLIST = '/private/var/Managed Preferences/mobile/com.apple.SystemConfiguration.plist'
 
 
 class DarwinNetwork(Network):
@@ -16,6 +17,23 @@ class DarwinNetwork(Network):
     @property
     def proxy_settings(self) -> Mapping:
         return self._client.symbols.CFNetworkCopySystemProxySettings().py()
+
+    def set_http_proxy(self, ip: str, port: int) -> None:
+        with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
+            config.set('Proxies', {'HTTPProxyType': 1,
+                                   'HTTPEnable': 1,
+                                   'HTTPPort': port,
+                                   'HTTPSProxy': ip,
+                                   'HTTPSPort': port,
+                                   'HTTPProxy': ip,
+                                   'HTTPSEnable': 1,
+                                   'BypassAllowed': 0})
+        self._client.processes.get_by_basename('configd').kill(SIGKILL)
+
+    def remove_http_proxy(self) -> None:
+        with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
+            config.remove('Proxies')
+        self._client.processes.get_by_basename('configd').kill(SIGKILL)
 
     def remove_certificate_pinning(self) -> None:
         with self._client.fs.remote_file(PINNING_RULED_DB) as local_db_file:
