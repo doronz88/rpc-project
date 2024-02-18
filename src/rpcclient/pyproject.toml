@@ -3,7 +3,7 @@ name = "rpcclient"
 description = "rpcclient for connecting with the rpcserver"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { file = "LICENSE" }
+license = { text = "GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007" }
 keywords = ["ios", "macos", "linux", "automation", "remote-shell", "remote-control", "ipython"]
 authors = [
     { name = "doronz88", email = "doron88@gmail.com" },
