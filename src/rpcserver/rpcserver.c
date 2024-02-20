@@ -564,8 +564,8 @@ void (^dummy_block)(void) = ^{
 bool handle_get_dummy_block(int sockfd, Rpc__CmdDummyBlock *cmd) {
     TRACE("enter");
     Rpc__ResponseDummyBlock resp_dummy_block = RPC__RESPONSE_DUMMY_BLOCK__INIT;
-    resp_dummy_block.address = (uint64_t) &dummy_block;
-    resp_dummy_block.size = sizeof(&dummy_block);
+    resp_dummy_block.address = (uint64_t) dummy_block;
+    resp_dummy_block.size = sizeof(dummy_block);
     return send_response(sockfd, (ProtobufCMessage *) &resp_dummy_block);
 }
 
