@@ -66,7 +66,7 @@ Example usage: \n\
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x19", "x20", "x21", \
         "x22", "x23", "x24", "x25", "x26"
 
-#define SERVER_MAGIC_VERSION (0x88888808)
+#define SERVER_MAGIC_VERSION (0x88888809)
 extern char **environ;
 
 typedef struct {
