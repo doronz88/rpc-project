@@ -81,7 +81,7 @@ def test_get_dummy_block(client):
     """
     :param rpcclient.client.Client client:
     """
-    assert client.get_dummy_block() != 0
+    assert client.get_dummy_block()[0] == client.symbols._NSConcreteGlobalBlock
 
 
 def test_listdir(client):

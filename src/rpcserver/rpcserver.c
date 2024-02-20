@@ -66,7 +66,7 @@ Example usage: \n\
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x19", "x20", "x21", \
         "x22", "x23", "x24", "x25", "x26"
 
-#define SERVER_MAGIC_VERSION (0x88888808)
+#define SERVER_MAGIC_VERSION (0x88888809)
 extern char **environ;
 
 typedef struct {
@@ -564,8 +564,8 @@ void (^dummy_block)(void) = ^{
 bool handle_get_dummy_block(int sockfd, Rpc__CmdDummyBlock *cmd) {
     TRACE("enter");
     Rpc__ResponseDummyBlock resp_dummy_block = RPC__RESPONSE_DUMMY_BLOCK__INIT;
-    resp_dummy_block.address = (uint64_t) &dummy_block;
-    resp_dummy_block.size = sizeof(&dummy_block);
+    resp_dummy_block.address = (uint64_t) dummy_block;
+    resp_dummy_block.size = sizeof(dummy_block);
     return send_response(sockfd, (ProtobufCMessage *) &resp_dummy_block);
 }
 
