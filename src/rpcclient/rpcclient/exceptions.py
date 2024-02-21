@@ -105,6 +105,11 @@ class LastElementNotFoundError(ElementNotFoundError):
     pass
 
 
+class LaunchError(BadReturnValueError):
+    """ failed to launch a child process """
+    pass
+
+
 class RpcFileExistsError(BadReturnValueError):
     """ RPC version for FileExistsError (errno = EEXIST) """
     pass

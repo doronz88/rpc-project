@@ -7,6 +7,7 @@ from rpcclient.ios.amfi import Amfi
 from rpcclient.ios.backlight import Backlight
 from rpcclient.ios.lockdown import Lockdown
 from rpcclient.ios.mobile_gestalt import MobileGestalt
+from rpcclient.ios.processes import IosProcesses
 from rpcclient.ios.screen_capture import ScreenCapture
 from rpcclient.ios.sprinboard import SpringBoard
 from rpcclient.ios.telephony import Telephony
@@ -21,6 +22,7 @@ class IosClient(DarwinClient):
         self.backlight = Backlight(self)
         self.reports = Reports(self, CRASH_REPORTS_DIR)
         self.mobile_gestalt = MobileGestalt(self)
+        self.processes = IosProcesses(self)
         self.lockdown = Lockdown(self)
         self.telephony = Telephony(self)
         self.screen_capture = ScreenCapture(self)
