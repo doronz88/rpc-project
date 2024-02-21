@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from rpcclient.client_factory import DEFAULT_PORT
+from rpcclient.exceptions import LaunchError
 
 LAUNCHD_PID = 1
 LAUNCHD_PATH = '/sbin/launchd'
@@ -29,3 +32,15 @@ def test_process_object(client):
     assert fds[0].fd == 0
     assert fds[1].fd == 1
     assert fds[2].fd == 2
+
+
+@pytest.mark.ios
+def test_launch_process(client):
+    pid = client.processes.launch('com.apple.MobileAddressBook')
+    client.processes.kill(pid)
+
+
+@pytest.mark.ios
+def test_launch_invalid_process(client):
+    with pytest.raises(LaunchError):
+        client.processes.launch('com.apple.cyber')
