@@ -1,11 +1,9 @@
 import logging
 import os
 import subprocess
-import tempfile
 import typing
-from pathlib import Path
+import urllib.request
 from socket import socket
-from zipfile import ZipFile
 
 import requests
 
@@ -16,31 +14,32 @@ from rpcclient.linux.client import LinuxClient
 from rpcclient.macos.client import MacosClient
 from rpcclient.protosocket import ProtoSocket
 
-PROJECT_URL = 'https://github.com/doronz88/rpc-project/archive/refs/heads/master.zip'
-RPCSERVER_SUBDIR = 'rpc-project-master/src/rpcserver'
-HOMEDIR = Path('~/.rpc-project').expanduser()
+PROJECT_URL = 'https://api.github.com/repos/doronz88/rpc-project/releases/latest'
+BINARY_NAME = 'rpcserver_macosx'
 
 logger = logging.getLogger(__name__)
+
 DEFAULT_PORT = 5910
 
 
 def create_local() -> typing.Union[Client, IosClient, MacosClient, LinuxClient]:
-    if not HOMEDIR.exists():
-        with tempfile.TemporaryDirectory() as temp_dir:
-            local_zip = Path(temp_dir) / 'master.zip'
-            local_zip.write_bytes(requests.get(PROJECT_URL).content)
-            ZipFile(local_zip).extractall(HOMEDIR)
-    os.chdir(HOMEDIR / RPCSERVER_SUBDIR)
-    cwd = os.getcwd()
-
-    assert 0 == os.system('make')
+    response = requests.get(PROJECT_URL)
+    response.raise_for_status()
+    data = response.json()
+    for asset in data['assets']:
+        if asset['name'] == BINARY_NAME:
+            download_url = asset['browser_download_url']
+            logger.info(f'Downloading {BINARY_NAME} from {download_url}')
+            urllib.request.urlretrieve(download_url, BINARY_NAME)
+            logger.info(f'Download completed: {BINARY_NAME}')
+            os.chmod(BINARY_NAME, os.stat(BINARY_NAME).st_mode | 0o100)
 
     server = socket()
     server.bind(('127.0.0.1', 0))
     available_port = server.getsockname()[1]
     server.close()
 
-    proc = subprocess.Popen(['./rpcserver', '-p', str(available_port)], cwd=cwd)
+    proc = subprocess.Popen([f'./{BINARY_NAME}', '-p', str(available_port)], cwd=os.getcwd())
     logger.info(f'server launched at pid {proc.pid}')
 
     while True:
