@@ -27,7 +27,6 @@ blkcnt_t = Int64ul
 blksize_t = Int32ul
 ino64_t = Int64ul
 fsid_t = Array(2, Int32sl)
-mach_port_t = Int64ul
 io_name_t = PaddedString(1024, 'utf8')
 io_object_t = Int64ul
 vm_prot_t = Int32ul
@@ -41,6 +40,7 @@ integer_t = Int32sl
 natural_t = Int32ul
 mach_port_name_t = natural_t
 integer_t = Int32sl
+mach_port_t = natural_t
 mach_port_type_t = natural_t
 mach_port_urefs_t = natural_t
 
