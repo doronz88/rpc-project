@@ -492,7 +492,7 @@ class Fs:
         with self.open(file, 'r') as f:
             return f.read()
 
-    def _remote_path(self, path: str) -> RemotePath:
+    def remote_path(self, path: str) -> RemotePath:
         return RemotePath(path, self._client)
 
     @path_to_str('local')
