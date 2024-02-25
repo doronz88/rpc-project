@@ -500,18 +500,18 @@ class Fs:
              force: bool = False):
         """ pull complete directory tree """
         if not isinstance(remotes, list):
-            remotes = [remotes]
-        remotes_str = [str(remote) for remote in remotes]
-        self._cp([self._remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
+            remotes = [posixpath.expanduser(remotes)]
+        remotes_str = [posixpath.expanduser(remote) for remote in remotes]
+        self._cp([self.remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
 
     @path_to_str('remote')
     def push(self, locals: Union[List[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
              force: bool = False):
         """ push complete directory tree """
         if not isinstance(locals, list):
-            locals = [locals]
-        locals_str = [str(local) for local in locals]
-        self._cp([Path(str(local)) for local in locals_str], self._remote_path(remote), recursive, force)
+            locals = [posixpath.expanduser(locals)]
+        locals_str = [posixpath.expanduser(local) for local in locals]
+        self._cp([Path(str(local)) for local in locals_str], self.remote_path(remote), recursive, force)
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = None, exist_ok=True):

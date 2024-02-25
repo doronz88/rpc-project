@@ -73,6 +73,24 @@ def test_listdir_non_exists(client):
         client.fs.listdir('/non_exists_path')
 
 
+def test_push_expand_path(client, tmp_path):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        local_file = Path(temp_dir) / 'local'
+        local_file.touch()
+        remote_file = tmp_path / 'temp.txt'
+        client.fs.push(local_file, remote_file)
+        assert remote_file.exists()
+
+
+def test_pull_expand_path(client, tmp_path):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        remote_file = tmp_path / 'temp.txt'
+        remote_file.touch()
+        local_file = Path(temp_dir) / 'local'
+        client.fs.pull(remote_file, local_file)
+        assert local_file.exists()
+
+
 @pytest.mark.parametrize('file_size', [1024, 10240, 102400])
 def test_push_pull_with_different_sizes(client, tmp_path, file_size):
     assert not client.fs.listdir(tmp_path)
