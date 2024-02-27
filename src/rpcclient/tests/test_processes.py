@@ -36,8 +36,7 @@ def test_process_object(client):
 
 @pytest.mark.ios
 def test_launch_process(client):
-    pid = client.processes.launch('com.apple.MobileAddressBook')
-    client.processes.kill(pid)
+    client.processes.launch('com.apple.calculator').kill()
 
 
 @pytest.mark.ios
