@@ -23,7 +23,7 @@ def tmp_path(client):
         tmp_path = client.fs.readlink(tmp_path)
     except BadReturnValueError:
         pass
-    filename = client.fs._remote_path(tmp_path) / uuid4().hex
+    filename = client.fs.remote_path(tmp_path) / uuid4().hex
     client.fs.mkdir(filename, mode=0o777)
     try:
         yield filename

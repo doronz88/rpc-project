@@ -92,5 +92,5 @@ class DarwinFs(Fs):
         if 0 != self._client.symbols.chflags(path, flags):
             self._client.raise_errno_exception(f'chflags failed for: {path}')
 
-    def _remote_path(self, path: str) -> DarwinRemotePath:
+    def remote_path(self, path: str) -> DarwinRemotePath:
         return DarwinRemotePath(path, self._client)
