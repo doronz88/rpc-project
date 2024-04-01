@@ -107,6 +107,18 @@ class DarwinClient(Client):
         super().interactive(additional_namespace=additional_namespace)
 
     @property
+    def errno(self) -> int:
+        p_error = self.symbols['__error']()
+        p_error.item_size = 4
+        return p_error[0]
+
+    @errno.setter
+    def errno(self, value: int) -> None:
+        p_error = self.symbols['__error']()
+        p_error.item_size = 4
+        p_error[0] = value
+
+    @property
     def images(self) -> typing.List[DyldImage]:
         m = []
         for i in range(self.symbols._dyld_image_count()):
