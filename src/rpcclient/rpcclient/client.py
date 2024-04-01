@@ -301,11 +301,11 @@ class Client:
         return Symbol.create(symbol, self)
 
     @property
-    def errno(self):
+    def errno(self) -> int:
         return self.symbols.errno[0]
 
     @errno.setter
-    def errno(self, value):
+    def errno(self, value: int) -> None:
         self.symbols.errno[0] = value
 
     @property
