@@ -42,6 +42,7 @@ FdStruct = namedtuple('FdStruct', 'fd struct')
 
 logger = logging.getLogger(__name__)
 
+CDHASH_SIZE = 20
 CHUNK_SIZE = 1024 * 64
 APP_SUFFIX = '.app/'
 
@@ -731,6 +732,14 @@ class Process:
                                  protection=protection[0], protection_max=protection[1], region_detail=region_detail))
 
         return result
+
+    @property
+    def cdhash(self) -> bytes:
+        with self._client.safe_malloc(CDHASH_SIZE) as cdhash:
+            # by reversing online-auth-agent
+            if 0 != self._client.symbols.csops(self.pid, 5, cdhash, CDHASH_SIZE):
+                raise BadReturnValueError(f'failed to get cdhash for {self.pid}')
+            return cdhash.peek(CDHASH_SIZE)
 
     def get_process_symbol(self, address: int) -> ProcessSymbol:
         return ProcessSymbol.create(address, self._client, self)
