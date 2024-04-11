@@ -369,7 +369,8 @@ class Client:
         c = Config()
         c.IPCompleter.use_jedi = False
         c.InteractiveShellApp.exec_lines = [
-            '''IPython.get_ipython().events.register('pre_run_cell', p._ipython_run_cell_hook)'''
+            '''IPython.get_ipython().events.register('pre_run_cell', p._ipython_run_cell_hook)''',
+            '''logging.getLogger('asyncio').disabled = True'''
         ]
         c.TerminalInteractiveShell.autoformatter = None
         c.BaseIPythonApplication.profile = 'rpcclient'
