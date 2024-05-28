@@ -34,6 +34,10 @@ def test_process_object(client):
     assert fds[2].fd == 2
 
 
+def test_get_memgraph_snapshot(client):
+    assert len(client.processes.get_self().parent.get_memgraph_snapshot()) > 0
+
+
 @pytest.mark.ios
 def test_launch_process(client):
     client.processes.launch('com.apple.calculator').kill()
