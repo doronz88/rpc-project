@@ -27,7 +27,7 @@ from rpcclient.darwin.structs import ARM_THREAD_STATE64_COUNT, FAT_CIGAM, FAT_MA
     x86_thread_state64_t
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibraryError, ProcessSymbolAbsentError, \
-    RpcClientException, SymbolAbsentError
+    RpcClientException, SymbolAbsentError, UnrecognizedSelectorError
 from rpcclient.processes import Processes
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGKILL, SIGTERM
@@ -823,6 +823,27 @@ class Process:
                                                        recv_right_pid=cross_ref_port_info.pid,
                                                        recv_right_proc_name=cross_ref_port_info.proc_name))
         return result
+
+    def get_memgraph_snapshot(self) -> bytes:
+        scanner = None
+        try:
+            # first attempt via new API
+            scanner = self._client.symbols.objc_getClass('VMUProcessObjectGraph').objc_call(
+                'createWithTask:', self.task)
+            snapshot_graph = scanner.objc_call('plistRepresentationWithOptions:', 0).py()
+        except UnrecognizedSelectorError:
+            # if failed, attempt with old API
+            scanner = self._client.symbols.objc_getClass('VMUTaskMemoryScanner').objc_call('alloc').objc_call(
+                'initWithTask:', self.task)
+            scanner.objc_call('addRootNodesFromTask')
+            scanner.objc_call('addMallocNodesFromTask')
+            snapshot_graph = scanner.objc_call('processSnapshotGraph').objc_call(
+                'plistRepresentationWithOptions:', 0).py()
+        finally:
+            if scanner is not None:
+                # free object scanner so process can resume
+                scanner.objc_call('release')
+        return snapshot_graph
 
     def __repr__(self):
         return f'<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>'
