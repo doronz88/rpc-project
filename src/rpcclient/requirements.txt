@@ -17,4 +17,4 @@ tqdm
 osstatus>=1.0.2
 parameter-decorators
 requests
-protobuf
+protobuf~=5.28.2
