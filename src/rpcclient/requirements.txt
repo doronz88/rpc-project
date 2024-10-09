@@ -9,7 +9,7 @@ pygments
 objc_types_decoder
 pycrashreport>=1.0.2
 lief
-capstone
+capstone>=5.0.3
 xonsh
 plumbum
 pygnuutils
@@ -17,4 +17,4 @@ tqdm
 osstatus>=1.0.2
 parameter-decorators
 requests
-protobuf
+protobuf~=5.27.0
