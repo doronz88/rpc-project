@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 from osstatus.cache import ErrorCode, get_possible_error_codes
 
@@ -48,5 +48,5 @@ class DarwinSymbol(Symbol):
         return self._client.objc_symbol(self)
 
     @property
-    def osstatus(self) -> Optional[List[ErrorCode]]:
+    def osstatus(self) -> Optional[list[ErrorCode]]:
         return get_possible_error_codes(self)

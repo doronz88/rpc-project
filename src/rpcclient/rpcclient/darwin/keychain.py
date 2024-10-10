@@ -1,5 +1,4 @@
 import logging
-from typing import List, Mapping
 
 from rpcclient.exceptions import BadReturnValueError, RpcPermissionError
 from rpcclient.symbol import Symbol
@@ -24,25 +23,25 @@ class Keychain:
         if err != 0:
             raise BadReturnValueError(f'SecItemAdd() returned: {err}')
 
-    def query_apple_share_passwords(self) -> List[Mapping]:
+    def query_apple_share_passwords(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassAppleSharePassword)
 
-    def query_internet_passwords(self) -> List[Mapping]:
+    def query_internet_passwords(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassInternetPassword)
 
-    def query_generic_passwords(self) -> List[Mapping]:
+    def query_generic_passwords(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassGenericPassword)
 
-    def query_identities(self) -> List[Mapping]:
+    def query_identities(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassIdentity)
 
-    def query_certificates(self) -> List[Mapping]:
+    def query_certificates(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassCertificate)
 
-    def query_keys(self) -> List[Mapping]:
+    def query_keys(self) -> list[dict]:
         return self._query(self._client.symbols.kSecClassKey)
 
-    def _query(self, class_type: Symbol) -> List[Mapping]:
+    def _query(self, class_type: Symbol) -> list[dict]:
         with self._client.safe_malloc(8) as p_result:
             p_result[0] = 0
 

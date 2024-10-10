@@ -1,5 +1,3 @@
-from typing import List, Mapping
-
 from parameter_decorators import path_to_str
 
 from rpcclient.darwin.structs import stat64, statfs64
@@ -52,7 +50,7 @@ class DarwinFs(Fs):
             self._client.raise_errno_exception(f'failed to removexattr(): {path}')
 
     @path_to_str('path')
-    def listxattr(self, path: str) -> List[str]:
+    def listxattr(self, path: str) -> list[str]:
         """ list extended attribute names """
         max_buf_len = 1024
         with self._client.safe_malloc(max_buf_len) as xattributes_names:
@@ -72,7 +70,7 @@ class DarwinFs(Fs):
             return value.peek(count)
 
     @path_to_str('path')
-    def dictxattr(self, path: str) -> Mapping[str, bytes]:
+    def dictxattr(self, path: str) -> dict[str, bytes]:
         """ get a dictionary of all extended attributes """
         result = {}
         for k in self.listxattr(path):

@@ -1,7 +1,6 @@
 import datetime
 import logging
 import re
-from typing import List
 
 from cached_property import cached_property
 
@@ -91,11 +90,11 @@ class OsLogPreferencesSubsystem(OsLogPreferencesBase):
         super().__init__(client, obj)
 
     @property
-    def category_strings(self) -> List[OsLogPreferencesCategory]:
+    def category_strings(self) -> list[OsLogPreferencesCategory]:
         return self._object.objc_call('categories').py()
 
     @property
-    def categories(self) -> List[OsLogPreferencesCategory]:
+    def categories(self) -> list[OsLogPreferencesCategory]:
         result = []
         for name in self.category_strings:
             result.append(self.get_category(name))
@@ -111,11 +110,11 @@ class OsLogPreferencesManager(OsLogPreferencesBase):
         super().__init__(client, obj)
 
     @property
-    def subsystem_strings(self) -> List[str]:
+    def subsystem_strings(self) -> list[str]:
         return self._object.objc_call('subsystems').py()
 
     @property
-    def subsystems(self) -> List[OsLogPreferencesSubsystem]:
+    def subsystems(self) -> list[OsLogPreferencesSubsystem]:
         result = []
         for name in self.subsystem_strings:
             result.append(self.get_subsystem(name))

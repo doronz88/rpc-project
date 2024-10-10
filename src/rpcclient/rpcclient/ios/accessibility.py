@@ -1,7 +1,7 @@
 import dataclasses
 import time
 from enum import IntEnum, IntFlag
-from typing import List, Optional
+from typing import Optional
 
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ElementNotFoundError, FirstElementNotFoundError, LastElementNotFoundError, \
@@ -215,7 +215,7 @@ class AXElement(DarwinSymbol):
         return AXTraits(self.objc_call('traits').c_uint64)
 
     @property
-    def elements(self) -> List['AXElement']:
+    def elements(self) -> list['AXElement']:
         """ get all current displayed elements """
         result = []
         elements = self.objc_call('explorerElements')
@@ -284,14 +284,14 @@ class AXElement(DarwinSymbol):
 
         return element
 
-    def _next_elements_with_count(self, count: int) -> List['AXElement']:
+    def _next_elements_with_count(self, count: int) -> list['AXElement']:
         elements = self.objc_call('nextElementsWithCount:', count)
         result = []
         for i in range(elements.objc_call('count')):
             result.append(AXElement.create(elements.objc_call('objectAtIndex:', i), self._client))
         return result
 
-    def _previous_elements_with_count(self, count: int) -> List['AXElement']:
+    def _previous_elements_with_count(self, count: int) -> list['AXElement']:
         elements = self.objc_call('previousElementsWithCount:', count)
         result = []
         for i in range(elements.objc_call('count')):
@@ -463,7 +463,7 @@ class Accessibility:
 
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_elements_by_labels(self, labels: List[str], auto_scroll=True, draw_frame=True, timeout=5,
+    def press_elements_by_labels(self, labels: list[str], auto_scroll=True, draw_frame=True, timeout=5,
                                  direction: AXDirection = AXDirection.Next, displayed_only=False):
         """
         press a sequence of labels

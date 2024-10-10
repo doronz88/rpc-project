@@ -3,7 +3,6 @@ import plistlib
 import posixpath
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Mapping
 
 from rpcclient.darwin.scpreferences import SCPreference
 
@@ -22,7 +21,7 @@ class PairRecord:
         return self._host_id
 
     @property
-    def record(self) -> Mapping:
+    def record(self) -> dict:
         return plistlib.loads(self._client.fs.read_file(posixpath.join(PAIR_RECORD_PATH, f'{self._host_id}.plist')))
 
     @property
@@ -55,7 +54,7 @@ class Lockdown:
         return str(host_id).upper()
 
     @property
-    def pair_records(self) -> List[PairRecord]:
+    def pair_records(self) -> list[PairRecord]:
         """ list pair records """
         result = []
         for filename in self._client.fs.listdir(PAIR_RECORD_PATH):
@@ -63,7 +62,7 @@ class Lockdown:
         return result
 
     @property
-    def pair_dates(self) -> Mapping:
+    def pair_dates(self) -> dict:
         result = {}
         raw = self._client.preferences.cf.get_dict('com.apple.mobile.ldpair', 'mobile', 'kCFPreferencesAnyHost')
         for host_id, timestmap in raw.items():
@@ -87,7 +86,7 @@ class Lockdown:
     def get_self_pair_record(self) -> PairRecord:
         return self.get_pair_record_by_host_id(self.get_host_id())
 
-    def add_pair_record(self, pair_record: Mapping, date: datetime, hostname: str = None):
+    def add_pair_record(self, pair_record: dict, date: datetime, hostname: str = None):
         pair_record = dict(pair_record)
         # remove private key from pair record before adding it
         pair_record.pop('HostPrivateKey')

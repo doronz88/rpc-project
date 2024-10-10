@@ -1,5 +1,3 @@
-from typing import Mapping
-
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.consts import MACH_PORT_NULL, kCFAllocatorDefault, kIOServicePlane
 from rpcclient.darwin.structs import io_name_t, io_object_t, mach_port_t
@@ -22,7 +20,7 @@ class IOService(Allocated):
             return name.peek_str()
 
     @property
-    def properties(self) -> Mapping:
+    def properties(self) -> dict:
         with self._client.safe_malloc(8) as p_properties:
             if self._client.symbols.IORegistryEntryCreateCFProperties(self._service, p_properties,
                                                                       kCFAllocatorDefault, 0):
@@ -42,7 +40,7 @@ class IOService(Allocated):
             s = IOService(self._client, child)
             yield s
 
-    def set(self, properties: Mapping):
+    def set(self, properties: dict):
         self._client.symbols.IORegistryEntrySetCFProperties(self._service, self._client.cf(properties))
 
     def get(self, key: str):
@@ -58,7 +56,7 @@ class IOService(Allocated):
 
 class BacklightControlService(IOService):
     @property
-    def display_parameters(self) -> Mapping:
+    def display_parameters(self) -> dict:
         return self.get('IODisplayParameters')
 
     @property

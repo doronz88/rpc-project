@@ -1,6 +1,5 @@
 from datetime import datetime
 from functools import lru_cache
-from typing import List, Mapping
 from uuid import UUID
 
 from rpcclient.darwin.common import CfSerializable
@@ -176,11 +175,11 @@ class Xpc:
         conn = self._connect_to_mach_service(service_name)
         return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
 
-    def force_run_activities(self, activities: List[str]) -> None:
+    def force_run_activities(self, activities: list[str]) -> None:
         self.sharedScheduler.objc_call('forceRunActivities:', self._client.cf(activities))
 
     @property
-    def loaded_activities(self) -> Mapping:
+    def loaded_activities(self) -> dict:
         return self._client.preferences.cf.get_dict('com.apple.xpc.activity2', 'root')
 
     def set_activity_base_date(self, name: str, date: datetime) -> None:

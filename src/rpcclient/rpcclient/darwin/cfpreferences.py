@@ -23,7 +23,7 @@ class CFPreferences:
         self._client = client
 
     def get_keys(self, application_id: str, username: str = kCFPreferencesCurrentUser,
-                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.List[str]]:
+                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[list[str]]:
         """ wrapper for CFPreferencesCopyKeyList """
         application_id = self._client.cf(application_id)
         username = self._client.cf(username)
@@ -43,7 +43,7 @@ class CFPreferences:
         return self._client.symbols.CFPreferencesCopyValue(key, application_id, username, hostname).py()
 
     def get_dict(self, application_id: str, username: str = kCFPreferencesCurrentUser,
-                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[typing.Mapping]:
+                 hostname: str = kCFPreferencesCurrentHost) -> typing.Optional[dict]:
         """ get a dictionary representation of given preference """
         result = {}
         key_list = self.get_keys(application_id, username, hostname)
@@ -67,14 +67,14 @@ class CFPreferences:
                                                    self._client.cf(application_id), self._client.cf(username),
                                                    self._client.cf(hostname))
 
-    def set_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
+    def set_dict(self, d: dict, application_id: str, username: str = kCFPreferencesCurrentUser,
                  hostname: str = kCFPreferencesCurrentHost):
         """ set entire preference dictionary (erase first if exists) """
         with suppress(NoSuchPreferenceError):
             self.clear(application_id, username, hostname)
         self.update_dict(d, application_id, username, hostname)
 
-    def update_dict(self, d: typing.Mapping, application_id: str, username: str = kCFPreferencesCurrentUser,
+    def update_dict(self, d: dict, application_id: str, username: str = kCFPreferencesCurrentUser,
                     hostname: str = kCFPreferencesCurrentHost):
         """ update preference dictionary """
         for k, v in d.items():

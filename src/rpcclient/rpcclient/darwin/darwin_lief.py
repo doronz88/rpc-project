@@ -1,6 +1,5 @@
 import plistlib
 import struct
-from typing import Mapping
 
 import lief
 from parameter_decorators import path_to_str
@@ -12,7 +11,7 @@ from rpcclient.lief import Lief
 
 class DarwinLief(Lief):
     @path_to_str('path')
-    def get_entitlements(self, path: str) -> Mapping:
+    def get_entitlements(self, path: str) -> dict:
         with self._client.fs.open(path, 'r') as f:
             buf = f.read()
         parsed = lief.parse(buf)

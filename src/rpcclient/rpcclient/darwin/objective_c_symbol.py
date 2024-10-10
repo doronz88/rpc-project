@@ -98,7 +98,7 @@ class ObjectiveCSymbol(DarwinSymbol):
         :param params: Additional parameters.
         :return: ObjectiveCSymbol when return type is an objc symbol.
         """
-        symbol = super(ObjectiveCSymbol, self).objc_call(selector, *params, **kwargs)
+        symbol = super().objc_call(selector, *params, **kwargs)
         return symbol.objc_symbol if self._client.is_objc_type(symbol) else symbol
 
     def _set_ivar(self, name, value):
@@ -182,12 +182,12 @@ class ObjectiveCSymbol(DarwinSymbol):
             for method in sup.methods:
                 result.add(method.name.replace(':', '_'))
 
-        result.update(list(super(ObjectiveCSymbol, self).__dir__()))
+        result.update(list(super().__dir__()))
         return list(result)
 
     def __getitem__(self, item):
         if isinstance(item, int):
-            return super(ObjectiveCSymbol, self).__getitem__(item)
+            return super().__getitem__(item)
 
         # Ivars
         for ivar in self.ivars:
@@ -218,7 +218,7 @@ class ObjectiveCSymbol(DarwinSymbol):
 
     def __setitem__(self, key, value):
         if isinstance(key, int):
-            super(ObjectiveCSymbol, self).__setitem__(key, value)
+            super().__setitem__(key, value)
             return
 
         with suppress(SettingIvarError):
@@ -233,7 +233,7 @@ class ObjectiveCSymbol(DarwinSymbol):
         try:
             self._set_ivar(key, value)
         except SettingIvarError:
-            super(ObjectiveCSymbol, self).__setattr__(key, value)
+            super().__setattr__(key, value)
 
     def __str__(self):
         return self._to_str(False)

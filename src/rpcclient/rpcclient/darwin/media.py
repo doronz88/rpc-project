@@ -1,6 +1,5 @@
 import struct
 from enum import Enum
-from typing import List
 
 from parameter_decorators import path_to_str
 
@@ -158,7 +157,7 @@ class AudioSession:
         return struct.pack('<I', self._session.objc_call('recordPermission'))[::-1].decode()
 
     @property
-    def available_categories(self) -> List[str]:
+    def available_categories(self) -> list[str]:
         return self._session.objc_call('availableCategories').py()
 
 

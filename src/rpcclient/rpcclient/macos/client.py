@@ -14,7 +14,7 @@ class MacosClient(DarwinClient):
         self.apple_script = AppleScript(self)
 
     @property
-    def roots(self) -> typing.List[str]:
+    def roots(self) -> list[str]:
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
 
         result = super().roots

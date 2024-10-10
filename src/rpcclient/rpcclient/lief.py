@@ -1,5 +1,4 @@
 from collections import namedtuple
-from typing import Mapping
 
 import lief
 from parameter_decorators import path_to_str
@@ -19,7 +18,7 @@ class Lief:
             return lief.parse(f.read())
 
     @path_to_str('path')
-    def get_symbols(self, path: str) -> Mapping[str, Symbol]:
+    def get_symbols(self, path: str) -> dict[str, Symbol]:
         result = {}
         parsed = self.parse(path)
         for s in parsed.symbols:

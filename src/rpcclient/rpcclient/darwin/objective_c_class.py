@@ -1,7 +1,7 @@
 from collections import namedtuple
 from functools import partial
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Optional
 
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
@@ -19,7 +19,7 @@ class Class:
     Wrapper for ObjectiveC Class object.
     """
 
-    def __init__(self, client, class_object=0, class_data: Mapping = None, lazy=False):
+    def __init__(self, client, class_object=0, class_data: Optional[dict] = None, lazy=False):
         """
         :param rpcclient.darwin.client.DarwinClient client: Darwin client.
         :param rpcclient.darwin.objective_c_symbol.Symbol class_object:
@@ -126,7 +126,7 @@ class Class:
             yield sup
             sup = sup.super
 
-    def _load_class_data(self, data: Mapping):
+    def _load_class_data(self, data: dict):
         self._class_object = self._client.symbol(data['address'])
         self.super = Class(self._client, data['super']) if data['super'] else None
         self.name = data['name']
@@ -162,7 +162,7 @@ class Class:
                 if method.is_class:
                     result.add(method.name.replace(':', '_'))
 
-        result.update(list(super(Class, self).__dir__()))
+        result.update(list(super().__dir__()))
         return list(result)
 
     def __str__(self):
