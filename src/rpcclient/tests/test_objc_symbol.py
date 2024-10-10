@@ -16,11 +16,11 @@ def test_method_by_method_name(client):
 
 
 def test_calling_property(client):
-    d = client.symbols.objc_getClass('NSMutableDictionary').objc_call('new').objc_symbol
+    d = client.symbols.objc_getClass('NSMutableDictionary').objc_call('new')
     # call method
-    d.setObject_forKey_(client.cf('value'), client.cf('key'))
+    d.objc_call('setObject:forKey:', client.cf('value'), client.cf('key'))
     # call property
-    assert '{\n    key = value;\n}' == d.description.py()
+    assert '{\n    key = value;\n}' == d.objc_symbol.description.py()
 
 
 def test_set_implementation(client):
