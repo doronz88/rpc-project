@@ -9,6 +9,7 @@ from pygments.formatters import TerminalTrueColorFormatter
 from pygments.lexers import ObjectiveCLexer
 
 from rpcclient.darwin import objc
+from rpcclient.darwin.objc import Method
 from rpcclient.darwin.objective_c_class import Class
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import RpcClientException
@@ -99,7 +100,17 @@ class ObjectiveCSymbol(DarwinSymbol):
         :return: ObjectiveCSymbol when return type is an objc symbol.
         """
         symbol = super().objc_call(selector, *params, **kwargs)
-        return symbol.objc_symbol if self._client.is_objc_type(symbol) else symbol
+        try:
+            is_objc_type = self.get_method(selector).return_type == 'id'
+        except AttributeError:
+            is_objc_type = False
+        return symbol.objc_symbol if is_objc_type else symbol
+
+    def get_method(self, name: str) -> Method:
+        for method in self.methods:
+            if method.name == name:
+                return method
+        raise AttributeError(f'Method "{name}" does not exist')
 
     def _set_ivar(self, name, value):
         try:
