@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 from pycrashreport.crash_report import CrashReportBase, get_crash_report_from_buf
 
@@ -21,7 +20,7 @@ class CrashReports:
         # bugfix: at some point, this setting was moved to "com.apple.osanalytics" bundle identifier
         self._client.preferences.cf.set('SymbolicateCrashes', enabled, 'com.apple.osanalytics', 'root')
 
-    def list(self, prefixed='') -> List[CrashReportBase]:
+    def list(self, prefixed='') -> list[CrashReportBase]:
         """ get a list of all crash reports as CrashReport parsed objects """
         result = []
         for root in self._client.roots:

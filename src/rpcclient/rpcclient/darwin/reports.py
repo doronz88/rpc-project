@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 from rpcclient.darwin.crash_reports import CrashReports
 
@@ -11,7 +10,7 @@ class Reports:
         self._client = client
         self.crash_reports = CrashReports(client, crash_reports_dir)
 
-    def get_logs(self, prefix='') -> List[Path]:
+    def get_logs(self, prefix='') -> list[Path]:
         result = []
         sub_paths = ['var/log', 'Library/Logs']
         for sub_path in sub_paths:

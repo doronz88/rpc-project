@@ -10,7 +10,7 @@ import time
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, List, Union
+from typing import Callable, Union
 from uuid import UUID
 
 import plumbum
@@ -76,7 +76,7 @@ def path_completer(xsh, action, completer, alias, command):
     result = []
     for f in client.fs.scandir(dirpath):
         if is_absolute:
-            completion_option = str((dirpath / f.name))
+            completion_option = str(dirpath / f.name)
         else:
             completion_option = str((dirpath / f.name).relative_to(pwd))
         try:
@@ -100,7 +100,7 @@ def dir_completer(xsh, action, completer, alias, command):
     result = []
     for f in client.fs.scandir(dirpath):
         if is_absolute:
-            completion_option = str((dirpath / f.name))
+            completion_option = str(dirpath / f.name)
         else:
             completion_option = str((dirpath / f.name).relative_to(pwd))
         try:
@@ -343,7 +343,7 @@ class XonshRc:
                         f'{{RESET}}',
                         file=sys.stdout)
 
-    def _rpc_press_elements(self, label: Annotated[List[str], Arg(nargs='+', completer=element_completer)]):
+    def _rpc_press_elements(self, label: Annotated[list[str], Arg(nargs='+', completer=element_completer)]):
         """
         press labels list by given order
         """
@@ -362,7 +362,7 @@ class XonshRc:
         self.client.accessibility.enabled = False
 
     def _rpc_press_keys(self, key: Annotated[
-        List[str], Arg(nargs='+',
+        list[str], Arg(nargs='+',
                        completer=lambda xsh, action, completer, alias, command: ['power', 'home', 'volup', 'voldown',
                                                                                  'mute'])]):
         """
@@ -481,7 +481,7 @@ class XonshRc:
         """
         self.client.fs.chdir(path)
 
-    def _rpc_rm(self, path: Annotated[List[str], Arg(nargs='+', completer=path_completer)], recursive=False,
+    def _rpc_rm(self, path: Annotated[list[str], Arg(nargs='+', completer=path_completer)], recursive=False,
                 force=False):
         """
         remove files
@@ -522,7 +522,7 @@ class XonshRc:
         """
         self.client.fs.mkdir(filename, mode=int(mode, 8), parents=parents)
 
-    def _rpc_cat(self, filename: Annotated[List[str], Arg(nargs='+', completer=path_completer)]):
+    def _rpc_cat(self, filename: Annotated[list[str], Arg(nargs='+', completer=path_completer)]):
         """
         read a list of files
         """
@@ -536,7 +536,7 @@ class XonshRc:
         except UnicodeDecodeError:
             return str(buf)
 
-    def _rpc_bat(self, filename: Annotated[List[str], Arg(completer=path_completer)]):
+    def _rpc_bat(self, filename: Annotated[list[str], Arg(completer=path_completer)]):
         """
         "bat" (improved-cat) given file
         """
@@ -544,7 +544,7 @@ class XonshRc:
             os.system(f'bat "{f}"')
 
     def _rpc_pull(
-            self, files: Annotated[List[str],
+            self, files: Annotated[list[str],
                                    Arg(nargs='+', completer=path_completer)],
             recursive: bool = False, force: bool = False):
         """
@@ -563,7 +563,7 @@ class XonshRc:
         return self._pull(files, local, recursive, force)
 
     def _rpc_push(
-            self, files: Annotated[List[str],
+            self, files: Annotated[list[str],
                                    Arg(nargs='+', completer=path_completer)],
             recursive: bool = False, force: bool = False):
         """
@@ -710,7 +710,7 @@ class XonshRc:
     def _relative_path(self, filename):
         return posixpath.join(self._rpc_pwd(), filename)
 
-    def _listdir(self, path: str) -> List[str]:
+    def _listdir(self, path: str) -> list[str]:
         return self.client.fs.listdir(path)
 
     def _pull(self, remote_filename, local_filename, recursive: bool = False, force: bool = False):

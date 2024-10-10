@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Mapping, Optional
+from typing import Optional
 
 from rpcclient.exceptions import MissingLibraryError, RpcPermissionError
 from rpcclient.structs.consts import RTLD_NOW
@@ -61,7 +61,7 @@ class Location:
         return CLAuthorizationStatus.from_value(self._location_manager.objc_call('authorizationStatus'))
 
     @property
-    def last_sample(self) -> Optional[Mapping]:
+    def last_sample(self) -> Optional[dict]:
         """ last taken location sample (or None if there isn't any) """
         location = self._location_manager.objc_call('location')
         if not location:

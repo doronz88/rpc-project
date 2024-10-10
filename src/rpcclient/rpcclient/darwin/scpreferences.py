@@ -1,4 +1,3 @@
-import typing
 from collections import UserDict
 
 import IPython
@@ -35,7 +34,7 @@ class SCPreference(Allocated):
         self._preferences_id = preferences_id
 
     @property
-    def keys(self) -> typing.List[str]:
+    def keys(self) -> list[str]:
         """ wrapper for SCPreferencesCopyKeyList """
         return self._client.symbols.SCPreferencesCopyKeyList(self._ref).py()
 
@@ -49,18 +48,18 @@ class SCPreference(Allocated):
         self._set(key, value)
         self._commit()
 
-    def set_dict(self, d: typing.Mapping):
+    def set_dict(self, d: dict):
         """ set the entire preference dictionary (clear if already exists) and commit the change """
         self._clear()
         self._update_dict(d)
         self._commit()
 
-    def _update_dict(self, d: typing.Mapping):
+    def _update_dict(self, d: dict):
         """ update preference dictionary """
         for k, v in d.items():
             self._set(k, v)
 
-    def update_dict(self, d: typing.Mapping):
+    def update_dict(self, d: dict):
         """ update preference dictionary and commit """
         self._update_dict(d)
         self._commit()
@@ -79,7 +78,7 @@ class SCPreference(Allocated):
         """ wrapper for SCPreferencesGetValue """
         return self._client.symbols.SCPreferencesGetValue(self._ref, self._client.cf(key)).py()
 
-    def get_dict(self) -> typing.Mapping:
+    def get_dict(self) -> dict:
         """ get a dictionary representation """
         result = {}
         for k in self.keys:
@@ -147,7 +146,7 @@ class SCPreferences:
             raise RpcClientException(f'SCPreferencesCreate failed for: {preferences_id}')
         return SCPreference(self._client, preferences_id, ref)
 
-    def get_keys(self, preferences_id: str) -> typing.List[str]:
+    def get_keys(self, preferences_id: str) -> list[str]:
         """ get all keys from given preferences_id """
         with self.open(preferences_id) as o:
             return o.keys

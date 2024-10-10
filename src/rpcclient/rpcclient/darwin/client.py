@@ -7,7 +7,6 @@ import typing
 from collections import namedtuple
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Mapping
 
 from cached_property import cached_property
 from tqdm import tqdm
@@ -75,7 +74,7 @@ class DarwinClient(Client):
         super().__init__(sock, sysname, arch, create_socket_cb, dlsym_global_handle=RTLD_GLOBAL)
 
     def _init_process_specific(self):
-        super(DarwinClient, self)._init_process_specific()
+        super()._init_process_specific()
 
         if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
@@ -100,7 +99,7 @@ class DarwinClient(Client):
         self._NSPropertyListSerialization = self.symbols.objc_getClass('NSPropertyListSerialization')
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
-    def interactive(self, additional_namespace: typing.Mapping = None):
+    def interactive(self, additional_namespace: typing.Optional[dict] = None):
         if additional_namespace is None:
             additional_namespace = {}
         additional_namespace['CFSTR'] = self.cf
@@ -119,7 +118,7 @@ class DarwinClient(Client):
         p_error[0] = value
 
     @property
-    def images(self) -> typing.List[DyldImage]:
+    def images(self) -> list[DyldImage]:
         m = []
         for i in range(self.symbols._dyld_image_count()):
             module_name = self.symbols._dyld_get_image_name(i).peek_str()
@@ -140,19 +139,19 @@ class DarwinClient(Client):
         return self.uname.machine.startswith('i')
 
     @property
-    def roots(self) -> typing.List[str]:
+    def roots(self) -> list[str]:
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
         return ['/', '/var/root']
 
-    def showobject(self, object_address: Symbol) -> Mapping:
+    def showobject(self, object_address: Symbol) -> dict:
         response = self._sock.send_recv(CmdShowObject(address=object_address))
         return json.loads(response.description)
 
-    def showclass(self, class_address: Symbol) -> Mapping:
+    def showclass(self, class_address: Symbol) -> dict:
         response = self._sock.send_recv(CmdShowClass(address=class_address))
         return json.loads(response.description)
 
-    def get_class_list(self) -> typing.Mapping[str, objective_c_class.Class]:
+    def get_class_list(self) -> dict[str, objective_c_class.Class]:
         result = {}
         command = CmdGetClassList()
         response = self._sock.send_recv(command)

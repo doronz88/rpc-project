@@ -2,7 +2,6 @@ import ctypes
 import os
 import struct
 from contextlib import contextmanager
-from typing import List
 
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
@@ -87,7 +86,7 @@ class Symbol(int):
         elif whence == os.SEEK_SET:
             self._offset = offset - self
         else:
-            raise IOError('Unsupported whence')
+            raise OSError('Unsupported whence')
 
     def read(self, count: int):
         """ Construct compliance. """
@@ -105,7 +104,7 @@ class Symbol(int):
         """ Construct compliance. """
         return self + self._offset
 
-    def disass(self, size=40) -> List[CsInsn]:
+    def disass(self, size=40) -> list[CsInsn]:
         """ peek disassembled lines of 'size' bytes """
         if self._client.arch == ARCH_ARM64:
             return list(Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN).disasm(self.peek(size), self))

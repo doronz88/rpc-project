@@ -1,6 +1,6 @@
 import ctypes
 import logging
-from typing import List, Mapping
+from typing import Optional
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.symbol import DarwinSymbol
@@ -40,7 +40,7 @@ class WifiSavedNetwork:
 
 
 class WifiScannedNetwork:
-    def __init__(self, client, interface: DarwinSymbol, network: Mapping):
+    def __init__(self, client, interface: DarwinSymbol, network: dict):
         self._client = client
         self._interface = interface
         self.network = network
@@ -90,7 +90,7 @@ class WifiInterface(Allocated):
         self._interface = interface
         self._device = device
 
-    def scan(self, options: Mapping = None) -> List[WifiScannedNetwork]:
+    def scan(self, options: Optional[dict] = None) -> list[WifiScannedNetwork]:
         """ perform Wi-Fi scan """
 
         if options is None:
@@ -132,7 +132,7 @@ class IosWifi:
             self._client.raise_errno_exception('WiFiManagerClientCreate failed')
 
     @property
-    def saved_networks(self) -> List[WifiSavedNetwork]:
+    def saved_networks(self) -> list[WifiSavedNetwork]:
         result = []
 
         network_list = self._client.symbols.WiFiManagerClientCopyNetworks(self._wifi_manager).py()
@@ -145,7 +145,7 @@ class IosWifi:
         return result
 
     @property
-    def interfaces(self) -> List[str]:
+    def interfaces(self) -> list[str]:
         """ get a list of all available wifi interfaces """
         with self._client.safe_malloc(8) as p_interface:
             if self._client.symbols.Apple80211Open(p_interface):

@@ -1,5 +1,4 @@
 import logging
-from typing import List, Mapping
 
 from rpcclient.darwin.consts import IOPMUserActiveType
 from rpcclient.exceptions import BadReturnValueError
@@ -54,7 +53,7 @@ class Power:
                 raise BadReturnValueError('IOPMAssertionCreateWithProperties() failed')
             return PowerAssertion(self._client, p_assertion_id[0])
 
-    def copy_assertions_by_process(self) -> Mapping[int, Mapping]:
+    def copy_assertions_by_process(self) -> dict[int, dict]:
         """ Returns a dictionary listing all assertions, grouped by their owning process """
         with self._client.safe_malloc(8) as p_assertions:
             if self._client.symbols.IOPMCopyAssertionsByProcess(p_assertions) != 0:
@@ -72,11 +71,11 @@ class Power:
             result[pid] = assertions.objc_call('objectForKey:', pid_object).py()
         return result
 
-    def copy_scheduled_power_events(self) -> List[Mapping]:
+    def copy_scheduled_power_events(self) -> list[dict]:
         """ List all scheduled system power events """
         return self._client.symbols.IOPMCopyScheduledPowerEvents().py()
 
-    def copy_assertions_status(self) -> Mapping[str, int]:
+    def copy_assertions_status(self) -> dict[str, int]:
         """ Returns a list of available assertions and their system-wide levels """
         with self._client.safe_malloc(8) as result:
             if 0 != self._client.symbols.IOPMCopyAssertionsStatus(result):

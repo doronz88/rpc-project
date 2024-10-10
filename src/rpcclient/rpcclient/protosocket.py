@@ -1,7 +1,6 @@
 import socket
 import struct
 import threading
-from typing import Tuple
 
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerDiedError, ServerResponseError
 from rpcclient.protos.rpc_pb2 import CmdClose, Command, Handshake, Response
@@ -42,7 +41,7 @@ class ProtoSocket:
         else:
             return getattr(response, command_type.lower())
 
-    def _receive(self) -> Tuple[int, bytes]:
+    def _receive(self) -> tuple[int, bytes]:
         try:
             size = struct.unpack('<Q', self.raw_socket.recv(8))[0]
             buff = self._recvall(size)

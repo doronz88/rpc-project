@@ -1,5 +1,4 @@
 import sqlite3
-from typing import Mapping
 
 from rpcclient.network import Network
 from rpcclient.structs.consts import SIGKILL
@@ -15,7 +14,7 @@ class DarwinNetwork(Network):
         super().__init__(client)
 
     @property
-    def proxy_settings(self) -> Mapping:
+    def proxy_settings(self) -> dict:
         return self._client.symbols.CFNetworkCopySystemProxySettings().py()
 
     def set_http_proxy(self, ip: str, port: int) -> None:

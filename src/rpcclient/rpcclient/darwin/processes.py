@@ -6,9 +6,10 @@ import re
 import struct
 import time
 from collections import namedtuple
+from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, List, Mapping, Optional
+from typing import Optional
 
 from cached_property import cached_property
 from construct import Array, Container, Int32ul
@@ -139,7 +140,7 @@ class Thread:
     def get_state(self):
         raise NotImplementedError()
 
-    def set_state(self, state: Mapping):
+    def set_state(self, state: dict):
         raise NotImplementedError()
 
     def resume(self):
@@ -162,7 +163,7 @@ class IntelThread64(Thread):
                     raise BadReturnValueError('thread_get_state() failed')
                 return x86_thread_state64_t.parse_stream(p_state)
 
-    def set_state(self, state: Mapping):
+    def set_state(self, state: dict) -> None:
         if self._client.symbols.thread_set_state(self._thread_id, x86_THREAD_STATE64,
                                                  x86_thread_state64_t.build(state),
                                                  x86_thread_state64_t.sizeof() // Int32ul.sizeof()):
@@ -179,7 +180,7 @@ class ArmThread64(Thread):
                     raise BadReturnValueError('thread_get_state() failed')
                 return arm_thread_state64_t.parse_stream(p_state)
 
-    def set_state(self, state: Mapping):
+    def set_state(self, state: dict) -> None:
         if self._client.symbols.thread_set_state(self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64,
                                                  arm_thread_state64_t.build(state),
                                                  ARM_THREAD_STATE64_COUNT):
@@ -237,7 +238,7 @@ class Backtrace:
     pid: int
     thread_id: int
     dispatch_queue_serial_num: int
-    frames: List[Frame]
+    frames: list[Frame]
 
     def __init__(self, vmu_backtrace: DarwinSymbol):
         backtrace = vmu_backtrace.objc_call('description').py()
@@ -313,7 +314,7 @@ class ProcessSymbol(Symbol):
 
 @dataclasses.dataclass
 class MachPortThreadInfo:
-    thread_ids: List[int]
+    thread_ids: list[int]
 
 
 @dataclasses.dataclass
@@ -321,7 +322,7 @@ class MachPortInfo:
     task: int
     pid: int
     name: int
-    rights: List[str]
+    rights: list[str]
     ipc_object: int
     dead: bool
     proc_name: Optional[str] = None
@@ -432,7 +433,7 @@ class Process:
             yield LoadedClass(name=name, type_name=type_name, binary_path=binary_path)
 
     @property
-    def images(self) -> List[Image]:
+    def images(self) -> list[Image]:
         """ get loaded image list """
         result = []
 
@@ -452,11 +453,11 @@ class Process:
         return result
 
     @property
-    def app_images(self) -> List[Image]:
+    def app_images(self) -> list[Image]:
         return [image for image in self.images if APP_SUFFIX in image.path]
 
     @property
-    def threads(self) -> List[Thread]:
+    def threads(self) -> list[Thread]:
         result = []
         with self._client.safe_malloc(8) as threads:
             with self._client.safe_malloc(4) as count:
@@ -474,7 +475,7 @@ class Process:
         return self._pid
 
     @property
-    def fds(self) -> List[Fd]:
+    def fds(self) -> list[Fd]:
         """ get a list of process opened file descriptors """
         result = []
         for fdstruct in self.fd_structs:
@@ -510,7 +511,7 @@ class Process:
         return result
 
     @property
-    def fd_structs(self) -> List[FdStruct]:
+    def fd_structs(self) -> list[FdStruct]:
         """ get a list of process opened file descriptors as raw structs """
         result = []
         size = self._client.symbols.proc_pidinfo(self.pid, PROC_PIDLISTFDS, 0, 0, 0)
@@ -582,7 +583,7 @@ class Process:
             return proc_taskallinfo.parse_stream(pti)
 
     @property
-    def backtraces(self) -> List[Backtrace]:
+    def backtraces(self) -> list[Backtrace]:
         result = []
         backtraces = self._client.symbols.objc_getClass('VMUSampler').objc_call('sampleAllThreadsOfTask:', self.task)
         for i in range(backtraces.objc_call('count')):
@@ -671,11 +672,11 @@ class Process:
         return Process(self._client, self.ppid)
 
     @property
-    def environ(self) -> List[str]:
+    def environ(self) -> list[str]:
         return self.vmu_proc_info.objc_call('envVars').py()
 
     @property
-    def arguments(self) -> List[str]:
+    def arguments(self) -> list[str]:
         return self.vmu_proc_info.objc_call('arguments').py()
 
     @property
@@ -687,7 +688,7 @@ class Process:
         return procargs2_t.parse(self.raw_procargs2)
 
     @property
-    def regions(self) -> List[Region]:
+    def regions(self) -> list[Region]:
         result = []
 
         # remove the '()' wrapping the list:
@@ -804,7 +805,7 @@ class Process:
                         output_file.flush()
                         output_file.write((image.address + crypt_offset).peek(crypt_size))
 
-    def get_mach_port_cross_ref_info(self) -> List[MachPortCrossRefInfo]:
+    def get_mach_port_cross_ref_info(self) -> list[MachPortCrossRefInfo]:
         """ Get all allocated mach ports and cross-refs to get the recv right owner """
         result = []
         own_ports = []
@@ -894,7 +895,7 @@ class DarwinProcesses(Processes):
                 return p
         raise ArgumentError(f'failed to locate process with name: {name}')
 
-    def grep(self, name: str) -> List[Process]:
+    def grep(self, name: str) -> list[Process]:
         """ get process list by basename filter """
         result = []
         proc_list = self.list()
@@ -903,7 +904,7 @@ class DarwinProcesses(Processes):
                 result.append(p)
         return result
 
-    def get_processes_by_listening_port(self, port: int) -> List[Process]:
+    def get_processes_by_listening_port(self, port: int) -> list[Process]:
         """ get a process object listening on the specified port """
         listening_processes = []
         for process in self.list():
@@ -920,7 +921,7 @@ class DarwinProcesses(Processes):
                     listening_processes.append(process)
         return listening_processes
 
-    def lsof(self) -> Mapping[int, List[Fd]]:
+    def lsof(self) -> dict[int, list[Fd]]:
         """ get dictionary of pid to its opened fds """
         result = {}
         for process in self.list():
@@ -935,7 +936,7 @@ class DarwinProcesses(Processes):
         return result
 
     @path_to_str('path')
-    def fuser(self, path: str) -> List[Process]:
+    def fuser(self, path: str) -> list[Process]:
         """get a list of all processes have an open hande to the specified path """
         result = []
         proc_list = self.list()
@@ -954,7 +955,7 @@ class DarwinProcesses(Processes):
 
         return result
 
-    def list(self) -> List[Process]:
+    def list(self) -> list[Process]:
         """ list all currently running processes """
         n = self._client.symbols.proc_listallpids(0, 0)
         pid_buf_size = pid_t.sizeof() * n

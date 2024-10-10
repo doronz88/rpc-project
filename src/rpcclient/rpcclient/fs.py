@@ -4,8 +4,9 @@ import os
 import posixpath
 import stat
 import tempfile
+from collections.abc import Generator
 from pathlib import Path, PosixPath
-from typing import Generator, List, Union
+from typing import Union
 
 from parameter_decorators import path_to_str
 
@@ -295,7 +296,7 @@ class Fs:
             else:
                 dest_file.write_bytes(src_file.read_bytes())
 
-    def _cp(self, sources: List[Path], dest: Path, recursive: bool, force: bool):
+    def _cp(self, sources: list[Path], dest: Path, recursive: bool, force: bool):
         dest_exists = dest.exists()
         is_dest_dir = dest_exists and dest.is_dir()
 
@@ -496,7 +497,7 @@ class Fs:
         return RemotePath(path, self._client)
 
     @path_to_str('local')
-    def pull(self, remotes: Union[List[Union[str, Path]], Union[str, Path]], local: str, recursive: bool = False,
+    def pull(self, remotes: Union[list[Union[str, Path]], Union[str, Path]], local: str, recursive: bool = False,
              force: bool = False):
         """ pull complete directory tree """
         if not isinstance(remotes, list):
@@ -505,7 +506,7 @@ class Fs:
         self._cp([self.remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
 
     @path_to_str('remote')
-    def push(self, locals: Union[List[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
+    def push(self, locals: Union[list[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
              force: bool = False):
         """ push complete directory tree """
         if not isinstance(locals, list):
@@ -555,12 +556,12 @@ class Fs:
         return buf
 
     @path_to_str('path')
-    def listdir(self, path: str = '.') -> List[str]:
+    def listdir(self, path: str = '.') -> list[str]:
         """ get directory listing for a given dirname """
         return [e.name for e in self.scandir(path)]
 
     @path_to_str('path')
-    def scandir(self, path: str = '.') -> List[DirEntry]:
+    def scandir(self, path: str = '.') -> list[DirEntry]:
         """ get directory listing for a given dirname """
         result = []
         for entry in self._client.listdir(path)[2:]:
@@ -637,8 +638,7 @@ class Fs:
 
         if dirs:
             for d in dirs:
-                for walk_result in self.walk(posixpath.join(top, d), topdown=topdown, onerror=onerror):
-                    yield walk_result
+                yield from self.walk(posixpath.join(top, d), topdown=topdown, onerror=onerror)
 
         if not topdown:
             yield top, dirs, files

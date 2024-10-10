@@ -1,6 +1,5 @@
 from collections import namedtuple
 from dataclasses import dataclass, field
-from typing import Mapping
 
 from objc_types_decoder.decode import decode as decode_type
 from objc_types_decoder.decode import decode_with_tail
@@ -49,7 +48,7 @@ class Method:
     args_types: list = field(compare=False)
 
     @staticmethod
-    def from_data(data: Mapping, client):
+    def from_data(data: dict, client):
         """
         Create Method object from raw data.
         :param data: Data as loaded from get_objectivec_symbol_data.m.

@@ -12,7 +12,7 @@ import typing
 from collections import namedtuple
 from pathlib import Path
 from select import select
-from typing import Any
+from typing import Any, Optional
 
 import IPython
 from traitlets.config import Config
@@ -164,7 +164,7 @@ class Client:
         response = self._sock.send_recv(command)
         return response.ptr
 
-    def call(self, address: int, argv: typing.List[int] = None, return_float64=False, return_float32=False,
+    def call(self, address: int, argv: list[int] = None, return_float64=False, return_float32=False,
              return_raw=False, va_list_index: int = 0xffff) -> typing.Union[float, Symbol, Any]:
         """ call a remote function and retrieve its return value as Symbol object """
         args = []
@@ -245,7 +245,7 @@ class Client:
                                stat=stat))
         return entries
 
-    def spawn(self, argv: typing.List[str] = None, envp: typing.List[str] = None, stdin: io_or_str = sys.stdin,
+    def spawn(self, argv: list[str] = None, envp: list[str] = None, stdin: io_or_str = sys.stdin,
               stdout=sys.stdout, raw_tty=False, background=False) -> SpawnResult:
         """
         spawn a new process and forward its stdin, stdout & stderr
@@ -317,7 +317,7 @@ class Client:
         return f'[{self.errno}] {err_str}'
 
     @property
-    def environ(self) -> typing.List[str]:
+    def environ(self) -> list[str]:
         result = []
         environ = self.symbols.environ[0]
         i = 0
@@ -363,7 +363,7 @@ class Client:
             if symbol:
                 self.symbols.free(symbol)
 
-    def interactive(self, additional_namespace: typing.Mapping = None):
+    def interactive(self, additional_namespace: Optional[dict] = None):
         """ Start an interactive shell """
         sys.argv = ['a']
         c = Config()
@@ -451,7 +451,7 @@ class Client:
             # new clients are handled in new processes so all symbols may reside in different addresses
             self._init_process_specific()
 
-    def _execute(self, argv: typing.List[str], envp: typing.List[str], background=False) -> int:
+    def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
         command = CmdExec(background=background, argv=argv, envp=envp)
         try:
             return self._sock.send_recv(command).pid

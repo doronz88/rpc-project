@@ -33,7 +33,7 @@ class IosClient(DarwinClient):
         self._radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
 
     @property
-    def roots(self) -> typing.List[str]:
+    def roots(self) -> list[str]:
         """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
         return super().roots + ['/var/mobile']
 

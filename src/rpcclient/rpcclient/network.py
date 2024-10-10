@@ -187,7 +187,7 @@ class Network:
         return Hostentry(name=result.h_name, aliases=aliases, addresses=addresses)
 
     @property
-    def interfaces(self) -> typing.List[Interface]:
+    def interfaces(self) -> list[Interface]:
         """ get current interfaces """
         results = []
         my_ifaddrs = ifaddrs(self._client)
