@@ -27,14 +27,17 @@ from rpcclient.fs import Fs
 from rpcclient.lief import Lief
 from rpcclient.network import Network
 from rpcclient.processes import Processes
-from rpcclient.protos.rpc_pb2 import Argument, CmdCall, CmdDlclose, CmdDlopen, CmdDlsym, CmdDummyBlock, CmdExec, \
-    CmdListDir, CmdPeek, CmdPoke, Response
 from rpcclient.protosocket import ProtoSocket
 from rpcclient.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, EPIPE, \
     RTLD_NEXT
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
 from rpcclient.sysctl import Sysctl
+
+# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
+os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+from rpcclient.protos.rpc_pb2 import Argument, CmdCall, CmdDlclose, CmdDlopen, CmdDlsym, CmdDummyBlock, CmdExec, \
+    CmdListDir, CmdPeek, CmdPoke, Response  # noqa E402
 
 tty_support = False
 try:
