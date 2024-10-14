@@ -6,8 +6,11 @@ from contextlib import contextmanager
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
 
-from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 from rpcclient.structs.generic import Dl_info
+
+# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
+os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64  # noqa: E402
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 RETVAL_BIT_COUNT = 64
