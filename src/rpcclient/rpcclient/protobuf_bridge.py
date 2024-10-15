@@ -6,10 +6,10 @@ import os
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 os.environ['TEMORARILY_DISABLE_PROTOBUF_VERSION_CHECK'] = 'true'
 
-from rpcclient.protos.rpc_pb2 import ARCH_ARM64, Argument, CmdCall, CmdClose, CmdDlclose, CmdDlopen, CmdDlsym, \
-    CmdDummyBlock, CmdExec, CmdGetClassList, CmdListDir, CmdPeek, CmdPoke, CmdShowClass, CmdShowObject, Command, \
-    Handshake, Response  # noqa: E402
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64, Argument, CmdCall, CmdClose, CmdCustom, CmdDlclose, CmdDlopen, \
+    CmdDlsym, CmdDummyBlock, CmdExec, CmdGetClassList, CmdListDir, CmdPeek, CmdPoke, CmdShowClass, CmdShowObject, \
+    Command, Handshake, Response, ResponseCustom  # noqa: E402
 
 __all__ = ['Argument', 'CmdCall', 'CmdClose', 'CmdDlclose', 'CmdDlopen', 'CmdDlsym', 'CmdDummyBlock', 'CmdExec',
            'CmdGetClassList', 'CmdListDir', 'CmdPeek', 'CmdPoke', 'CmdShowClass', 'CmdShowObject', 'Command',
-           'Handshake', 'Response', 'ARCH_ARM64']
+           'Handshake', 'Response', 'ARCH_ARM64', 'CmdCustom', 'ResponseCustom']
