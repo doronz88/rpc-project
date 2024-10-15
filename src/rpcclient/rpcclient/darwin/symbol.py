@@ -49,4 +49,5 @@ class DarwinSymbol(Symbol):
 
     @property
     def osstatus(self) -> Optional[list[ErrorCode]]:
+        """ Get possible translation to given error code by querying osstatus """
         return get_possible_error_codes(self)
