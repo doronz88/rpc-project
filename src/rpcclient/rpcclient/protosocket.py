@@ -1,13 +1,9 @@
-import os
 import socket
 import struct
 import threading
 
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerDiedError, ServerResponseError
-
-# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-from rpcclient.protos.rpc_pb2 import CmdClose, Command, Handshake, Response  # noqa: E402
+from rpcclient.protobuf_bridge import CmdClose, Command, Handshake, Response
 
 # field[0] is MAGIC - skip
 COMMAND_MAPPING = {field.message_type.name: field.name for field in Command.DESCRIPTOR.fields[1:]}

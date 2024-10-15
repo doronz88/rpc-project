@@ -2,7 +2,6 @@ import ast
 import builtins
 import json
 import logging
-import os
 import plistlib
 import typing
 from collections import namedtuple
@@ -36,13 +35,10 @@ from rpcclient.darwin.syslog import Syslog
 from rpcclient.darwin.time import Time
 from rpcclient.darwin.xpc import Xpc
 from rpcclient.exceptions import CfSerializationError, GettingObjectiveCClassError, MissingLibraryError
+from rpcclient.protobuf_bridge import CmdGetClassList, CmdShowClass, CmdShowObject
 from rpcclient.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.symbol import Symbol
 from rpcclient.symbols_jar import SymbolsJar
-
-# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-from rpcclient.protos.rpc_pb2 import CmdGetClassList, CmdShowClass, CmdShowObject  # noqa: E402
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
