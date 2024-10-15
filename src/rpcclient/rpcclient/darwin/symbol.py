@@ -51,3 +51,8 @@ class DarwinSymbol(Symbol):
     def osstatus(self) -> Optional[list[ErrorCode]]:
         """ Get possible translation to given error code by querying osstatus """
         return get_possible_error_codes(self)
+
+    @property
+    def stripped_value(self) -> 'DarwinSymbol':
+        """ Remove PAC upper bits """
+        return self._client.symbol(self & 0xfffffffff)
