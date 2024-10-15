@@ -138,7 +138,7 @@ class AudioSession:
     def set_category(self, category: AVAudioSessionCategory,
                      mode: AVAudioSessionMode = AVAudioSessionMode.Default,
                      route_sharing_policy: AVAudioSessionRouteSharingPolicy = AVAudioSessionRouteSharingPolicy.Default,
-                     options: AVAudioSessionCategoryOptions = 0):
+                     options: AVAudioSessionCategoryOptions = AVAudioSessionCategoryOptions.DefaultToSpeaker) -> None:
         category = self._client.symbols[category.value][0]
         mode = self._client.symbols[mode.value][0]
         self._session.objc_call('setCategory:mode:routeSharingPolicy:options:error:', category, mode,
