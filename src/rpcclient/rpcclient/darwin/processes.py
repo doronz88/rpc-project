@@ -1,7 +1,6 @@
 import dataclasses
 import errno
 import logging
-import os
 import posixpath
 import re
 import struct
@@ -31,13 +30,10 @@ from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibraryError, ProcessSymbolAbsentError, \
     RpcClientException, SymbolAbsentError, UnrecognizedSelectorError
 from rpcclient.processes import Processes
+from rpcclient.protobuf_bridge import ARCH_ARM64
 from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGKILL, SIGTERM
 from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
 from rpcclient.sysctl import CTL, KERN
-
-# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-from rpcclient.protos.rpc_pb2 import ARCH_ARM64  # noqa: E402
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')

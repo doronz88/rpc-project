@@ -1,4 +1,3 @@
-import os
 from contextlib import closing
 from uuid import uuid4
 
@@ -8,10 +7,7 @@ from rpcclient.client_factory import create_tcp_client
 from rpcclient.darwin.client import DarwinClient
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.ios.client import IosClient
-
-# make sure imports from the *_pb2 modules don't depend on the locally installed protobuf version
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-from rpcclient.protos.rpc_pb2 import ARCH_ARM64  # noqa: E402
+from rpcclient.protobuf_bridge import ARCH_ARM64
 
 
 @pytest.fixture
