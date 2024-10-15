@@ -81,7 +81,7 @@ def test_get_dummy_block(client):
     """
     :param rpcclient.client.Client client:
     """
-    assert client.get_dummy_block()[0] == client.symbols._NSConcreteGlobalBlock
+    client.cf([1, 2, 3]).objc_call('enumerateObjectsUsingBlock:', client.get_dummy_block())
 
 
 def test_listdir(client):
