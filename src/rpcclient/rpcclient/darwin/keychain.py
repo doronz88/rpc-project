@@ -5,7 +5,6 @@ from rpcclient.symbol import Symbol
 
 logger = logging.getLogger(__name__)
 
-
 class Keychain:
     """ keychain utils """
 
@@ -67,7 +66,8 @@ class Keychain:
                 raise RpcPermissionError()
 
             # results contain a reference which isn't plist-serializable
-            removal_key = self._client.cf('v_Ref')
+            keys_to_remove = [self._client.cf('v_Ref'), self._client.cf('accc')]
             for i in range(result.objc_call('count')):
-                result.objc_call('objectAtIndex:', i).objc_call('removeObjectForKey:', removal_key)
+                for removal_key in keys_to_remove:
+                    result.objc_call('objectAtIndex:', i).objc_call('removeObjectForKey:', removal_key)
             return result.py()
