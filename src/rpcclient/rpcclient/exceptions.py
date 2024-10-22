@@ -15,6 +15,7 @@ class ResponseNotFoundError(RpcClientException):
 
 class ServerResponseError(RpcClientException):
     """ Server returned error """
+
     def __init__(self, error):
         super().__init__()
         self.error = error
@@ -196,4 +197,9 @@ class RpcXpcSerializationError(RpcXpcError):
 
 class RpcSetDeveloperModeError(BadReturnValueError):
     """ Failed to set Developer Mode """
+    pass
+
+
+class RpcFailedToGetPrimaryAppError(BadReturnValueError):
+    """ Failed to get [AXElement primaryApp] """
     pass

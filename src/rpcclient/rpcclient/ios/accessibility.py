@@ -5,7 +5,7 @@ from typing import Optional
 
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import ElementNotFoundError, FirstElementNotFoundError, LastElementNotFoundError, \
-    MissingLibraryError, RpcAccessibilityTurnedOffError
+    MissingLibraryError, RpcAccessibilityTurnedOffError, RpcFailedToGetPrimaryAppError
 from rpcclient.structs.consts import RTLD_NOW
 
 
@@ -393,7 +393,10 @@ class Accessibility:
     def primary_app(self) -> AXElement:
         if not self.enabled:
             raise RpcAccessibilityTurnedOffError()
-        return self.axelement(self._client.symbols.objc_getClass('AXElement').objc_call('primaryApp'))
+        primary_app = self._client.symbols.objc_getClass('AXElement').objc_call('primaryApp')
+        if primary_app == 0:
+            raise RpcFailedToGetPrimaryAppError()
+        return self.axelement(primary_app)
 
     @property
     def enabled(self) -> bool:
