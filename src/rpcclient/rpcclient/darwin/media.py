@@ -143,7 +143,6 @@ class AudioSession:
         mode = self._client.symbols[mode.value][0]
         self._session.objc_call('setCategory:mode:routeSharingPolicy:options:error:', category, mode,
                                 route_sharing_policy, options, 0)
-        self._session.objc_call('requestRecordPermission:', self._client.get_dummy_block())
 
     def override_output_audio_port(self, port: int):
         self._session.objc_call('overrideOutputAudioPort:error:', port, 0)
