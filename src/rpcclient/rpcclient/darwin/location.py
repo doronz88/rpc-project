@@ -68,6 +68,10 @@ class Location:
             return None
         return location.objc_call('jsonObject').py()
 
+    def request_always_authorization(self) -> None:
+        """ Request authorization to always query location data """
+        self._location_manager.objc_call('requestAlwaysAuthorization')
+
     def start_updating_location(self):
         """ request location updates from CLLocationManager """
         if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
