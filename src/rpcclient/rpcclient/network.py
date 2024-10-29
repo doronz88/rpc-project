@@ -1,6 +1,7 @@
 import socket as pysock
 import typing
 from collections import namedtuple
+from typing import Optional
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
@@ -165,11 +166,14 @@ class Network:
             self._client.raise_errno_exception(f'failed connecting to: {filename}')
         return Socket(self._client, sockfd)
 
-    def gethostbyname(self, name: str) -> Hostentry:
+    def gethostbyname(self, name: str) -> Optional[Hostentry]:
+        """ Query DNS record. Returns None if not found. """
         aliases = []
         addresses = []
-
-        result = hostent(self._client).parse_stream(self._client.symbols.gethostbyname(name))
+        result = self._client.symbols.gethostbyname(name)
+        if result == 0:
+            return None
+        result = hostent(self._client).parse_stream(result)
         p_aliases = result.h_aliases
 
         i = 0
