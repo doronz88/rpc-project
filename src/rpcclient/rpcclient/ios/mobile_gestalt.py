@@ -348,6 +348,10 @@ class MobileGestalt:
     def PasswordConfigured(self):
         return self.get_answer('PasswordConfigured')
 
+    @property
+    def PasswordProtected(self):
+        return self.get_answer('PasswordProtected')
+
     # Regional Behaviour
 
     @property
