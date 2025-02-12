@@ -9,7 +9,7 @@ from collections import namedtuple
 from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from cached_property import cached_property
 from construct import Array, Container, Int32ul
@@ -412,11 +412,12 @@ class Process:
     def get_symbol_class_info(self, address: int) -> DarwinSymbol:
         return self.vmu_object_identifier.objc_call('classInfoForMemory:length:', address, 8)
 
-    def get_symbol_address(self, name: str, lib: str = None) -> ProcessSymbol:
+    def get_symbol_address(self, name: str, lib: str = None) -> Union[DarwinSymbol, ProcessSymbol]:
         if lib is not None:
-            return ProcessSymbol.create(
-                self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64, self._client,
-                self)
+            address = self.vmu_object_identifier.objc_call('addressOfSymbol:inLibrary:', name, lib).c_uint64
+            if self.pid == self._client.pid:
+                return self._client.symbol(address)
+            return ProcessSymbol.create(address, self._client, self)
 
         image = self.get_symbol_image(name)
         return self.get_symbol_address(name, posixpath.basename(image.path))
