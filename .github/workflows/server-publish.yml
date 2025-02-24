@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       
@@ -38,7 +38,7 @@ jobs:
           make
       - if: matrix.os == 'ubuntu-latest'
         name: Upload ubuntu server artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpcserver_linux
           path: ./src/rpcserver/build/rpcserver_linux
@@ -58,21 +58,21 @@ jobs:
           make
       - if: matrix.os == 'macos-latest'
         name: Upload iphoneos server artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpcserver_ios
           path: ./src/rpcserver/build/rpcserver_ios
 
       - if: matrix.os == 'macos-latest'
         name: Upload macos server artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpcserver_macosx
           path: ./src/rpcserver/build/rpcserver_macosx
           
       - name: Upload server artifacts to GitHub Release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             src/rpcserver/build/rpcserver_linux
