@@ -474,13 +474,15 @@ class Fs:
             'w': O_WRONLY | O_CREAT | O_TRUNC,
             'w+': O_RDWR | O_CREAT,
         }
-        mode = available_modes.get(mode)
-        if mode is None:
+        mode_int = available_modes.get(mode)
+        if mode_int is None:
             raise ArgumentError(f'mode can be only one of: {available_modes.keys()}')
 
-        fd = self._client.symbols.open(file, mode, access).c_int32
+        fd = self._client.symbols.open(file, mode_int, access, va_list_index=2).c_int32
         if fd < 0:
             self._client.raise_errno_exception(f'failed to open: {file}')
+
+        self.chmod(file, access)
         return File(self._client, fd)
 
     @path_to_str('file')
@@ -515,7 +517,7 @@ class Fs:
         self._cp([Path(str(local)) for local in locals_str], self.remote_path(remote), recursive, force)
 
     @path_to_str('file')
-    def touch(self, file: str, mode: int = None, exist_ok=True):
+    def touch(self, file: str, mode: int = 0o777, exist_ok=True):
         """ simulate unix touch command for given file """
         if not exist_ok:
             try:
@@ -523,10 +525,8 @@ class Fs:
                 raise RpcFileExistsError()
             except RpcFileNotFoundError:
                 pass
-        with self.open(file, 'w+'):
+        with self.open(file, 'w+', mode):
             pass
-        if mode is not None:
-            self.chmod(file, mode)
 
     @path_to_str('src', 'dst')
     def symlink(self, src: str, dst: str) -> int:

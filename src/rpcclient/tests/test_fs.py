@@ -8,6 +8,12 @@ from rpcclient.darwin.consts import UF_IMMUTABLE
 from rpcclient.exceptions import RpcFileNotFoundError, RpcPermissionError
 
 
+def test_touch(client, tmp_path):
+    file = (tmp_path / 'temp.txt')
+    client.fs.touch(file, mode=0o666)
+    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
+
+
 def test_chown(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     client.fs.touch(file)
@@ -22,6 +28,13 @@ def test_chmod(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     client.fs.touch(file, mode=0o777)
     client.fs.chmod(file, 0o666)
+    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
+
+
+def test_open(client, tmp_path):
+    file = (tmp_path / 'temp.txt')
+    with client.fs.open(file, 'rw', 0o666):
+        pass
     assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
 
 
