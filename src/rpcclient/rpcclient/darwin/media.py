@@ -34,6 +34,12 @@ class AVAudioSessionMode(Enum):
     VoicePrompt = 'AVAudioSessionModeVoicePrompt'
 
 
+class InterruptionPriority(Enum):
+    Default = 0
+    PhoneCall = 10
+    EmergencyAlert = 20
+
+
 class Recorder(Allocated):
     """
     Wrapper for AVAudioRecorder
@@ -144,6 +150,9 @@ class AudioSession:
         self._session.objc_call('setCategory:mode:routeSharingPolicy:options:error:', category, mode,
                                 route_sharing_policy, options, 0)
 
+    def set_interruption_priority(self, priority: InterruptionPriority):
+        self._session.objc_call('setInterruptionPriority:error:', priority, 0)
+
     def override_output_audio_port(self, port: int):
         self._session.objc_call('overrideOutputAudioPort:error:', port, 0)
 
@@ -158,6 +167,14 @@ class AudioSession:
     @property
     def available_categories(self) -> list[str]:
         return self._session.objc_call('availableCategories').py()
+
+    @property
+    def available_modes(self) -> list[str]:
+        return self._session.objc_call('availableModes').py()
+
+    @property
+    def is_active(self) -> bool:
+        return bool(self._session.objc_call('isActive'))
 
 
 class DarwinMedia:
