@@ -20,6 +20,7 @@ from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
 import rpcclient
+from rpcclient.capture_fd import CaptureFD
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcBrokenPipeError, RpcConnectionRefusedError, \
     RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, RpcNotADirectoryError, RpcNotEmptyError, \
     RpcPermissionError, RpcResourceTemporarilyUnavailableError, ServerResponseError, SpawnError, SymbolAbsentError
@@ -526,6 +527,10 @@ class Client:
         if exception:
             raise exception(message)
         raise BadReturnValueError(message)
+
+    def capture_fd(self, fd: int) -> CaptureFD:
+        """ Get a context manager, capturing output to `fd`. Read from it using the `read()` method """
+        return CaptureFD(self, fd)
 
     def __repr__(self):
         buf = f'<{self.__class__.__name__} '

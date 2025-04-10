@@ -5,6 +5,10 @@ BUFFERSIZE = 0x10000
 
 
 class CaptureFD:
+    """
+    Context manager, capturing output to a given `fd`. Read from it using the `read()` method.
+    """
+
     def __init__(self, client, fd: int) -> None:
         self._client = client
         self.fd: int = fd
@@ -41,6 +45,7 @@ class CaptureFD:
             self._pipefd = None
 
     def read(self) -> bytes:
+        """ Read the bytes captured from `fd` so far. """
         data = b''
         if self._pipefd is not None:
             with self._client.safe_malloc(BUFFERSIZE) as buff:
