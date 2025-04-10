@@ -914,3 +914,17 @@ ipc_info_name_t = Struct(
     'iin_next' / natural_t,             # marequest/next in free list
     'iin_hash' / natural_t,             # hash index
 )
+
+POLLIN = 0x01
+POLLPRI = 0x02
+POLLOUT = 0x04
+POLLERR = 0x08
+POLLHUP = 0x10
+POLLNVAL = 0x20
+
+
+pollfd = Struct(
+    'fd' / Int32sl,
+    'events' / Int16sl,
+    'revents' / Int16sl,
+)

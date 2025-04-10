@@ -528,9 +528,17 @@ class Client:
             raise exception(message)
         raise BadReturnValueError(message)
 
-    def capture_fd(self, fd: int) -> CaptureFD:
-        """ Get a context manager, capturing output to `fd`. Read from it using the `read()` method """
-        return CaptureFD(self, fd)
+    def capture_fd(self, fd: int, sock_buf_size: Optional[int] = None) -> CaptureFD:
+        """
+        Get a context manager, capturing output to `fd`. Read from it using the `read()` method
+
+        sock_buf_size is required for captures above 6KB, as any write above this value would block until a read is performed.
+
+        :param fd: FD to capture
+        :param sock_buf_size: Buffer size for the capture socket, if not specified, default value is used.
+        :return: CaptureFD object
+        """
+        return CaptureFD(self, fd, sock_buf_size)
 
     def __repr__(self):
         buf = f'<{self.__class__.__name__} '
