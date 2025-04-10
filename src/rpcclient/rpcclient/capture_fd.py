@@ -1,7 +1,5 @@
 from typing import Optional
 
-from rpcclient.darwin.symbol import DarwinSymbol
-
 FD_SIZE = 4
 BUFFERSIZE = 0x10000
 
@@ -10,15 +8,15 @@ class CaptureFD:
     def __init__(self, client, fd: int) -> None:
         self._client = client
         self.fd: int = fd
-        self._backupfd: Optional[DarwinSymbol] = None
-        self._pipefd: Optional[DarwinSymbol] = None
+        self._backupfd: Optional[int] = None
+        self._pipefd: Optional[int] = None
 
     def __enter__(self) -> 'CaptureFD':
         with self._client.safe_malloc(FD_SIZE * 2) as pipefds:
             pipefds.item_size = FD_SIZE
             if 0 != self._client.symbols.pipe(pipefds):
                 self._client.raise_errno_exception('pipe failed')
-            self._backupfd = self._client.symbols.dup(self.fd)
+            self._backupfd = self._client.symbols.dup(self.fd).c_int32
             if -1 == self._backupfd:
                 self._backupfd = None
                 self._client.raise_errno_exception('dup fd failed')
