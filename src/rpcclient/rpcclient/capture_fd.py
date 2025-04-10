@@ -1,5 +1,8 @@
 from typing import Optional
 
+from rpcclient.darwin.structs import pollfd, POLLIN
+
+
 FD_SIZE = 4
 BUFFERSIZE = 0x10000
 
@@ -51,6 +54,10 @@ class CaptureFD:
             with self._client.safe_malloc(BUFFERSIZE) as buff:
                 read = BUFFERSIZE
                 while read == BUFFERSIZE:
+                    with self._client.safe_malloc(pollfd.sizeof()) as pfds:
+                        pfds.poke(pollfd.build({'fd':self._pipefd, 'events':POLLIN, 'revents':0}))
+                        if 1 != self._client.symbols.poll(pfds, 1, 0):
+                            return data
                     read = self._client.symbols.read(
                         self._pipefd,
                         buff,
