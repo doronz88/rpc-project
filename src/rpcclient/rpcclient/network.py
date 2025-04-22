@@ -7,8 +7,8 @@ from rpcclient.allocated import Allocated
 from rpcclient.darwin.structs import timeval
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.structs.consts import AF_INET, AF_INET6, AF_UNIX, EPIPE, F_GETFL, F_SETFL, MSG_NOSIGNAL, O_NONBLOCK, \
-    SO_RCVTIMEO, SO_SNDTIMEO, SOCK_STREAM, SOL_SOCKET
-from rpcclient.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un
+    SO_RCVBUF, SO_RCVTIMEO, SO_SNDBUF, SO_SNDTIMEO, SOCK_STREAM, SOL_SOCKET
+from rpcclient.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un, uint32_t
 from rpcclient.symbol import Symbol
 
 Interface = namedtuple('Interface', 'name address netmask broadcast')
@@ -95,6 +95,10 @@ class Socket(Allocated):
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
         if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)):
             self._client.raise_errno_exception(f'setsockopt() failed: {self._client.last_error}')
+
+    def setbufsize(self, size: int) -> None:
+        self.setsockopt(SOL_SOCKET, SO_SNDBUF, uint32_t.build(size))
+        self.setsockopt(SOL_SOCKET, SO_RCVBUF, uint32_t.build(size))
 
     def settimeout(self, seconds: int):
         self._timeout = seconds
