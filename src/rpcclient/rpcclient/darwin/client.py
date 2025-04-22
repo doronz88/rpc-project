@@ -7,12 +7,13 @@ import typing
 from collections import namedtuple
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import List
 
 from cached_property import cached_property
 from tqdm import tqdm
 
 from rpcclient.client import Client
-from rpcclient.darwin import objective_c_class
+from rpcclient.darwin import autorelease_pool, objective_c_class
 from rpcclient.darwin.bluetooth import Bluetooth
 from rpcclient.darwin.common import CfSerializable
 from rpcclient.darwin.consts import CFPropertyListFormat, CFPropertyListMutabilityOptions, kCFAllocatorDefault
@@ -311,3 +312,38 @@ class DarwinClient(Client):
             if 'SpringBoard' in filename or 'UI' in filename:
                 continue
             self.dlopen(f'{frameworks_path}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
+
+    def create_autorelease_pool_ctx(self) -> autorelease_pool.AutorelesePoolCtx:
+        """
+        Create `AutoreleasePoolCtx` representing an Objective-C `NSAutoreleasePool`.
+        Automatically initialize the new pool, can be used with `with` to
+        manage a section which would be drained after exiting.
+
+        :return: `AutorelesePoolCtx`
+        """
+        return autorelease_pool.AutorelesePoolCtx(self)
+
+    def get_autorelease_pools_raw(self) -> str:
+        """
+        Get raw autorelease pool dump from stderr using `_objc_autoreleasePoolPrint`, handling known off-by-one bug.
+
+        :return: Full raw text of all pools printed to stderr
+        """
+        return autorelease_pool.get_autorelease_pools_str(self)
+
+    def get_autorelease_pools(self) -> List[autorelease_pool.AutoreleasePool]:
+        """
+        Get all autorelease pools currently in the thread.
+
+        :return: List of `AutoreleasePool` instances found in the dump
+        """
+        return autorelease_pool.get_autorelease_pools(self)
+
+    def get_current_autorelease_pool(self) -> autorelease_pool.AutoreleasePool:
+        """
+        Get the most recently created autorelease pool.
+
+        :return: The last `AutoreleasePool` in the list (most recent)
+        :raises IndexError: if no pools are found
+        """
+        return autorelease_pool.get_current_autorelease_pool(self)
