@@ -61,15 +61,29 @@ def test_autorelease_pool_object_retrival(client) -> None:
     :param rpcclient.darwin.client.DarwinClient client:
     """
     with client.create_autorelease_pool_ctx():
-        obj = client.cf("tst")
+        obj = client.cf('tst')
         pool = client.get_current_autorelease_pool()
         assert obj == pool[0]
 
 
-def test_autorelease_pool_experimental(client) -> None:
+def test_autorelease_pool_object_retrival_from_ctx(client) -> None:
     """
     :param rpcclient.darwin.client.DarwinClient client:
     """
     with client.create_autorelease_pool_ctx() as pool:
-        obj = client.cf("tst")
-        assert obj == pool._get_autorelease_pool()[0]
+        obj = client.cf('tst')
+        assert obj == pool.get_autorelease_pool()[0]
+
+
+def test_autorelease_pool_object_retrival_refresh(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    with client.create_autorelease_pool_ctx() as pool:
+        obj = client.cf('tst')
+        pool = pool.get_autorelease_pool()
+        assert obj in pool
+        obj2 = client.cf('tst2')
+        assert obj2 not in pool
+        pool.refresh()
+        assert obj2 in pool
