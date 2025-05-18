@@ -41,6 +41,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
         """
         super().__init__()
         self._client = client
+        self._mask = client.symbols.objc_debug_autoreleasepoolpage_ptr_mask[0]
         self.address = address
         self.end = address + 8
         self.refresh()
@@ -54,7 +55,8 @@ class AutoreleasePool(UserList[DarwinSymbol]):
         page_sym = find_page_for_address(self._client, self.address)
         page = AutoreleasePoolPageData(self._client).parse_stream(page_sym)
         next = self.address + 8
-        while next[0].c_int64 not in [0, 0xa3a3a3a3] or next == page.next:
+        while (next[0].c_int64 not in [0, 0xa3a3a3a3, 0xa3a3a3a3a3a3a3a3] or
+               next == page.next):
             if next == page.next:
                 if page.child == 0:
                     break
@@ -62,7 +64,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
                 page = AutoreleasePoolPageData(self._client).parse_stream(
                     page.child)
                 continue
-            self.append(next[0])
+            self.append(next[0] & self._mask)
             next += 8
         self.end = next
 
