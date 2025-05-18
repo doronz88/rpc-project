@@ -323,14 +323,6 @@ class DarwinClient(Client):
         """
         return autorelease_pool.AutorelesePoolCtx(self)
 
-    def get_autorelease_pools_raw(self) -> str:
-        """
-        Get raw autorelease pool dump from stderr using `_objc_autoreleasePoolPrint`, handling known off-by-one bug.
-
-        :return: Full raw text of all pools printed to stderr
-        """
-        return autorelease_pool.get_autorelease_pools_str(self)
-
     def get_autorelease_pools(self) -> List[autorelease_pool.AutoreleasePool]:
         """
         Get all autorelease pools currently in the thread.
