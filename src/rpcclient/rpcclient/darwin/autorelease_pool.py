@@ -1,21 +1,30 @@
-import re
 from collections import UserList
 from typing import List, Optional
 
-from rpcclient.darwin.symbol import DarwinSymbol
+from construct import Hex, Int32ul, PaddedString, Struct
 
-POOL_BASE_MAGIC = '################  POOL BASE\n'
-POOL_RE = re.compile(
-    r'^[^\n]*#{2,}\s+POOL\s+(?P<name>\S+)'        # allow anything before the hashes
-    r'(?P<body>.*?)(?=^[^\n]*#{2,}\s+POOL|\Z)',   # up to the next same‐pattern header
-    re.DOTALL | re.MULTILINE
+from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.structs.generic import SymbolFormatField
+
+magic_t = Struct(
+    'm0' / Hex(Int32ul),
+    'm1' / PaddedString(12, 'ascii')
 )
-OBJ_ADDR = re.compile(
-    r'\[0x[0-9A-Fa-f]+\]\s+'      # skip the address in the pool
-    r'(?:0x)?([0-9A-Fa-f]+)'      # capture the address of the object
-)
-STDERR_FD = 2
-SOCK_BUFFER_SIZE = 100 * 1024 * 1024  # 100MB
+
+
+SIZEOF_PAGE_DATA = 0x38
+
+
+def AutoreleasePoolPageData(client) -> Struct:
+    return Struct(
+            'magic' / magic_t,
+            'next' / SymbolFormatField(client),
+            'thread' / SymbolFormatField(client),
+            'parent' / SymbolFormatField(client),
+            'child' / SymbolFormatField(client),
+            'depth' / Hex(Int32ul),
+            'hiwat' / Hex(Int32ul)
+        )
 
 
 class AutoreleasePool(UserList[DarwinSymbol]):
@@ -23,30 +32,39 @@ class AutoreleasePool(UserList[DarwinSymbol]):
     A list-like container for `DarwinSymbol` objects representing one Objective-C autorelease pool.
     """
 
-    def __init__(self, client, name: str, raw: str) -> None:
+    def __init__(self, client, address: DarwinSymbol) -> None:
         """
-        Initialize `AutoreleasePool` by parsing the raw pool dump.
+        Initialize `AutoreleasePool`.
 
         :param client:
-        :param name: String uniquely naming this pool ("BASE" for the base pool and address for any other).
-        :param raw: Raw text body of pool dump.
+        :param address: address of the pool start.
         """
         super().__init__()
         self._client = client
-        self.name = name
-        self._parse_pool(raw)
+        self.address = address
+        self.end = address + 8
+        self.refresh()
 
-    def _parse_pool(self, raw: str) -> None:
+    def refresh(self) -> None:
         """
-        Extract object addresses from raw dump and append DarwinSymbol instances.
-
-        :param raw: Raw text body of pool dump.
+        refresh the content of of the `AutoreleasePool` object to reflect the current state of the actual pool
         """
-        raw_objs = OBJ_ADDR.findall(raw)
-        for obj_hex in raw_objs:
-            addr_int = int(obj_hex, 16)
-            sym = self._client.symbol(addr_int)
-            self.append(sym)
+        self.clear()
+        get_autorelease_pool_end(self._client)  # to solve autorelease pool bug
+        page_sym = find_page_for_address(self._client, self.address)
+        page = AutoreleasePoolPageData(self._client).parse_stream(page_sym)
+        next = self.address + 8
+        while next[0].c_int64 not in [0, 0xa3a3a3a3] or next == page.next:
+            if next == page.next:
+                if page.child == 0:
+                    break
+                next = page.child + SIZEOF_PAGE_DATA
+                page = AutoreleasePoolPageData(self._client).parse_stream(
+                    page.child)
+                continue
+            self.append(next[0])
+            next += 8
+        self.end = next
 
     def __repr__(self) -> str:
         """
@@ -54,7 +72,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
 
         :return: String representation of the pool
         """
-        return f'<{self.__class__.__name__} {self.name} contains {len(self)} objects>'
+        return f'<{self.__class__.__name__} {hex(self.address)} contains {len(self)} objects>'
 
     def __str__(self) -> str:
         """
@@ -62,8 +80,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
 
         :return: String representation of the pool
         """
-        output = f'{self.__class__.__name__} {self.name}:\n'
-
+        output = f'{self.__class__.__name__} {hex(self.address)}:\n'
         for idx in range(len(self)):
             class_name = self._client.symbols.class_getName(self[idx].objc_call('class')).peek_str()
             output += f'#{idx}:\t0x{self[idx]:x}\t{class_name}\n'
@@ -106,52 +123,79 @@ class AutorelesePoolCtx:
 
     def _create(self) -> None:
         """
-        Create the `NSAutoreleasePool` if not already present.
+        Create the pool if not already present.
         """
         if self._pool is None:
-            klass = self._client.symbols.objc_getClass('NSAutoreleasePool')
-            self._pool = klass.objc_call('new')
+            self._pool = self._client.symbols.objc_autoreleasePoolPush()
 
     def drain(self) -> None:
         """
         Drain (release) the current autorelease pool if it exists, then clear it.
         """
         if self._pool is not None:
-            self._pool.objc_call('drain')
+            self._client.symbols.objc_autoreleasePoolPop(self._pool)
             self._pool = None
 
-    def _get_autorelease_pool(self) -> Optional[AutoreleasePool]:
+    def get_autorelease_pool(self) -> Optional[AutoreleasePool]:
         """
-        Experimental: Locate current autorelease pool by comparing object addresses.
+        Return an `AutoreleasePool` object representing the current pool.
 
-        Warning: Relies on unconfirmed implementation details of `NSAutoreleasePool`.
-
-        :return: `AutoreleasePool` instance if found, else None
+        :return: `AutoreleasePool` instance if pool is initialized, else None
         """
         if self._pool is not None:
-            start_addr = self._pool[1]
-            name_hex = hex(start_addr)
-            for pool in get_autorelease_pools(self._client):
-                if pool.name == name_hex:
-                    return pool
+            return AutoreleasePool(self._client, self._pool)
         return None
 
 
-def get_autorelease_pools_str(client) -> str:
+def get_autorelease_pool_end(client) -> DarwinSymbol:
     """
-    Get raw autorelease pool dump from stderr using `_objc_autoreleasePoolPrint`, handling known off-by-one bug.
+    Retreive the end of the autorelease pool.
 
     :param client:
-    :return: Full raw text of all pools printed to stderr
+    :return: `DarwinSymbol` representing the end of the pool
     """
-    # Because of a bug in the implementation of _objc_autoreleasePoolPrint
-    # the last object in the autorelease pool will not show.
-    # In order to amend that an empty pool is created and released.
-    AutorelesePoolCtx(client).drain()
-    with client.capture_fd(STDERR_FD, SOCK_BUFFER_SIZE) as cap:
-        client.symbols._objc_autoreleasePoolPrint()
-        data = cap.read()
-    return data.decode('utf-8')
+    end = client.symbols.objc_autoreleasePoolPush()
+    client.symbols.objc_autoreleasePoolPop(end)
+    return end
+
+
+def find_page_for_address(client, address: DarwinSymbol) -> DarwinSymbol:
+    """
+    Find the page for a given address inside of the thread's autorelease pool.
+
+    :param client:
+    :param address: An address inside of the autorelease pool
+    :return: `DarwinSymbol` representing page
+    """
+    current = address - SIZEOF_PAGE_DATA
+    while current.peek(4) != b'\xa1\xa1\xa1\xa1':
+        current -= 8
+    return current
+
+
+def find_hot_page(client) -> DarwinSymbol:
+    """
+    Find the current hot page of the thread's autorelease pool.
+
+    :param client:
+    :return: `DarwinSymbol` representing the end of the pool
+    """
+    return find_page_for_address(client, get_autorelease_pool_end(client))
+
+
+def find_first_page(client) -> DarwinSymbol:
+    """
+    Find the current first page of the thread's autorelease pool.
+
+    :param client:
+    :return: `DarwinSymbol` representing the end of the pool
+    """
+    page_sym = find_hot_page(client)
+    page = AutoreleasePoolPageData(client).parse_stream(page_sym)
+    while page.parent != 0:
+        page_sym = page.parent
+        page = AutoreleasePoolPageData(client).parse_stream(page_sym)
+    return page_sym
 
 
 def get_autorelease_pools(client) -> List[AutoreleasePool]:
@@ -161,12 +205,13 @@ def get_autorelease_pools(client) -> List[AutoreleasePool]:
     :param client:
     :return: List of `AutoreleasePool` instances found in the dump
     """
-    raw = POOL_BASE_MAGIC + get_autorelease_pools_str(client)
-    pools: List[AutoreleasePool] = []
-    for match in POOL_RE.finditer(raw):
-        name = match.group('name')
-        body = match.group('body')
-        pools.append(AutoreleasePool(client, name, body))
+    end = get_autorelease_pool_end(client)
+    page_sym = find_first_page(client)
+    pool = AutoreleasePool(client, page_sym + SIZEOF_PAGE_DATA)
+    pools: List[AutoreleasePool] = [pool]
+    while pool.end != end:
+        pool = AutoreleasePool(client, pool.end)
+        pools.append(pool)
     return pools
 
 
