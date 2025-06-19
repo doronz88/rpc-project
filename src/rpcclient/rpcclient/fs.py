@@ -464,7 +464,8 @@ class Fs:
             'rw' - read and write. create if it doesn't exist. also truncate.
             'w' - write only. create if it doesn't exist. also truncate.
             'w+' - read and write. create if it doesn't exist.
-        :param access: access mode as octal value
+        :param access: access mode as octal value (Only relevant when creating new files)
+            and only applies to RW permissions (not X).
         :return: a context manager file object
         """
         available_modes = {
@@ -482,7 +483,6 @@ class Fs:
         if fd < 0:
             self._client.raise_errno_exception(f'failed to open: {file}')
 
-        self.chmod(file, access)
         return File(self._client, fd)
 
     @path_to_str('file')
@@ -527,6 +527,7 @@ class Fs:
                 pass
         with self.open(file, 'w+', mode):
             pass
+        self.chmod(file, mode)
 
     @path_to_str('src', 'dst')
     def symlink(self, src: str, dst: str) -> int:
