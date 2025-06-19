@@ -11,7 +11,9 @@ from rpcclient.exceptions import RpcFileNotFoundError, RpcPermissionError
 def test_touch(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     client.fs.touch(file, mode=0o666)
-    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
+    umask = client.symbols.umask(0o22)
+    client.symbols.umask(umask)
+    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666 & ~umask
 
 
 def test_chown(client, tmp_path):
@@ -35,7 +37,9 @@ def test_open(client, tmp_path):
     file = (tmp_path / 'temp.txt')
     with client.fs.open(file, 'rw', 0o666):
         pass
-    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666
+    umask = client.symbols.umask(0o22)
+    client.symbols.umask(umask)
+    assert S_IMODE(client.fs.stat(file).st_mode) == 0o666 & ~umask
 
 
 def test_remove(client, tmp_path):

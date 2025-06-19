@@ -482,7 +482,6 @@ class Fs:
         if fd < 0:
             self._client.raise_errno_exception(f'failed to open: {file}')
 
-        self.chmod(file, access)
         return File(self._client, fd)
 
     @path_to_str('file')
@@ -517,7 +516,7 @@ class Fs:
         self._cp([Path(str(local)) for local in locals_str], self.remote_path(remote), recursive, force)
 
     @path_to_str('file')
-    def touch(self, file: str, mode: int = 0o777, exist_ok=True):
+    def touch(self, file: str, mode: int = 0o666, exist_ok=True):
         """ simulate unix touch command for given file """
         if not exist_ok:
             try:
