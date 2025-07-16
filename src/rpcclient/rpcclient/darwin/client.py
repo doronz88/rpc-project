@@ -19,6 +19,7 @@ from rpcclient.darwin.common import CfSerializable
 from rpcclient.darwin.consts import CFPropertyListFormat, CFPropertyListMutabilityOptions, kCFAllocatorDefault
 from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
+from rpcclient.darwin.duet import Duet
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.hid import Hid
 from rpcclient.darwin.ioregistry import IORegistry
@@ -99,6 +100,7 @@ class DarwinClient(Client):
         self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.symbols.objc_getClass('NSPropertyListSerialization')
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
+        self.duet = Duet(self)
 
     def interactive(self, additional_namespace: typing.Optional[dict] = None):
         if additional_namespace is None:
