@@ -19,6 +19,7 @@ from rpcclient.darwin.common import CfSerializable
 from rpcclient.darwin.consts import CFPropertyListFormat, CFPropertyListMutabilityOptions, kCFAllocatorDefault
 from rpcclient.darwin.core_graphics import CoreGraphics
 from rpcclient.darwin.darwin_lief import DarwinLief
+from rpcclient.darwin.duet import Duet
 from rpcclient.darwin.fs import DarwinFs
 from rpcclient.darwin.hid import Hid
 from rpcclient.darwin.ioregistry import IORegistry
@@ -80,6 +81,7 @@ class DarwinClient(Client):
         if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
 
+        self.duet = Duet(self)
         self.fs = DarwinFs(self)
         self.preferences = Preferences(self)
         self.processes = DarwinProcesses(self)

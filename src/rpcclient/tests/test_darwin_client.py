@@ -87,3 +87,12 @@ def test_autorelease_pool_object_retrival_refresh(client):
         assert obj2 not in pool
         pool.refresh()
         assert obj2 in pool
+
+
+def test_duet_knowledge_store(client):
+    """
+    :param rpcclient.darwin.client.DarwinClient client:
+    """
+    with client.duet.knowledge_store_copy_ctx() as ctx:
+        events = ctx.query_events_streams()
+        assert 0 != events.keys()
