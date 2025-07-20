@@ -6,6 +6,7 @@ import stat
 import tempfile
 from collections.abc import Generator
 from pathlib import Path, PosixPath
+from random import Random
 from typing import Union
 
 from parameter_decorators import path_to_str
@@ -244,7 +245,7 @@ class RemotePath(PosixPath):
             return f.read()
 
     def stat(self):
-        raise self._client.fs.stat(self._path)
+        return self._client.fs.stat(self._path)
 
     def symlink_to(self, target: Path, target_is_directory: bool = False) -> None:
         return self._client.fs.symlink(target, self._path)
@@ -267,7 +268,44 @@ class RemotePath(PosixPath):
             raise FileExistsError()
 
     def __truediv__(self, key: Path) -> 'RemotePath':
-        return self.__class__(f'{self._path}/{key}', self._client)
+        return RemotePath(f'{self._path}/{key}', self._client)
+
+    def remove(self, recursive: bool = False, force: bool = False):
+        """Remove the current path from the filesystem.
+
+        :param recursive:
+        :param force:
+        """
+        if self.exists():
+            self._client.fs.remove(self._path, recursive=recursive, force=force)
+
+
+class RemoteTemporaryDir(Allocated, RemotePath):
+    """ Temporary directory on the remote device """
+
+    def __init__(self, client, directory: str = '/tmp', mode: int = 0o700):
+        """Generate a random temp directory name and create it in the given directory (default '/tmp').
+
+        :param rpcclient.darwin.client.DarwinClient client:
+        :param directory: Directory to create the temp directory inside (default '/tmp').
+        :param mode: Mode to create the temp directory with (default 0o700).
+        """
+        Allocated.__init__(self)
+        remote_dir = client.fs.remote_path(directory)
+        if not remote_dir.exists:
+            raise RpcFileNotFoundError(f'remote dir {remote_dir} does not exist')
+        name = 'tmpdir_' + ''.join(Random().choices('abcdefghijklmnopqrstuvwxyz0123456789_', k=8))
+        remote_path = client.fs.remote_path(str(remote_dir / Path(name)))
+        RemotePath.__init__(self, remote_path, client)
+        self.mkdir(mode)
+
+    def __new__(cls, *args, **kwargs):
+        # this will not be needed once python3.11 is deprecated since it is now possible to subclass normally
+        return RemotePath.__new__(cls, *[args[1], args[0]])
+
+    def _deallocate(self):
+        """Remove the temp directory from the filesystem recursively"""
+        self.remove(recursive=True, force=True)
 
 
 class Fs:
@@ -296,7 +334,7 @@ class Fs:
             else:
                 dest_file.write_bytes(src_file.read_bytes())
 
-    def _cp(self, sources: list[Path], dest: Path, recursive: bool, force: bool):
+    def cp(self, sources: list[Path], dest: Path, recursive: bool, force: bool):
         dest_exists = dest.exists()
         is_dest_dir = dest_exists and dest.is_dir()
 
@@ -504,7 +542,7 @@ class Fs:
         if not isinstance(remotes, list):
             remotes = [posixpath.expanduser(remotes)]
         remotes_str = [posixpath.expanduser(remote) for remote in remotes]
-        self._cp([self.remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
+        self.cp([self.remote_path(remote) for remote in remotes_str], Path(str(local)), recursive, force)
 
     @path_to_str('remote')
     def push(self, locals: Union[list[Union[str, Path]], Union[str, Path]], remote: str, recursive: bool = False,
@@ -513,7 +551,7 @@ class Fs:
         if not isinstance(locals, list):
             locals = [posixpath.expanduser(locals)]
         locals_str = [posixpath.expanduser(local) for local in locals]
-        self._cp([Path(str(local)) for local in locals_str], self.remote_path(remote), recursive, force)
+        self.cp([Path(str(local)) for local in locals_str], self.remote_path(remote), recursive, force)
 
     @path_to_str('file')
     def touch(self, file: str, mode: int = 0o666, exist_ok=True):
@@ -652,4 +690,13 @@ class Fs:
             try:
                 yield local.absolute()
             finally:
-                pass
+                self.push(local, remote, force=True)
+
+    @path_to_str('directory')
+    def remote_temp_dir(self, directory: str = '/tmp', mode: int = 0o700) -> RemoteTemporaryDir:
+        """Generate a random temp directory name and create it in the given directory (default '/tmp').
+
+        :param directory: Directory to create the temp directory inside (default '/tmp').
+        :param mode: Mode to create the temp directory with (default 0o700).
+        """
+        return RemoteTemporaryDir(self._client, directory, mode)
