@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import cached_property
-from pprint import pformat
 from typing import Any, Optional
 
 from rpcclient.allocated import Allocated
@@ -59,12 +58,12 @@ class DKEvent:
         return self.native.objc_call('endDate').py()
 
     @cached_property
-    def metadata(self) -> Optional[dict[str, Any]]:
+    def metadata(self) -> str:
         """Return the event's metadata dictionary, if present.
 
         :returns: Metadata mapping or `None` when absent.
         """
-        return self.native.objc_call('metadata').py()
+        return self.native.objc_call('metadata').cfdesc
 
     @cached_property
     def stream(self) -> str:
@@ -91,8 +90,7 @@ class DKEvent:
         output += f' value:\t{self.value}\n'
         output += f' start:\t{self.start}\n'
         output += f' end:\t{self.end}'
-        if self.metadata is not None:
-            output += f'\n metadata: \n{pformat(self.metadata, compact=True, width=120, indent=2)}'
+        output += f' metadata:\n{self.metadata}'
         return output
 
 
