@@ -144,25 +144,25 @@ static bool sendall(int sockfd, const void *buf, size_t len) {
 bool receive_message(int sockfd, char **buf, size_t *size) {
     *buf = NULL;
     *size = 0;
-    bool ret = false;
+    char *tmp = NULL;
 
     size_t n = 0;
     CHECK(recvall(sockfd, &n, sizeof(n)));
     CHECK(n > 0);
 
-    char *tmp = (char *) malloc(n);
-
+    tmp = (char *) malloc(n);
     CHECK(tmp);
     CHECK(recvall(sockfd, tmp, n))
-
     *buf = tmp;
     *size = n;
-    ret = true;
+    
+    return true;
+
 error:
-    if (!ret) {
+    if (!tmp) {
         safe_free((void **) &tmp);
     }
-    return ret;
+    return false;
 }
 
 bool send_message(int sockfd, const uint8_t *buf, size_t len) {
