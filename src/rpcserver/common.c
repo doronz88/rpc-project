@@ -100,48 +100,75 @@ void safe_free(void **ptr) {
     *ptr = NULL;
 }
 
-bool receive_message(int sockfd, char **buf, size_t *size) {
-    bool ret = false;
-    CHECK(sizeof(size_t) == recv(sockfd, size, sizeof(size_t), 0));
-    CHECK(*size > 0);
-    *buf = (char *) malloc(*size * sizeof(char));
-    CHECK(NULL != *buf);
-    CHECK(recvall(sockfd, *buf, *size));
-    ret = true;
-error:
-    return ret;
+static bool sock_io_all(ssize_t (*op)(int, void *, size_t, int),
+                        int fd, void *buf, size_t len, int flags, bool is_read) {
+    uint8_t *p = (uint8_t *) buf;
+    size_t done = 0;
+    while (done < len) {
+        ssize_t n = op(fd, p + done, len - done, flags);
+        if (n > 0) {
+            done += (size_t) n;
+            continue;
+        }
+
+        if (n == 0) {
+            /* for reads, 0 = EOF/peer closed; for writes, treat as "try again" */
+            if (is_read) {
+                return false;
+            }
+            continue;
+        }
+        /* Interrupted by a signal (e.g., debugger attach/SIGCHLD); not a real error. */
+        if (errno == EINTR) {
+            continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+        }
+        /* real error */
+        return false;
+    }
+    return true;
 }
 
-bool recvall(int sockfd, char *buf, size_t len) {
+static bool recvall(int sockfd, void *buf, size_t len) {
+    return sock_io_all((ssize_t(*)(int, void *, size_t, int)) recv,
+                       sockfd, buf, len, /*flags=*/0, /*is_read=*/true);
+}
+
+static bool sendall(int sockfd, const void *buf, size_t len) {
+    return sock_io_all((ssize_t(*)(int, void *, size_t, int)) send,
+                       sockfd, (void *) buf, len, /*flags=*/MSG_NOSIGNAL, /*is_read=*/false);
+}
+
+bool receive_message(int sockfd, char **buf, size_t *size) {
+    *buf = NULL;
+    *size = 0;
     bool ret = false;
-    size_t total_bytes = 0;
-    size_t bytes;
 
-    while (len > 0) {
-        bytes = recv(sockfd, buf + total_bytes, len, 0);
-        CHECK(bytes > 0);
-        total_bytes += bytes;
-        len -= bytes;
-    }
+    size_t n = 0;
+    CHECK(recvall(sockfd, &n, sizeof(n)));
+    CHECK(n > 0);
 
+    char *tmp = (char *) malloc(n);
+
+    CHECK(tmp);
+    CHECK(recvall(sockfd, tmp, n))
+
+    *buf = tmp;
+    *size = n;
     ret = true;
 error:
+    if (!ret) {
+        safe_free((void **) &tmp);
+    }
     return ret;
 }
 
 bool send_message(int sockfd, const uint8_t *buf, size_t len) {
     bool ret = false;
-
-    size_t total_bytes = 0;
-    size_t bytes;
-    CHECK(send(sockfd, &len, sizeof(size_t), MSG_NOSIGNAL) != -1);
-    while (len > 0) {
-        bytes = send(sockfd, buf + total_bytes, len, MSG_NOSIGNAL);
-        CHECK(bytes != -1);
-
-        total_bytes += bytes;
-        len -= bytes;
-    }
+    CHECK(sendall(sockfd, &len, sizeof(len)));
+    CHECK(sendall(sockfd, buf, len));
     ret = true;
 error:
     return ret;

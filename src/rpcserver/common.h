@@ -47,8 +47,6 @@ void print_backtrace();
 
 void trace(const char *prefix, const char *fmt, ...);
 
-bool recvall(int sockfd, char *buf, size_t len);
-
 bool writeall(int fd, const char *buf, size_t len);
 
 bool send_message(int sockfd, const uint8_t *buf, size_t len);
