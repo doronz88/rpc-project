@@ -1,6 +1,7 @@
 import pytest
 
 from rpcclient.darwin.consts import NSStringEncoding
+from rpcclient.darwin.symbol import DarwinSymbol
 
 pytestmark = pytest.mark.darwin
 
@@ -35,3 +36,10 @@ def test_set_implementation(client):
 def test_always_return(client, value):
     client.objc_get_class('NSJSONSerialization').get_method('isValidJSONObject:').always_return(value)
     assert client.objc_get_class('NSJSONSerialization').isValidJSONObject_() == value
+
+
+def test_ivar_symbol(client):
+    NSString = client.objc_get_class('NSString')
+    ascii_encoding = NSStringEncoding.NSASCIIStringEncoding
+    str1 = NSString.stringWithCString_encoding_('Taylor Swift', ascii_encoding).objc_symbol
+    assert isinstance(str1.isa, DarwinSymbol)
