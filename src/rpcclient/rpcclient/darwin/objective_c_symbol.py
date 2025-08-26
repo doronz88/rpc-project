@@ -61,7 +61,7 @@ class ObjectiveCSymbol(DarwinSymbol):
 
         ivars_list = [
             Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'],
-                 value=ivar['value']) for ivar in object_data['ivars']
+                 value=self._client.symbol(ivar['value'])) for ivar in object_data['ivars']
         ]
         methods_list = [
             objc.Method.from_data(method, self._client) for method in object_data['methods']
