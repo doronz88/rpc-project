@@ -32,8 +32,9 @@ from rpcclient.exceptions import ArgumentError, BadReturnValueError, MissingLibr
 from rpcclient.processes import Processes
 from rpcclient.protobuf_bridge import ARCH_ARM64
 from rpcclient.structs.consts import RTLD_NOW, SEEK_SET, SIGKILL, SIGTERM
-from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
+from rpcclient.subsystems.processes import Processes
 from rpcclient.sysctl import CTL, KERN
+from rpcclient.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
@@ -856,17 +857,9 @@ class DarwinProcesses(Processes):
 
     def __init__(self, client):
         super().__init__(client)
-        self._load_symbolication_library()
+        client.load_framework('Symbolication')
         self._self_process = Process(self._client, self._client.pid)
 
-    def _load_symbolication_library(self):
-        options = [
-            '/System/Library/PrivateFrameworks/Symbolication.framework/Symbolication'
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('Symbolication library isn\'t available')
 
     def get_self(self) -> Process:
         """ get self process """

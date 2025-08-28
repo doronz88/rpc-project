@@ -5,7 +5,8 @@ from typing import Any, Optional
 
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import RpcClientException
+from rpcclient.exceptions import RpcClientException, MissingLibraryError
+from rpcclient.structs.consts import RTLD_NOW
 
 
 class Duet:
@@ -14,6 +15,7 @@ class Duet:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
+        self._client.load_framework('DuetActivityScheduler')
         self.NSArray_cls = client.symbols.objc_getClass('NSArray')
         self.CDPaths_cls = client.symbols.objc_getClass('_CDPaths')
         self.DKEventQuery_cls = client.symbols.objc_getClass('_DKEventQuery')
@@ -29,6 +31,7 @@ class Duet:
     def knowledge_store_xpc(self) -> 'KnowledgeStoreXPC':
         """Connect directly to the live knowledge store via XPC."""
         return KnowledgeStoreXPC(self._client, self)
+
 
 
 class DKEvent:

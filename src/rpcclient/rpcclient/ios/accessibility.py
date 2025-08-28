@@ -382,8 +382,8 @@ class Accessibility:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._load_ax_runtime()
-        self._load_accessibility_ui()
+        self._client.load_framework('AXRuntime')
+        self._client.load_framework('AccessibilityUI')
         self._ui_client = client.symbols.objc_getClass('AXUIClient').objc_call('alloc').objc_call(
             'initWithIdentifier:serviceBundleName:',
             client.cf('AXAuditAXUIClientIdentifier'),
@@ -483,24 +483,6 @@ class Accessibility:
 
             if draw_frame:
                 self.hide_frame()
-
-    def _load_ax_runtime(self):
-        options = [
-            '/System/Library/PrivateFrameworks/AXRuntime.framework/AXRuntime',
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('failed to load AXRuntime')
-
-    def _load_accessibility_ui(self):
-        options = [
-            '/System/Library/PrivateFrameworks/AccessibilityUI.framework/AccessibilityUI',
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('failed to load AccessibilityUI')
 
     def axelement(self, symbol: DarwinSymbol) -> AXElement:
         return AXElement.create(symbol, self._client)

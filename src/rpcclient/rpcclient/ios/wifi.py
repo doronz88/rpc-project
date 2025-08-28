@@ -5,7 +5,6 @@ from typing import Optional
 from rpcclient.allocated import Allocated
 from rpcclient.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
-from rpcclient.structs.consts import RTLD_NOW
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +124,7 @@ class IosWifi:
 
     def __init__(self, client):
         self._client = client
-        self._load_wifi_library()
+        self._client.load_framework('WiFiKit')
 
         self._wifi_manager = self._client.symbols.WiFiManagerClientCreate(0, 0)
         if not self._wifi_manager:
@@ -191,19 +190,6 @@ class IosWifi:
             self._client.raise_errno_exception('WiFiManagerClientGetDevice failed')
 
         return WifiInterface(self._client, handle, device)
-
-    def _load_wifi_library(self):
-        options = [
-            # macOS
-            '/System/Library/Frameworks/CoreWLAN.framework/Versions/A/CoreWLAN',
-            '/System/Library/Frameworks/CoreWLAN.framework/CoreWLAN',
-            # iOS
-            '/System/Library/PrivateFrameworks/WiFiKit.framework/WiFiKit'
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        logger.warning('WiFi library isn\'t available')
 
     def _set(self, is_on: bool):
         if not self._client.symbols.WiFiManagerClientSetProperty(self._wifi_manager,

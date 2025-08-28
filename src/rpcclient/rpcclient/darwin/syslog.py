@@ -132,7 +132,7 @@ class Syslog:
         @type client: rpcclient.darwin.client.DarwinClient
         """
         self._client = client
-        self._load_logging_support_library()
+        self._client.load_framework('LoggingSupport')
         self.preferences_manager = OsLogPreferencesManager(self._client)
 
     @cached_property
@@ -281,9 +281,6 @@ class Syslog:
 
         if self._client.symbols.notify_post('com.apple.CFNetwork.har-capture-update'):
             raise BadReturnValueError('notify_post() failed')
-
-    def _load_logging_support_library(self) -> None:
-        self._client.load_framework('LoggingSupport')
 
     def _set_harlogger_for_process(self, value: bool, process: Process) -> None:
         process.poke(self._enable_har_global, value.to_bytes(1, 'little'))

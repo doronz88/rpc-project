@@ -42,7 +42,7 @@ class Telephony:
 
     def __init__(self, client):
         self._client = client
-        self._load_callkit_library()
+        self._client.load_framework('CallKit')
         self.cx_call_controller = self._client.symbols.objc_getClass('CXCallController').objc_call('new')
         self.cx_call_observer = self.cx_call_controller.objc_call('callObserver')
         self.ct_message_center = self._client.symbols.objc_getClass('CTMessageCenter').objc_call('sharedMessageCenter')
@@ -83,12 +83,3 @@ class Telephony:
             if call.objc_call('hasEnded'):
                 continue
             return Call(self._client, self.cx_call_controller, call)
-
-    def _load_callkit_library(self):
-        options = [
-            '/System/Library/Frameworks/CallKit.framework/CallKit'
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        logger.warning('CallKit library isn\'t available')

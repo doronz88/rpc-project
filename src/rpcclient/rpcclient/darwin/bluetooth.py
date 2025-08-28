@@ -1,8 +1,5 @@
 from typing import Optional
 
-from rpcclient.exceptions import MissingLibraryError
-from rpcclient.structs.consts import RTLD_NOW
-
 
 class Bluetooth:
     """ bluetooth utils """
@@ -13,8 +10,7 @@ class Bluetooth:
 
     def __init__(self, client):
         self._client = client
-        self._load_bluetooth_manager()
-
+        self._client.load_framework('BluetoothManager')
         bluetooth_manager_class = client.symbols.objc_getClass('BluetoothManager')
         if not client.getenv(self._ENV_QUEUE_SET):
             bluetooth_manager_class.objc_call('setSharedInstanceQueue:',
@@ -46,15 +42,6 @@ class Bluetooth:
     @discoverable.setter
     def discoverable(self, value: bool):
         self._bluetooth_manager.objc_call('setDiscoverable:', value)
-
-    def _load_bluetooth_manager(self):
-        options = [
-            '/System/Library/PrivateFrameworks/BluetoothManager.framework/BluetoothManager',
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('failed to load BluetoothManager')
 
     def _set(self, is_on):
         self._bluetooth_manager.objc_call('setPowered:', is_on)

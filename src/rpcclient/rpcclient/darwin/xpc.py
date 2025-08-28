@@ -5,8 +5,7 @@ from uuid import UUID
 from rpcclient.darwin.common import CfSerializable
 from rpcclient.darwin.consts import XPC_ARRAY_APPEND
 from rpcclient.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import MissingLibraryError, RpcXpcSerializationError
-from rpcclient.structs.consts import RTLD_NOW
+from rpcclient.exceptions import RpcXpcSerializationError
 
 
 class XPCObject(DarwinSymbol):
@@ -92,7 +91,7 @@ class Xpc:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._load_duet_activity_scheduler_manager()
+        self._client.load_framework('DuetActivityScheduler')
         self.sharedScheduler = self._client.symbols.objc_getClass('_DASScheduler').objc_call('sharedScheduler')
 
     def create_xpc_dictionary(self) -> XPCDictionary:
@@ -194,12 +193,3 @@ class Xpc:
         self._client.symbols.xpc_connection_set_event_handler(conn, self._client.get_dummy_block())
         self._client.symbols.xpc_connection_resume(conn)
         return conn
-
-    def _load_duet_activity_scheduler_manager(self) -> None:
-        options = [
-            '/System/Library/PrivateFrameworks/DuetActivityScheduler.framework/DuetActivityScheduler',
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('failed to load DuetActivityScheduler')

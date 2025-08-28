@@ -11,12 +11,7 @@ class Time:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._load_core_time_framework()
-
-    def _load_core_time_framework(self):
-        if self._client.dlopen('/System/Library/PrivateFrameworks/CoreTime.framework/CoreTime', RTLD_NOW):
-            return
-        raise MissingLibraryError('failed to load CoreTime')
+        self._client.load_framework('CoreTime')
 
     def now(self) -> datetime:
         """ get current time """

@@ -1,8 +1,7 @@
 from enum import Enum
 from typing import Optional
 
-from rpcclient.exceptions import MissingLibraryError, RpcPermissionError
-from rpcclient.structs.consts import RTLD_NOW
+from rpcclient.exceptions import RpcPermissionError
 
 
 class CLAuthorizationStatus(Enum):
@@ -28,22 +27,10 @@ class Location:
 
     def __init__(self, client):
         self._client = client
+        self._client.load_framework('CoreLocation')
 
-        self._load_location_library()
         self._CLLocationManager = self._client.symbols.objc_getClass('CLLocationManager')
         self._location_manager = self._CLLocationManager.objc_call('sharedManager')
-
-    def _load_location_library(self):
-        options = [
-            # macOS
-            '/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation',
-            # iOS
-            '/System/Library/Frameworks/CoreLocation.framework/CoreLocation'
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('CoreLocation library isn\'t available')
 
     @property
     def location_services_enabled(self) -> bool:

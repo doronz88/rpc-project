@@ -185,21 +185,9 @@ class DarwinMedia:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
+        self._client.load_framework('AVFoundation')
         self._load_av_foundation()
         self.session = AudioSession(self._client)
-
-    def _load_av_foundation(self):
-        options = [
-            # macOS
-            '/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation',
-            '/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio',
-            # iOS
-            '/System/Library/Frameworks/AVFoundation.framework/AVFoundation'
-        ]
-        for option in options:
-            if self._client.dlopen(option, RTLD_NOW):
-                return
-        raise MissingLibraryError('failed to load AVFAudio')
 
     @path_to_str('filename')
     def get_recorder(self, filename: str) -> Recorder:
