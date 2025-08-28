@@ -49,9 +49,10 @@ bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
 
 #define DEFAULT_PORT ("5910")
 #define USAGE \
-    ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] \n\
+    ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] [-d disable worker] \n\
 -h  show this help message \n\
 -o  output. can be all of the following: stdout, syslog and file:filename. can be passed multiple times \n\
+-d  disable worker. for debugging perpuses, handle clients inprocess instead spawn worker \n\
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
@@ -709,6 +710,8 @@ void handle_client(int sockfd) {
     handshake.arch = RPC__ARCH__ARCH_UNKNOWN;
     handshake.sysname = uname_buf.sysname;
     handshake.machine = uname_buf.machine;
+    handshake.platform = PLATFORM;
+
     CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
 
 #ifdef __ARM_ARCH_ISA_A64
@@ -810,9 +813,10 @@ void signal_handler(int sig) {
 int main(int argc, const char *argv[]) {
     int opt;
     bool worker_spawn = false;
+    bool disable_worker = false;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *) argv, "hp:o:w")) != -1) {
+    while ((opt = getopt(argc, (char *const *) argv, "hpdo:w")) != -1) {
         switch (opt) {
         case 'p': {
             strncpy(port, optarg, sizeof(port) - 1);
@@ -836,6 +840,10 @@ int main(int argc, const char *argv[]) {
         }
         case 'w': {
             worker_spawn = true;
+            break;
+        }
+        case 'd': {
+            disable_worker = true;
             break;
         }
         case 'h':
@@ -906,11 +914,12 @@ int main(int argc, const char *argv[]) {
                         get_in_addr((struct sockaddr *) &their_addr), ipstr,
                         sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
-#ifdef SINGLE_THREAD
-        handle_client(client_fd);
-#else
-        CHECK(spawn_worker_server(client_fd, argv, argc));
-#endif
+        if (disable_worker) {
+            TRACE("Direct mode: handling client without spawning worker");
+            handle_client(client_fd);
+        } else {
+            CHECK(spawn_worker_server(client_fd, argv, argc));
+        }
     }
 
 error:
