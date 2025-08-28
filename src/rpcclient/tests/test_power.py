@@ -1,6 +1,6 @@
 import pytest
 
-from rpcclient.darwin.consts import IOPMUserActiveType
+from rpcclient.clients.darwin.consts import IOPMUserActiveType
 
 pytestmark = pytest.mark.darwin
 

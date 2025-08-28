@@ -1,40 +1,49 @@
 import logging
+from typing import Union
 
 import click
 import coloredlogs
 
-from rpcclient.client_factory import DEFAULT_PORT, create_local, create_tcp_client
+from rpcclient.client_manager import ClientManager
+from rpcclient.console.console import Console, disable_loggers
+from rpcclient.transports import DEFAULT_PORT
 
 coloredlogs.install(level=logging.DEBUG)
 
-logging.getLogger('asyncio').disabled = True
-logging.getLogger('parso').disabled = True
-logging.getLogger('parso.cache').disabled = True
-logging.getLogger('parso.python.diff').disabled = True
-logging.getLogger('blib2to3.pgen2.driver').disabled = True
-logging.getLogger('humanfriendly.prompts').disabled = True
-logging.getLogger("urllib3.connectionpool").disabled = True
+disable_loggers()
 
 
 @click.command()
 def rpclocal() -> None:
-    """ connect to local machine """
-    create_local().interactive()
+    """ connect to a local machine """
+    manager = ClientManager()
+    client = manager.create(mode='local')
+    Console(manager).interactive(switch_pid=client.pid)
 
 
 @click.command()
-@click.argument('hostname')
-@click.option('-p', '--port', type=click.INT, default=DEFAULT_PORT)
+@click.argument('hostname', required=False)
+@click.option('-p', '--port', type=click.INT, default=DEFAULT_PORT, help='TCP port to connect to')
 @click.option('-r', '--rebind-symbols', is_flag=True, help='reload all symbols upon connection')
 @click.option('-l', '--load-all-libraries', is_flag=True, help='load all libraries')
-def rpcclient(hostname: str, port: int, rebind_symbols: bool, load_all_libraries: bool):
-    """ connect to remote host """
-    client = create_tcp_client(hostname, port=port)
-    if load_all_libraries:
-        client.load_all_libraries(rebind_symbols=False)
-    if rebind_symbols:
-        client.rebind_symbols()
-    client.interactive()
+def rpcclient(hostname: Union[str, None], port: int, rebind_symbols: bool, load_all_libraries: bool):
+    """
+    Start the console.
+    If HOSTNAME is provided, connect immediately.
+    Otherwise, start without a connection.
+    You can connect later from the console.
+    """
+    manager = ClientManager()
+    pid = None
+    if hostname:
+        client = manager.create(hostname=hostname, port=port)
+        pid = client.pid
+        if rebind_symbols:
+            client.rebind_symbols()
+        if load_all_libraries:
+            client.load_all_libraries()
+
+    Console(manager).interactive(switch_pid=pid)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from rpcclient.client_factory import DEFAULT_PORT
 from rpcclient.exceptions import LaunchError
+from rpcclient.transports import DEFAULT_PORT
 
 LAUNCHD_PID = 1
 LAUNCHD_PATH = '/sbin/launchd'

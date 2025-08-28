@@ -1,7 +1,7 @@
 import pytest
 
-from rpcclient.darwin.consts import NSStringEncoding
-from rpcclient.darwin.symbol import DarwinSymbol
+from rpcclient.clients.darwin.consts import NSStringEncoding
+from rpcclient.clients.darwin.symbol import DarwinSymbol
 
 pytestmark = pytest.mark.darwin
 

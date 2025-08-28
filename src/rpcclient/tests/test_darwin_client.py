@@ -37,7 +37,7 @@ def test_load_all_libraries(client):
     :param rpcclient.darwin.client.DarwinClient client:
     """
     original_count = len(client.images)
-    client.load_all_libraries()
+    client.load_all_libraries(rebind_symbols=False)  # Pytest not running under ipython, so we can't rebind symbols.'
     assert len(client.images) > original_count
 
 

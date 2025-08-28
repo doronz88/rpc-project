@@ -13,6 +13,10 @@ class ResponseNotFoundError(RpcClientException):
     pass
 
 
+class SubsystemInitError(RpcClientException):
+    """Raised when an unavailable subsystems is used."""
+
+
 class ServerResponseError(RpcClientException):
     """ Server returned error """
 
@@ -168,6 +172,15 @@ class RpcResourceTemporarilyUnavailableError(BadReturnValueError):
 
 class RpcConnectionRefusedError(BadReturnValueError):
     """ RPC version for ConnectionRefusedError (errno = ECONNREFUSED) """
+    pass
+
+
+class RpcDeadClientError(BadReturnValueError):
+    """ RPC client in a dead state """
+    pass
+
+
+class NoSuchClientError(RpcClientException):
     pass
 
 

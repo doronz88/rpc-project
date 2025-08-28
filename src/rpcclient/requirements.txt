@@ -18,3 +18,4 @@ osstatus>=1.0.2
 parameter-decorators
 requests
 protobuf
+inquirer3
