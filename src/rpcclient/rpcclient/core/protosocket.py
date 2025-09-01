@@ -2,13 +2,14 @@ import socket
 import struct
 import threading
 
+from google.protobuf.descriptor import FieldDescriptor
+
 from rpcclient.core.protobuf_bridge import CmdClose, Command, Handshake, Response
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerDiedError, ServerResponseError
+from rpcclient.protos.rpc_pb2 import ErrorCode, ProtocolConstants
 
-# field[0] is MAGIC - skip
-COMMAND_MAPPING = {field.message_type.name: field.name for field in Command.DESCRIPTOR.fields[1:]}
-SERVER_MAGIC_VERSION = 0x88888809
-MAGIC = 0x12345679
+COMMAND_MAPPING = {field.message_type.name: field.name for field in Command.DESCRIPTOR.fields if
+                   field.type == FieldDescriptor.TYPE_MESSAGE}
 MAX_PATH_LEN = 1024
 
 
@@ -18,16 +19,23 @@ class ProtoSocket:
         self.raw_socket = sock
         self._protocol_lock = threading.Lock()
         self._do_handshake()
+        self.client_id = None
 
     def _do_handshake(self) -> None:
         self.handshake = Handshake()
         size, buff = self._receive()
         self.handshake.ParseFromString(buff)
-        if self.handshake.magic != SERVER_MAGIC_VERSION:
-            raise InvalidServerVersionMagicError(f'got {self.handshake.magic:x} instead of {SERVER_MAGIC_VERSION:x}')
+        if self.handshake.magic != ProtocolConstants.SERVER_VERSION:
+            raise InvalidServerVersionMagicError(
+                f'got {self.handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}')
+        self.client_id = self.handshake.client_id
+
+    def set_client_id(self, client_id: int) -> None:
+        self.client_id = client_id
 
     def send_recv(self, sub_command):
-        command = Command(magic=MAGIC, **{COMMAND_MAPPING.get(sub_command.DESCRIPTOR.name): sub_command})
+        command = Command(magic=ProtocolConstants.MESSAGE_MAGIC, client_id=self.client_id,
+                          **{COMMAND_MAPPING.get(sub_command.DESCRIPTOR.name): sub_command})
         response = Response()
         with self._protocol_lock:
             self._send(command.SerializeToString())
@@ -37,7 +45,10 @@ class ProtoSocket:
 
         # Iterate through all possible response types
         if response.HasField('error'):
-            raise ServerResponseError(response.error)
+            if response.error.code == ErrorCode.ERROR_UNSUPPORTED_COMMAND:
+                raise ServerResponseError(f'Command "{command_type}" is not supported by server')
+            else:
+                raise ServerResponseError(f'Command "{command_type}" failed: {response.error}')
         else:
             return getattr(response, command_type.lower())
 
@@ -67,6 +78,6 @@ class ProtoSocket:
         return buf
 
     def close(self) -> None:
-        command = Command(magic=MAGIC, close=CmdClose())
+        command = Command(magic=ProtocolConstants.MESSAGE_MAGIC, client_id=self.handshake.client_id, close=CmdClose())
         self._send(command.SerializeToString())
         self.raw_socket.close()

@@ -56,7 +56,6 @@ bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
 \n\
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
-#define MAGIC (0x12345679)
 #define MAX_CONNECTIONS (1024)
 
 #define MAX_OPTION_LEN (256)
@@ -67,7 +66,6 @@ Example usage: \n\
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x19", "x20", "x21", \
         "x22", "x23", "x24", "x25", "x26"
 
-#define SERVER_MAGIC_VERSION (0x88888809)
 extern char **environ;
 
 typedef struct {
@@ -271,6 +269,7 @@ error:
         TRACE("invalid pid");
         // failed to create process somewhere in the prolog, at least notify
         Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
+        error.code = RPC__ERROR_CODE__ERROR_SPAWN_FAILED;
         send_response(sockfd, (ProtobufCMessage *) &error);
     }
 
@@ -491,6 +490,7 @@ bool handle_peek(int sockfd, Rpc__CmdPeek *cmd) {
 
     } else {
         Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
+        error.code = RPC__ERROR_CODE__ERROR_MEMORY_ACCESS;
         CHECK(send_response(sockfd, (ProtobufCMessage *) &error))
     }
 #else // __APPLE__
@@ -515,6 +515,7 @@ bool handle_poke(int sockfd, Rpc__CmdPoke *cmd) {
         CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_poke));
     } else {
         Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
+        error.code = RPC__ERROR_CODE__ERROR_MEMORY_ACCESS;
         CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
     }
 
@@ -594,6 +595,7 @@ bool handle_listdir(int sockfd, Rpc__CmdListDir *cmd) {
 
     dirp = opendir(cmd->path);
     if (NULL == dirp) {
+        error.code = RPC__ERROR_CODE__ERROR_FILE_SYSTEM;
         CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
         return true;
     }
@@ -605,7 +607,7 @@ bool handle_listdir(int sockfd, Rpc__CmdListDir *cmd) {
     dirp = opendir(cmd->path);
     CHECK(dirp != NULL);
 
-    resp_list_dir.magic = MAGIC;
+    resp_list_dir.magic = RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC;
     resp_list_dir.dirp = (uint64_t) dirp;
     resp_list_dir.n_dir_entries = entry_count;
     resp_list_dir.dir_entries =
@@ -706,10 +708,11 @@ void handle_client(int sockfd) {
 
     CHECK(0 == uname(&uname_buf));
     Rpc__Handshake handshake = RPC__HANDSHAKE__INIT;
-    handshake.magic = SERVER_MAGIC_VERSION;
+    handshake.magic = RPC__PROTOCOL_CONSTANTS__SERVER_VERSION;
     handshake.arch = RPC__ARCH__ARCH_UNKNOWN;
     handshake.sysname = uname_buf.sysname;
     handshake.machine = uname_buf.machine;
+    handshake.client_id = getpid();
     handshake.platform = PLATFORM;
 
     CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
@@ -730,8 +733,8 @@ void handle_client(int sockfd) {
         TRACE("recv");
         cmd = rpc__command__unpack(NULL, message_size, (uint8_t *) recv_buff);
         CHECK(cmd != NULL);
-        TRACE("client fd: %d, cmd type: %d", sockfd, cmd->type_case);
-        CHECK(cmd->magic == MAGIC);
+        TRACE("client fd: %d, client_id %d, cmd type: %d", sockfd, cmd->client_id, cmd->type_case);
+        CHECK(cmd->magic == RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC);
 
         switch (cmd->type_case) {
         case RPC__COMMAND__TYPE_EXEC: {
@@ -787,6 +790,9 @@ void handle_client(int sockfd) {
         }
         default: {
             TRACE("unknown cmd: %d", cmd->type_case);
+            Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
+            error.code = RPC__ERROR_CODE__ERROR_UNSUPPORTED_COMMAND;
+            CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
         }
         }
         rpc__command__free_unpacked(cmd, NULL);

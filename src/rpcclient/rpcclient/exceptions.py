@@ -14,15 +14,13 @@ class ResponseNotFoundError(RpcClientException):
 
 
 class SubsystemInitError(RpcClientException):
-    """Raised when an unavailable subsystems is used."""
+    """Raised when unavailable subsystems are used."""
+    pass
 
 
 class ServerResponseError(RpcClientException):
     """ Server returned error """
-
-    def __init__(self, error):
-        super().__init__()
-        self.error = error
+    pass
 
 
 class ServerDiedError(RpcClientException):
