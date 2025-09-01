@@ -128,16 +128,19 @@ Example usage:
 Connecting via:
 
 ```shell
-python3 -m rpcclient <HOST>
+python3 -m rpcclient
 ```
 
 Full usage:
 
 ```
-Usage: python -m rpcclient [OPTIONS] HOSTNAME
+Usage: rpcclient [OPTIONS] [HOSTNAME]
+
+  Start the console. If HOSTNAME is provided, connect immediately. Otherwise,
+  start without a connection. You can connect later from the console.
 
 Options:
-  -p, --port INTEGER
+  -p, --port INTEGER        TCP port to connect to
   -r, --rebind-symbols      reload all symbols upon connection
   -l, --load-all-libraries  load all libraries
   --help                    Show this message and exit.
@@ -148,37 +151,70 @@ Options:
 You should now get a nice iPython shell looking like this:
 
 ```
-➜  rpc-project git:(master) python3 -m rpcclient 127.0.0.1
-2022-03-29 23:42:31 Cyber root[24947] INFO connection uname.sysname: Darwin
-
-Welcome to the rpcclient interactive shell! You interactive shell for controlling the remote rpcserver.
-Feel free to use the following globals:
-
-🌍 p - the injected process
-🌍 symbols - process global symbols
-
-Have a nice flight ✈️!
-Starting an IPython shell... 🐍
-
-Python 3.9.10 (main, Jan 15 2022, 11:48:04)
+RpcClient has been successfully loaded! 😎
+Usage:
+mgr     Client manager: create | get | remove | clients | clear
+console Console controller: switch
+p       Active client (e.g., p.info(), p.pid)
+F1      Show this help
+F2      Show active contexts
+F3      Previous context
+F4      Toggle Auto switch on creation
+Have a nice flight ✈️! Starting an IPython shell...
+Python 3.12.7 (main, Oct  1 2024, 02:05:46) [Clang 16.0.0 (clang-1600.0.26.3)]
 Type 'copyright', 'credits' or 'license' for more information
-IPython 7.25.0 -- An enhanced Interactive Python. Type '?' for help.
+IPython 9.4.0 -- An enhanced Interactive Python. Type '?' for help.
 
-In [1]:
+IPython profile: rpcclient
+Tip: Use `F2` or %edit with no arguments to open an empty editor with a temporary file.
+
+[Rpc-client]:
 ```
 
-And... Congrats! You are now ready to go! 😎
+### Understanding the globals: mgr, console, and p
 
-Try accessing the different features using the global `p` variable.
+- mgr — Client manager for creating and tracking RPC clients
+    - `mgr.create(hostname="127.0.0.1", port=5910)` → create and connect a new client
+    - `mgr.get(pid)` → get a client by PID
+    - `mgr.remove(pid)` → disconnect and remove a client
+    - `mgr.clients` → list current clients
+    - `mgr.clear()` → remove all clients
+
+- console — Console/session controller for switching active client contexts
+    - `console.switch(pid)` → switch the active context to a specific PID
+    - `console.switch()` → interactively pick a client to switch to
+
+- p — The active client in the current console context
+    - Use p to call APIs, e.g., `p.info()`, `p.pid`, `p.fs.listdir(".")`, `p.spawn([...])`
+    - When you switch contexts, p is automatically updated to the selected client
+
+
+Create a new client:
+```
+[Rpc-client]: mgr.create(hostname="127.0.0.1")
+Auto-switched to new client PID: 79669
+[osx| (79669) rpcserver_macosx]: <MacosClient: 79669 | rpcserver_macosx>
+
+[osx| (79669) rpcserver_macosx]:
+```
+
+Change the console context to another client:
+```
+[Rpc-client]: console.switch()
+[?] Select a client PID: <MacosClient: 78536 | rpcserver_macosx>
+   <MacosClient: 78535 | rpcserver_macosx>
+ ❯ <MacosClient: 78536 | rpcserver_macosx>
+```
+
+Now you can try accessing the different features using the global `p` variable.
 For example (Just a tiny sample of the many things you can now do. Feel free to explore much more!):
 
 ```
-In [2]: p.spawn(['sleep', '1'])
-2022-03-29 23:45:51 Cyber root[24947] INFO shell process started as pid: 25047
-Out[2]: SpawnResult(error=0, pid=25047, stdout=<_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>)
+[osx| (78479) rpcserver_macosx]: p.spawn(['sleep', '1'])
+[osx| (78479) rpcserver_macosx]: SpawnResult(error=0, pid=25047, stdout=<_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>)
 
-In [3]: p.fs.listdir('.')
-Out[3]:
+[osx| (78479) rpcserver_macosx]: p.fs.listdir('.')
+[osx| (78479) rpcserver_macosx]:
 ['common.c',
  '.pytest_cache',
  'Makefile',
@@ -189,8 +225,8 @@ Out[3]:
  'ents.plist',
  'build_darwin.sh']
 
-In [4]: p.processes.get_by_pid(p.pid).fds
-Out[4]:
+[osx| (78479) rpcserver_macosx]: p.processes.get_by_pid(p.pid).fds
+[osx| (78479) rpcserver_macosx]:
 [FileFd(fd=0, path='/dev/ttys000'),
  FileFd(fd=1, path='/dev/ttys000'),
  FileFd(fd=2, path='/dev/ttys000'),
@@ -199,8 +235,8 @@ Out[4]:
  Ipv6TcpFd(fd=5, local_address='127.0.0.1', local_port=5910, remote_address='127.0.0.1', remote_port=53229),
  Ipv6TcpFd(fd=6, local_address='127.0.0.1', local_port=5910, remote_address='127.0.0.1', remote_port=53530)]
 
-In [5]: p.processes.get_by_pid(p.pid).regions[:3]
-Out[5]:
+[osx| (78479) rpcserver_macosx]: p.processes.get_by_pid(p.pid).regions[:3]
+[osx| (78479) rpcserver_macosx]:
 [Region(region_type='__TEXT', start=4501995520, end=4502028288, vsize='32K', protection='r-x', protection_max='r-x', region_detail='/Users/USER/*/rpcserver_macosx_x86_64'),
  Region(region_type='__DATA_CONST', start=4502028288, end=4502044672, vsize='16K', protection='r--', protection_max='rw-', region_detail='/Users/USER/*/rpcserver_macosx_x86_64'),
  Region(region_type='__DATA', start=4502044672, end=4502061056, vsize='16K', protection='rw-', protection_max='rw-', region_detail='/Users/USER/*/rpcserver_macosx_x86_64')]

@@ -4,7 +4,7 @@ from stat import S_IMODE
 
 import pytest
 
-from rpcclient.darwin.consts import UF_IMMUTABLE
+from rpcclient.clients.darwin.consts import UF_IMMUTABLE
 from rpcclient.exceptions import RpcFileNotFoundError, RpcPermissionError
 
 

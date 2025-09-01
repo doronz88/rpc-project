@@ -2,13 +2,28 @@ syntax = "proto3";
 
 package rpc;
 
+enum ProtocolConstants {
+  UNKNOWN = 0;
+  SERVER_VERSION = 0x8888810;
+  MESSAGE_MAGIC = 0x1234569;
+}
+
 enum Arch {
     ARCH_UNKNOWN = 0;
     ARCH_ARM64 = 1;
 }
 
+enum ErrorCode {
+    ERROR_UNKNOWN = 0;
+    ERROR_UNSUPPORTED_COMMAND = 1;
+    ERROR_MEMORY_ACCESS = 2;
+    ERROR_SPAWN_FAILED = 3;
+    ERROR_FILE_SYSTEM = 4;
+}
+
 message Command {
     int32 magic = 1;
+    uint32 client_id = 17;
     oneof type {
         CmdExec exec = 2;
         CmdDlopen dlopen = 3;
@@ -82,6 +97,8 @@ message Handshake {
     Arch arch = 2;
     string sysname = 3;
     string machine = 4;
+    string platform = 5;
+    uint32 client_id = 6;
 }
 
 message ObjcClass {
@@ -171,7 +188,9 @@ message CmdGetClassList {}
 
 message ResponseGetClassList { repeated ObjcClass classes = 1; }
 
-message ResponseError {}
+message ResponseError {
+    ErrorCode code = 1;
+}
 
 message ResponseListdir {
     uint64 magic = 1;

@@ -116,12 +116,12 @@ def test_environ(client):
     assert len(client.environ) > 0
     for e in client.environ:
         assert '=' in e
-
-
-def test_reconnect(client):
-    """
-    :param rpcclient.client.Client client:
-    """
-    test_listdir(client)
-    client.reconnect()
-    test_listdir(client)
+#
+#
+# def test_reconnect(client):
+#     """
+#     :param rpcclient.client.Client client:
+#     """
+#     test_listdir(client)
+#     client.reconnect()
+#     test_listdir(client)

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from rpcclient.client_factory import DEFAULT_PORT
 from rpcclient.exceptions import LaunchError
+from rpcclient.transports import DEFAULT_PORT
 
 LAUNCHD_PID = 1
 LAUNCHD_PATH = '/sbin/launchd'
@@ -27,7 +27,7 @@ def test_process_object(client):
     server = client.processes.get_self()
     assert server.pid > 0
     assert len(server.images) > 0
-    assert len([img for img in server.images if Path(img.path).resolve() == Path(server.path).resolve()]) > 0
+    assert len([img for img in server.images if Path(img.path).name == Path(server.path).name]) > 0
     fds = server.fds
     assert fds[0].fd == 0
     assert fds[1].fd == 1

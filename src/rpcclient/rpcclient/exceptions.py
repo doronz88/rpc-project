@@ -13,12 +13,14 @@ class ResponseNotFoundError(RpcClientException):
     pass
 
 
+class SubsystemInitError(RpcClientException):
+    """Raised when unavailable subsystems are used."""
+    pass
+
+
 class ServerResponseError(RpcClientException):
     """ Server returned error """
-
-    def __init__(self, error):
-        super().__init__()
-        self.error = error
+    pass
 
 
 class ServerDiedError(RpcClientException):
@@ -168,6 +170,15 @@ class RpcResourceTemporarilyUnavailableError(BadReturnValueError):
 
 class RpcConnectionRefusedError(BadReturnValueError):
     """ RPC version for ConnectionRefusedError (errno = ECONNREFUSED) """
+    pass
+
+
+class RpcDeadClientError(BadReturnValueError):
+    """ RPC client in a dead state """
+    pass
+
+
+class NoSuchClientError(RpcClientException):
     pass
 
 

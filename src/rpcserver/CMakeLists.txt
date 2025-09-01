@@ -6,7 +6,6 @@ set(apple_specific "")
 include(ExternalProject)
 include_directories(.)
 include_directories(protobuf-c)
-#add_compile_definitions(SINGLE_THREAD)
 if (NOT DEFINED TARGET)
     message(FATAL_ERROR "Please specify the target using -DTARGET=OSX|IOS|LINUX")
 endif ()
@@ -106,10 +105,10 @@ if (APPLE)
 
 endif ()
 
-
 add_executable(${TARGET_NAME} rpcserver.c common.c protos/rpc.pb-c.c)
 add_dependencies(${TARGET_NAME} protobuf-c)
 target_link_libraries(${TARGET_NAME} PRIVATE ${LIBPROTO_C}/libprotobuf-c.a ${apple_specific})
+target_compile_definitions(${TARGET_NAME} PRIVATE PLATFORM="${TARGET_UPPERCASE}")
 
 if (IOS_TARGET)
     add_custom_command(

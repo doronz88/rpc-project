@@ -3,16 +3,16 @@ from uuid import uuid4
 
 import pytest
 
-from rpcclient.client_factory import create_tcp_client
-from rpcclient.darwin.client import DarwinClient
+from rpcclient.client_manager import ClientManager
+from rpcclient.clients.darwin.client import DarwinClient
+from rpcclient.clients.ios.client import IosClient
 from rpcclient.exceptions import BadReturnValueError
-from rpcclient.ios.client import IosClient
-from rpcclient.protobuf_bridge import ARCH_ARM64
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 
 
 @pytest.fixture
 def client():
-    with closing(create_tcp_client('127.0.0.1')) as c:
+    with closing(ClientManager().create(hostname='127.0.0.1')) as c:
         yield c
 
 
@@ -41,8 +41,8 @@ def pytest_configure(config):
         'markers',
         '''local_only: marks tests that require features the CI lacks (deselect with '-m "not local_only"')'''
     )
-    config.addinivalue_line('markers', 'darwin: marks tests that require darwin platform to run')
-    config.addinivalue_line('markers', 'ios: marks tests that require ios platform to run')
+    config.addinivalue_line('markers', 'darwin: marks tests that require darwin clients to run')
+    config.addinivalue_line('markers', 'ios: marks tests that require ios clients to run')
     config.addinivalue_line('markers', 'local_machine: marks tests that require local_machine to run')
     config.addinivalue_line('markers', 'arm: marks tests that require arm architecture to run')
 
@@ -54,7 +54,7 @@ def pytest_collection_modifyitems(config, items):
     skip_not_arm = pytest.mark.skip(reason='Arm arch is required for this test')
     skip_not_local_machine = pytest.mark.skip(reason='Local machine is required for this test')
 
-    with closing(create_tcp_client('127.0.0.1')) as c:
+    with closing(ClientManager().create(hostname='127.0.0.1')) as c:
         is_darwin = isinstance(c, DarwinClient)
         is_ios = isinstance(c, IosClient)
         is_arm = c.arch == ARCH_ARM64
