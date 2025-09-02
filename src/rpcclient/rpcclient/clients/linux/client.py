@@ -5,8 +5,6 @@ from rpcclient.core.client import CoreClient
 
 
 class LinuxClient(CoreClient):
-    def __init__(self, sock, sysname: str, arch, server_type):
-        super().__init__(sock, sysname, arch, server_type)
 
     @cached_property
     def uname(self):

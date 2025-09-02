@@ -8,9 +8,9 @@ CRASH_REPORTS_DIR = 'Library/Logs/DiagnosticReports'
 
 class MacosClient(DarwinClient):
 
-    def __init__(self, sock, sysname: str, arch, server_type):
-        super().__init__(sock, sysname, arch, server_type)
-        self.reports = Reports(self, CRASH_REPORTS_DIR)
+    @subsystem
+    def reports(self) -> Reports:
+        return Reports(self, CRASH_REPORTS_DIR)
 
     @subsystem
     def apple_script(self) -> AppleScript:
