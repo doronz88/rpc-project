@@ -95,7 +95,8 @@ class CoreClient:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock: ProtoSocket, sysname: str, arch, server_type: str = 'core', dlsym_global_handle=RTLD_NEXT):
+    def __init__(self, cid: int, sock: ProtoSocket, sysname: str, arch, server_type: str = 'core',
+                 dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
         self._sock = sock
         self._old_settings = None
@@ -107,6 +108,7 @@ class CoreClient:
         self.notifier = EventNotifier()
         self.symbols = SymbolsJar.create(self)
         self.type = server_type
+        self.id = cid
 
     @subsystem
     def fs(self) -> Fs:
@@ -158,9 +160,9 @@ class CoreClient:
 
     def send_recv(self, command):
         try:
-            return self._sock.send_recv(command)
+            return self._sock.send_recv(command, self.id)
         except ConnectionError:
-            self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.pid)
+            self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.id)
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
@@ -381,7 +383,7 @@ class CoreClient:
 
     def close(self):
         self._sock.close()
-        self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.pid)
+        self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.id)
 
     def shell(self):
         self._logger.disabled = True

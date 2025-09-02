@@ -70,8 +70,8 @@ class DyldImage:
 
 
 class DarwinClient(CoreClient):
-    def __init__(self, sock, sysname: str, arch, server_type):
-        super().__init__(sock, sysname, arch, server_type, dlsym_global_handle=RTLD_GLOBAL)
+    def __init__(self, cid: int, sock, sysname: str, arch, server_type):
+        super().__init__(cid, sock, sysname, arch, server_type, dlsym_global_handle=RTLD_GLOBAL)
 
         if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
@@ -187,17 +187,17 @@ class DarwinClient(CoreClient):
         return ['/', '/var/root']
 
     def showobject(self, object_address: Symbol) -> dict:
-        response = self._sock.send_recv(CmdShowObject(address=object_address))
+        response = self.send_recv(CmdShowObject(address=object_address))
         return json.loads(response.description)
 
     def showclass(self, class_address: Symbol) -> dict:
-        response = self._sock.send_recv(CmdShowClass(address=class_address))
+        response = self.send_recv(CmdShowClass(address=class_address))
         return json.loads(response.description)
 
     def get_class_list(self) -> dict[str, objective_c_class.Class]:
         result = {}
         command = CmdGetClassList()
-        response = self._sock.send_recv(command)
+        response = self.send_recv(command)
         for _class in response.classes:
             result[_class.name] = objective_c_class.Class(self, self.symbol(_class.address), lazy=True)
         return result

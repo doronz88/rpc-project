@@ -43,42 +43,46 @@ class ClientManager:
             raise ValueError(f'Unknown client mode: {mode}')
 
         proto_sock = transport_factory(**kwargs)
-        sysname = proto_sock.handshake.sysname.lower()
-        arch = proto_sock.handshake.arch
         server_type = proto_sock.handshake.platform.lower()
 
         client_factory = self.client_factory.get(server_type)
         if client_factory is None:
             raise ValueError(f'Unknown client mode: {server_type}')
 
-        client: ClientType = client_factory(sock=proto_sock, sysname=sysname, arch=arch, server_type=server_type)
+        client: ClientType = client_factory(
+            cid=proto_sock.handshake.client_id,
+            sock=proto_sock,
+            sysname=proto_sock.handshake.sysname.lower(),
+            arch=proto_sock.handshake.arch,
+            server_type=server_type
+        )
         client.notifier.register(EventType.CLIENT_DISCONNECTED, self._on_client_disconnect)
 
-        self._clients.register(client.pid, client)
+        self._clients.register(client.id, client)
         self.notifier.notify(EventType.CLIENT_CREATED, client)
         return client
 
-    def remove(self, pid: int) -> bool:
-        """ Remove a client by PID; emit REMOVED if found. """
-        removed = self._clients.unregister(pid)
+    def remove(self, cid: int) -> bool:
+        """ Remove a client by ID; emit REMOVED if found. """
+        removed = self._clients.unregister(cid)
         if removed is not None:
-            self.notifier.notify(EventType.CLIENT_REMOVED, pid)
+            self.notifier.notify(EventType.CLIENT_REMOVED, cid)
             return True
         return False
 
     def clear(self) -> None:
         """ Remove all clients (prunes the registry and emits REMOVED per client). """
-        for pid, _ in self._clients.items():
-            self.remove(pid)
+        for cid, _ in self._clients.items():
+            self.remove(cid)
 
-    def get(self, pid: int) -> Union[ClientType, None]:
-        """ Return the client for PID, or None. """
-        return self._clients.get(pid)
+    def get(self, cid: int) -> Union[ClientType, None]:
+        """ Return the client for ID, or None. """
+        return self._clients.get(cid)
 
     @property
     def clients(self) -> dict[int, ClientType]:
         return dict(self._clients.items())
 
-    def _on_client_disconnect(self, pid: int) -> None:
+    def _on_client_disconnect(self, cid: int) -> None:
         """ Internal: remove a client when it signals disconnection. """
-        self.remove(pid)
+        self.remove(cid)

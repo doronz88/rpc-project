@@ -18,7 +18,7 @@ def rpclocal() -> None:
     """ connect to a local machine """
     manager = ClientManager()
     client = manager.create(mode='local')
-    Console(manager).interactive(switch_pid=client.pid)
+    Console(manager).interactive(switch_cid=client.id)
 
 
 @click.command()
@@ -34,16 +34,16 @@ def rpcclient(hostname: Union[str, None], port: int, rebind_symbols: bool, load_
     You can connect later from the console.
     """
     manager = ClientManager()
-    pid = None
+    cid = None
     if hostname:
         client = manager.create(hostname=hostname, port=port)
-        pid = client.pid
+        cid = client.id
         if rebind_symbols:
             client.rebind_symbols()
         if load_all_libraries:
             client.load_all_libraries()
 
-    Console(manager).interactive(switch_pid=pid)
+    Console(manager).interactive(switch_cid=cid)
 
 
 if __name__ == '__main__':

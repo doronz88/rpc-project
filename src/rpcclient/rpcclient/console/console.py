@@ -48,9 +48,9 @@ class ConsoleContext:
     user_ns: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @property
-    def pid(self) -> int:
-        """ Return the PID of the client. """
-        return self.p.pid
+    def id(self) -> int:
+        """ Return the client ID of the client. """
+        return self.p.id
 
     def __repr__(self) -> str:
         """ Debug-friendly representation of the client. """
@@ -105,12 +105,12 @@ class Console:
 
     def init_contexts(self) -> None:
         """ Seed console contexts from current live clients. """
-        for pid, client in self.mgr.clients.items():
-            if pid in self._contexts:
+        for cid, client in self.mgr.clients.items():
+            if cid in self._contexts:
                 continue
-            self._contexts.register(pid, ConsoleContext(client))
+            self._contexts.register(cid, ConsoleContext(client))
 
-    def setup_shell(self, switch_pid: Union[int, None] = None) -> None:
+    def setup_shell(self, switch_cid: Union[int, None] = None) -> None:
         """ One-time shell setup: quiet logs, capture baseline, and optionally switch. """
         if self._setup_done:
             return
@@ -118,16 +118,16 @@ class Console:
         self._ipython = get_ipython()
         self._baseline_keys = set(self._ipython.user_ns.keys())
         self.init_contexts()
-        if switch_pid is not None:
-            self.switch(switch_pid)
+        if switch_cid is not None:
+            self.switch(switch_cid)
         self._setup_done = True
 
-    def interactive(self, additional_namespace: Union[dict, None] = None, switch_pid: Union[int, None] = None) -> None:
+    def interactive(self, additional_namespace: Union[dict, None] = None, switch_cid: Union[int, None] = None) -> None:
         """ Launch the IPython shell with custom config and extensions. """
         sys.argv = ['a']
         ipython_config = Config()
         ipython_config.IPCompleter.use_jedi = False
-        ipython_config.InteractiveShellApp.exec_lines = [f'''console.setup_shell({switch_pid})''']
+        ipython_config.InteractiveShellApp.exec_lines = [f'''console.setup_shell({switch_cid})''']
         ipython_config.TerminalInteractiveShell.autoformatter = None
         ipython_config.BaseIPythonApplication.profile = 'rpcclient'
         ipython_config.TerminalInteractiveShell.prompts_class = 'rpcclient.console.prompt.RpcPrompt'
@@ -144,27 +144,27 @@ class Console:
         IPython.start_ipython(config=ipython_config, user_ns=namespace)
         self.mgr.clear()
 
-    def switch(self, pid: Union[int, None] = None) -> None:
-        """ Switch the active console context by PID (or interactively pick one). """
+    def switch(self, cid: Union[int, None] = None) -> None:
+        """ Switch the active console context by client ID (or interactively pick one). """
         if not self._contexts.items():
             raise NoSuchClientError('No clients available')
 
-        if pid is None:
+        if cid is None:
             choices = [ctx for _, ctx in self._contexts.items()]
-            ctx = prompt_selection(choices, 'Select a client PID')
+            ctx = prompt_selection(choices, 'Select a client client ID')
         else:
-            ctx = self._contexts.get(pid)
+            ctx = self._contexts.get(cid)
 
         if ctx is None:
-            client = self.mgr.get(pid)
+            client = self.mgr.get(cid)
             if client is None:
-                echo_error(f'No such client: {pid}')
+                echo_error(f'No such client: {cid}')
                 return
             ctx = ConsoleContext(client)
-            self._contexts.register(client.pid, ctx)
+            self._contexts.register(client.id, ctx)
 
         self._switch(ctx)
-        echo_success(f'Switched to client PID: {ctx.pid}')
+        echo_success(f'Switched to client client ID: {ctx.id}')
 
     def _switch(self, ctx: ConsoleContext) -> None:
         """ Internal: swap `p` and per-context variables in the shell namespace. """
@@ -186,23 +186,23 @@ class Console:
         ns['p'] = ctx.p
 
         self._previous = self._current
-        self._current = ctx.pid
+        self._current = ctx.id
 
     def _on_client_created(self, client: ClientType) -> None:
         """ Event: auto-switch to newly created client if enabled. """
         if not (self._auto_switch_on_create and self._ipython):
             return
         ctx = ConsoleContext(client)
-        self._contexts.register(client.pid, ctx)
+        self._contexts.register(client.id, ctx)
         self._switch(ctx)
-        echo_info(f'Auto-switched to new client PID: {client.pid}')
+        echo_info(f'Auto-switched to new client client ID: {client.id}')
 
-    def _on_client_removed(self, pid: int) -> None:
+    def _on_client_removed(self, cid: int) -> None:
         """ Event: clean up context for a removed client. """
-        if pid not in self._contexts:
+        if cid not in self._contexts:
             return
-        self._contexts.unregister(pid)
-        if self._current != pid:
+        self._contexts.unregister(cid)
+        if self._current != cid:
             return
         self._current = None
         self._ipython.user_ns['p'] = None
