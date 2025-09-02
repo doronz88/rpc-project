@@ -822,7 +822,7 @@ int main(int argc, const char *argv[]) {
     bool disable_worker = false;
     char port[MAX_OPTION_LEN] = DEFAULT_PORT;
 
-    while ((opt = getopt(argc, (char *const *) argv, "hpdo:w")) != -1) {
+    while ((opt = getopt(argc, (char *const *) argv, "hwdo:p:")) != -1) {
         switch (opt) {
         case 'p': {
             strncpy(port, optarg, sizeof(port) - 1);

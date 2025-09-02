@@ -1,13 +1,13 @@
 import contextlib
 import ctypes
 import dataclasses
-import enum
 import logging
 import os
 import sys
 import threading
 import typing
 from collections import namedtuple
+from enum import Enum, auto
 from pathlib import Path
 from select import select
 from typing import Any, Optional
@@ -30,7 +30,7 @@ from rpcclient.core.subsystems.processes import Processes
 from rpcclient.core.subsystems.sysctl import Sysctl
 from rpcclient.core.symbol import Symbol
 from rpcclient.core.symbols_jar import SymbolsJar
-from rpcclient.event_notifier import EventNotifier, EventType
+from rpcclient.event_notifier import EventNotifier
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcBrokenPipeError, RpcConnectionRefusedError, \
     RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, RpcNotADirectoryError, RpcNotEmptyError, \
     RpcPermissionError, RpcResourceTemporarilyUnavailableError, ServerResponseError, SpawnError
@@ -90,12 +90,18 @@ class ProtocolDirent:
     stat: ProtocolDitentStat
 
 
+class ClientEvent(Enum):
+    CREATED = auto()
+    TERMINATED = auto()
+
+
 class CoreClient:
     """ Main client interface to access remote rpcserver """
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, sock: ProtoSocket, sysname: str, arch, server_type: str = 'core', dlsym_global_handle=RTLD_NEXT):
+    def __init__(self, cid: int, sock: ProtoSocket, sysname: str, arch, server_type: str = 'core',
+                 dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
         self._sock = sock
         self._old_settings = None
@@ -107,6 +113,7 @@ class CoreClient:
         self.notifier = EventNotifier()
         self.symbols = SymbolsJar.create(self)
         self.type = server_type
+        self.id = cid
 
     @subsystem
     def fs(self) -> Fs:
@@ -158,9 +165,9 @@ class CoreClient:
 
     def send_recv(self, command):
         try:
-            return self._sock.send_recv(command)
+            return self._sock.send_recv(command, self.id)
         except ConnectionError:
-            self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.pid)
+            self.notifier.notify(ClientEvent.TERMINATED, self.id)
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
@@ -193,7 +200,7 @@ class CoreClient:
                 args.append(Argument(v_int=ctypes.c_uint64(arg).value))
             elif isinstance(arg, bytes):
                 args.append(Argument(v_bytes=arg))
-            elif isinstance(arg, enum.Enum):
+            elif isinstance(arg, Enum):
                 args.append(Argument(v_int=ctypes.c_uint64(arg.value).value))
             else:
                 raise ArgumentError()
@@ -381,7 +388,7 @@ class CoreClient:
 
     def close(self):
         self._sock.close()
-        self.notifier.notify(EventType.CLIENT_DISCONNECTED, self.pid)
+        self.notifier.notify(ClientEvent.TERMINATED, self.id)
 
     def shell(self):
         self._logger.disabled = True

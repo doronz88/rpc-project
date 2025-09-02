@@ -22,7 +22,7 @@ class RpcPrompt(Prompts):
             client = get_ipython().user_ns.get("p")
             return [
                 (base_token, f"[{client.type}| "),
-                (num_token, f"({client.pid}) "),
+                (num_token, f"({client.id}) "),
                 (base_token, f"{client.progname}]: "),
             ]
         except AttributeError:

@@ -19,7 +19,6 @@ class ProtoSocket:
         self.raw_socket = sock
         self._protocol_lock = threading.Lock()
         self._do_handshake()
-        self.client_id = None
 
     def _do_handshake(self) -> None:
         self.handshake = Handshake()
@@ -30,11 +29,8 @@ class ProtoSocket:
                 f'got {self.handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}')
         self.client_id = self.handshake.client_id
 
-    def set_client_id(self, client_id: int) -> None:
-        self.client_id = client_id
-
-    def send_recv(self, sub_command):
-        command = Command(magic=ProtocolConstants.MESSAGE_MAGIC, client_id=self.client_id,
+    def send_recv(self, sub_command, client_id: int):
+        command = Command(magic=ProtocolConstants.MESSAGE_MAGIC, client_id=client_id,
                           **{COMMAND_MAPPING.get(sub_command.DESCRIPTOR.name): sub_command})
         response = Response()
         with self._protocol_lock:
