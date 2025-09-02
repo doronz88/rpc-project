@@ -1,3 +1,10 @@
+# Rpc-Project
+
+<!-- markdownlint-disable MD013 -->
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/doronz88/rpc-project)
+<!-- markdownlint-enable MD013 -->
+
+
 - [rpc-project](#rpc-project)
   - [Description](#description)
   - [Local installation](#local-installation)
