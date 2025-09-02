@@ -10,9 +10,8 @@ from traitlets.config import Config
 
 from rpcclient.client_manager import ClientManager, ClientType
 from rpcclient.console.extensions.keybindings import get_keybindings
-from rpcclient.event_notifier import EventType
 from rpcclient.exceptions import NoSuchClientError
-from rpcclient.registries import SingleRegistry
+from rpcclient.registry import Registry, RegistryEvent
 from rpcclient.utils import prompt_selection
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,7 @@ class Console:
     def __init__(self, mgr: ClientManager) -> None:
         """ Initialize the console with a client manager and event wiring. """
         self.mgr = mgr
-        self._contexts = SingleRegistry()
+        self._contexts = Registry()
         self._current: Union[int, None] = None
         self._previous: Union[int, None] = None
         self._ipython = None
@@ -96,8 +95,9 @@ class Console:
         self._auto_switch_on_create = True
         self._setup_done = False
 
-        self.mgr.notifier.register(EventType.CLIENT_CREATED, self._on_client_created)
-        self.mgr.notifier.register(EventType.CLIENT_REMOVED, self._on_client_removed)
+        self.mgr.notifier.register(RegistryEvent.REGISTERED, self._on_registered)
+        self.mgr.notifier.register(RegistryEvent.UNREGISTERED, self._on_unregistered)
+        self.mgr.notifier.register(RegistryEvent.CLEARED, self._on_clear)
 
     @property
     def contexts(self) -> dict[int, ConsoleContext]:
@@ -188,27 +188,42 @@ class Console:
         self._previous = self._current
         self._current = ctx.id
 
-    def _on_client_created(self, client: ClientType) -> None:
-        """ Event: auto-switch to newly created client if enabled. """
+    def _reset_current(self, msg: str = 'Current client has been removed') -> None:
+        """Clear current client and console binding, then warn."""
+        self._current = None
+        self._ipython.user_ns['p'] = None
+        echo_warn(msg)
+
+    # ---------------------------------------------------------------------------
+    # Client manager — event handlers
+    # ---------------------------------------------------------------------------
+
+    def _on_registered(self, cid, client: ClientType) -> None:
+        """ Event: auto-switch to a newly created client if enabled. """
         if not (self._auto_switch_on_create and self._ipython):
             return
         ctx = ConsoleContext(client)
-        self._contexts.register(client.id, ctx)
+        self._contexts.register(cid, ctx)
         self._switch(ctx)
         echo_info(f'Auto-switched to new client client ID: {client.id}')
 
-    def _on_client_removed(self, cid: int) -> None:
+    def _on_unregistered(self, cid: int) -> None:
         """ Event: clean up context for a removed client. """
         if cid not in self._contexts:
             return
         self._contexts.unregister(cid)
         if self._current != cid:
             return
-        self._current = None
-        self._ipython.user_ns['p'] = None
-        echo_warn('Current client has been removed')
+        self._reset_current()
 
+    def _on_clear(self) -> None:
+        """ Event: clean up all contexts. """
+        self._contexts.clear()
+        self._reset_current()
+
+    # ---------------------------------------------------------------------------
     # Keybinding callbacks
+    # ---------------------------------------------------------------------------
 
     def show_help(self, *_: Any) -> None:
         """ Print console help and keybindings. """
