@@ -32,7 +32,7 @@ class Registry(Generic[K, V]):
             self._data[key] = value
         self.notifier.notify(RegistryEvent.REGISTERED, *(key, value))
 
-    def unregister(self, key: K) -> Optional[V]:
+    def unregister(self, key: K):
         """ Remove the key """
         with self._lock:
             self._data.pop(key, None)
@@ -58,3 +58,14 @@ class Registry(Generic[K, V]):
         """ Return True if the key exists. """
         with self._lock:
             return key in self._data
+
+    def __repr__(self) -> str:
+        # single-line debug view
+        return f'{self.__class__.__name__}({self.items()!r})'
+
+    def __str__(self) -> str:
+        # multi-line readable view
+        items = self.items()
+        lines = [f'{self.__class__.__name__} ({len(items)} entries):']
+        lines += [f'  {k!r}: {v!r}' for k, v in items]
+        return '\n'.join(lines)
