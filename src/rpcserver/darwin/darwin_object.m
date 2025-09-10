@@ -36,5 +36,5 @@ bool handle_showobject(int sockfd, Rpc__CmdShowObject *cmd) {
 
   resp_show_object.description = (char *) [response_str UTF8String];
 
-  return send_response(sockfd, (ProtobufCMessage *) &resp_show_object);
+  return send_response(sockfd, (ProtobufCMessage *) &resp_show_object,RPC__STATUS_CODE__OK);
 }

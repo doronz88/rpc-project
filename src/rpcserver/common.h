@@ -51,7 +51,7 @@ bool writeall(int fd, const char *buf, size_t len);
 
 bool send_message(int sockfd, const uint8_t *buf, size_t len);
 
-bool send_response(int sockfd, ProtobufCMessage *resp);
+bool send_response(int sockfd, const ProtobufCMessage *inner, uint32_t code);
 
 bool receive_message(int sockfd, char **buf, size_t *size);
 

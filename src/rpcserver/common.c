@@ -80,6 +80,7 @@ void trace(const char *prefix, const char *fmt, ...) {
         fflush(g_file);
     }
 }
+
 bool copy_arr_with_null(char ***dest, char **src, size_t n_src) {
     bool ret = false;
     if (n_src > 0) {
@@ -155,7 +156,7 @@ bool receive_message(int sockfd, char **buf, size_t *size) {
     CHECK(recvall(sockfd, tmp, n))
     *buf = tmp;
     *size = n;
-    
+
     return true;
 
 error:
@@ -192,67 +193,37 @@ error:
     return ret;
 }
 
-bool send_response(int sockfd, ProtobufCMessage *resp) {
+bool send_response(int sockfd, const ProtobufCMessage *inner, uint32_t code) {
     bool ret = false;
-    Rpc__Response response = RPC__RESPONSE__INIT;
-    char *c_name = (char *) (ProtobufCMessageDescriptor *) resp->descriptor->c_name;
-
-    if (strcmp("Rpc__ResponseCmdExec", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_EXEC;
-        response.exec = (Rpc__ResponseCmdExec *) resp;
-    } else if (strcmp("Rpc__ResponseCmdExecChunk", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_EXEC_CHUNK;
-        response.exec_chunk = (Rpc__ResponseCmdExecChunk *) resp;
-    } else if (strcmp("Rpc__ResponseDlopen", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_DLOPEN;
-        response.dlopen = (Rpc__ResponseDlopen *) resp;
-    } else if (strcmp("Rpc__ResponseDlclose", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_DLCLOSE;
-        response.dlclose = (Rpc__ResponseDlclose *) resp;
-    } else if (strcmp("Rpc__ResponseDlsym", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_DLSYM;
-        response.dlsym = (Rpc__ResponseDlsym *) resp;
-    } else if (strcmp("Rpc__ResponsePeek", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_PEEK;
-        response.peek = (Rpc__ResponsePeek *) resp;
-    } else if (strcmp("Rpc__ResponsePoke", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_POKE;
-        response.poke = (Rpc__ResponsePoke *) resp;
-    } else if (strcmp("Rpc__ResponseCall", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_CALL;
-        response.call = (Rpc__ResponseCall *) resp;
-    } else if (strcmp("Rpc__ResponseError", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_ERROR;
-        response.error = (Rpc__ResponseError *) resp;
-    } else if (strcmp("Rpc__ResponseDummyBlock", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_DUMMY_BLOCK;
-        response.dummy_block = (Rpc__ResponseDummyBlock *) resp;
-    } else if (strcmp("Rpc__ResponseShowObject", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_SHOW_OBJECT;
-        response.show_object = (Rpc__ResponseShowObject *) resp;
-    } else if (strcmp("Rpc__ResponseGetClassList", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_CLASS_LIST;
-        response.class_list = (Rpc__ResponseGetClassList *) resp;
-    } else if (strcmp("Rpc__ResponseShowClass", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_SHOW_CLASS;
-        response.show_class = (Rpc__ResponseShowClass *) resp;
-    } else if (strcmp("Rpc__ResponseListdir", c_name) == 0) {
-        response.type_case = RPC__RESPONSE__TYPE_LIST_DIR;
-        response.list_dir = (Rpc__ResponseListdir *) resp;
-    } else {
-        TRACE("Unknown response type_case: %s\n", c_name);
-        goto error;
+    uint8_t *inner_buf = NULL;
+    uint8_t *outer_buf = NULL;
+    // 1) Pack the inner message (may be NULL if you want empty payload)
+    size_t inner_len = 0;
+    if (inner) {
+        inner_len = protobuf_c_message_get_packed_size(inner);
+        inner_buf = (uint8_t *) malloc(inner_len);
+        if (!inner_buf) goto error;
+        protobuf_c_message_pack(inner, inner_buf);
     }
-    uint8_t *buffer = NULL;
-    size_t len = rpc__response__get_packed_size(&response);
-    CHECK(len > 0);
-    buffer = (uint8_t *) malloc(len * sizeof(uint8_t));
-    CHECK(buffer != NULL);
-    CHECK(rpc__response__pack(&response, buffer) > 0);
-    CHECK(send_message(sockfd, buffer, len));
+
+    // 2) Build the outer Response with bytes payload
+    Rpc__Response outer = RPC__RESPONSE__INIT;
+    outer.code = code;
+    outer.payload.data = inner_buf; // may be NULL if inner == NULL
+    outer.payload.len = inner_len;
+
+    size_t outer_len = rpc__response__get_packed_size(&outer);
+    if (outer_len == 0) goto error;
+
+    outer_buf = (uint8_t *) malloc(outer_len);
+    if (!outer_buf) goto error;
+
+    rpc__response__pack(&outer, outer_buf);
+    send_message(sockfd, outer_buf, outer_len);
     ret = true;
 
 error:
-    safe_free((void **) &buffer);
+    safe_free((void **) &inner_buf);
+    safe_free((void **) &outer_buf);
     return ret;
 }

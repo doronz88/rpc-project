@@ -35,5 +35,5 @@ int handle_showclass(int sockfd, Rpc__CmdShowClass *cmd) {
   NSString *response_str = getClassDescriptionStr((id) cmd->address);
   resp_show_class.description = (char *) [response_str UTF8String];
 
-  return send_response(sockfd, (ProtobufCMessage *) &resp_show_class);
+  return send_response(sockfd, (ProtobufCMessage *) &resp_show_class,RPC__STATUS_CODE__OK);
 }

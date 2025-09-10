@@ -29,7 +29,7 @@ bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) {
     resp_class_list.classes[i]->name = strdup(name);
   }
   resp_class_list.n_classes = count;
-  CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_class_list));
+  CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_class_list,RPC__STATUS_CODE__OK));
   ret = true;
 
 error:
