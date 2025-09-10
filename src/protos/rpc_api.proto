@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package rpc.api;
+
+enum MsgId {
+  MSG_ID_UNKNOWN = 0;
+
+  REQ_DLOPEN = 1;
+  REQ_DLCLOSE = 2;
+  REQ_DLSYM = 3;
+  REQ_PEEK = 4;
+  REQ_POKE = 5;
+  REQ_EXEC = 6;
+  REQ_CALL = 7;
+  REQ_CLOSE_CLIENT = 8;
+  REQ_LIST_DIR = 9;
+  REQ_DUMMY_BLOCK = 10;
+  REQ_GET_CLASS_LIST = 11;
+  REQ_SHOW_OBJECT = 12;
+  REQ_SHOW_CLASS = 13;
+
+  reserved 0x100 to max; // Validation: This should equal ProtocolConstants.RPC_MAX_REQ_MSG_ID
+}
+
+
+message RequestShowObject {uint64 address = 1;}
+
+message ReplyShowObject {string description = 1;}
+
+message RequestShowClass {uint64 address = 1;}
+
+message ReplyShowClass {string description = 1;}
+
+message RequestDlopen {
+  string filename = 1;
+  int32 mode = 2;
+}
+
+message ReplyDlopen {uint64 handle = 1;}
+
+message RequestDlclose {uint64 handle = 1;}
+
+message ReplyDlclose {uint32 res = 1;}
+
+message RequestDlsym {
+  uint64 handle = 1;
+  string symbol_name = 2;
+}
+
+message ReplyDlsym {uint64 ptr = 1;}
+
+message RequestExec {
+  bool background = 1;
+  repeated string argv = 2;
+  repeated string envp = 3;
+}
+
+message ReplyExec {uint32 pid = 1; int32 fd = 2;}
+
+message RequestCall {
+  uint64 address = 1;
+  uint64 va_list_index = 2;
+  repeated Argument argv = 3;
+}
+
+message ReplyCall {
+  oneof return_values {
+    ReturnRegistersArm arm_registers = 1;
+    uint64 return_value = 2;
+  }
+}
+
+message RequestPeek {
+  uint64 address = 1;
+  uint64 size = 2;
+}
+
+message ReplyPeek {bytes data = 1;}
+
+message RequestPoke {
+  uint64 address = 1;
+  bytes data = 2;
+}
+
+message ReplyPoke {}
+
+message RequestListDir {string path = 1;}
+
+message RequestDummyBlock {}
+
+message ReplyDummyBlock {
+  uint64 address = 1;
+  uint64 size = 2;
+}
+
+message RequestGetClassList {}
+
+message ObjcClass {
+  uint64 address = 1;
+  string name = 2;
+}
+
+message ReplyGetClassList {repeated ObjcClass classes = 1;}
+
+message ReplyError {
+  string message = 1;
+  int32 errno_code = 2;
+}
+
+message ReplyListDir {
+  repeated DirEntry dir_entries = 3;
+}
+
+message RequestCloseClient {}
+
+message ReplyCloseClient {}
+
+message DirEntryStat {
+  uint64 errno1 = 1;
+  uint64 st_dev = 2;
+  uint64 st_mode = 3;
+  uint64 st_nlink = 4;
+  uint64 st_ino = 5;
+  uint64 st_uid = 6;
+  uint64 st_gid = 7;
+  uint64 st_rdev = 8;
+  uint64 st_size = 9;
+  uint64 st_blocks = 10;
+  uint64 st_blksize = 11;
+  uint64 st_atime1 = 12;
+  uint64 st_mtime1 = 13;
+  uint64 st_ctime1 = 14;
+}
+
+message DirEntry {
+  uint64 d_type = 1;
+  string d_name = 2;
+  DirEntryStat lstat = 3;
+  DirEntryStat stat = 4;
+}
+
+message ReturnRegistersArm {
+  uint64 x0 = 1;
+  uint64 x1 = 2;
+  uint64 x2 = 3;
+  uint64 x3 = 4;
+  uint64 x4 = 5;
+  uint64 x5 = 6;
+  uint64 x6 = 7;
+  uint64 x7 = 8;
+
+  double d0 = 9;
+  double d1 = 10;
+  double d2 = 11;
+  double d3 = 12;
+  double d4 = 13;
+  double d5 = 14;
+  double d6 = 15;
+  double d7 = 16;
+}
+
+message Argument {
+  oneof type {
+    uint64 v_int = 1;
+    double v_double = 2;
+    string v_str = 3;
+    bytes v_bytes = 4;
+  }
+}

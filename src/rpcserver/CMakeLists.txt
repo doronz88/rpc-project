@@ -89,23 +89,25 @@ if (APPLE)
     message("Foundation Library: ${FOUNDATION_LIBRARY}")
 
     add_library(darwin_utils OBJECT darwin/darwin_utils.m)
-    add_library(darwin_class OBJECT darwin/darwin_class.m)
-    add_library(darwin_object OBJECT darwin/darwin_object.m)
-    add_library(darwin_get_class_list OBJECT darwin/darwin_get_class_list.m)
+    add_library(darwin_routines OBJECT darwin/darwin_routines.m
+            darwin/darwin_routines.m)
 
     # Add Apple-specific dependencies to the apple_specific variable
     set(apple_specific
             darwin_utils
-            darwin_class
-            darwin_object
-            darwin_get_class_list
+            darwin_routines
             ${COREFOUNDATION_LIBRARY}
             ${FOUNDATION_LIBRARY}
     )
 
 endif ()
 
-add_executable(${TARGET_NAME} rpcserver.c common.c protos/rpc.pb-c.c)
+add_executable(${TARGET_NAME} rpcserver.c common.c protos/rpc.pb-c.c
+        routines.c
+        call_abi.c
+        rpc_builtin.c
+        protos/rpc_api.pb-c.c
+)
 add_dependencies(${TARGET_NAME} protobuf-c)
 target_link_libraries(${TARGET_NAME} PRIVATE ${LIBPROTO_C}/libprotobuf-c.a ${apple_specific})
 target_compile_definitions(${TARGET_NAME} PRIVATE PLATFORM="${TARGET_UPPERCASE}")

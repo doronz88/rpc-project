@@ -2,19 +2,8 @@
 #include <objc/objc.h>
 #include <objc/runtime.h>
 
-void addProtocolsToDictionary(Class objcClass, NSDictionary *outDictionary) {
-  uint outCount = 0;
-  id *protocols = class_copyProtocolList(objcClass, &outCount);
 
-  for (uint i = 0; i < outCount; ++i) {
-    [outDictionary[@"protocols"] addObject:[NSString stringWithCString:protocol_getName(protocols[i]) encoding:NSUTF8StringEncoding]];
-  }
-  if (protocols) {
-    free(protocols);
-  }
-}
-
-static void addToIvars(Class objcClass, NSDictionary *outDictionary, id objcObject, Ivar ivar) {
+void addToIvars(Class objcClass, NSDictionary *outDictionary, id objcObject, Ivar ivar) {
   NSMutableDictionary *currIvarObject = [NSMutableDictionary new];
   NSString *ivarName = [NSString stringWithCString:ivar_getName(ivar) encoding:NSUTF8StringEncoding];
   [currIvarObject setObject:ivarName forKey:@"name"];
@@ -28,6 +17,18 @@ static void addToIvars(Class objcClass, NSDictionary *outDictionary, id objcObje
     [currIvarObject setObject:value forKey:@"value"];
   }
   [outDictionary[@"ivars"] addObject:currIvarObject];
+}
+
+void addProtocolsToDictionary(Class objcClass, NSDictionary *outDictionary) {
+  uint outCount = 0;
+  id *protocols = class_copyProtocolList(objcClass, &outCount);
+
+  for (uint i = 0; i < outCount; ++i) {
+    [outDictionary[@"protocols"] addObject:[NSString stringWithCString:protocol_getName(protocols[i]) encoding:NSUTF8StringEncoding]];
+  }
+  if (protocols) {
+    free(protocols);
+  }
 }
 
 void addIvarsToDictionary(Class objcClass, NSDictionary *outDictionary, id objcObject) {
@@ -160,4 +161,54 @@ void addMethodsToDictionary(Class objcClass, NSDictionary *outDictionary) {
 NSString *getDictionaryJsonString(NSDictionary *classDescription) {
   NSData *data = [NSJSONSerialization dataWithJSONObject:classDescription options:0 error:nil];
   return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+}
+
+
+NSDictionary *getClassDescription(Class objcClass) {
+  NSDictionary *classDescription = @{
+    @"protocols": [NSMutableArray new],
+    @"ivars": [NSMutableArray new],
+    @"properties": [NSMutableArray new],
+    @"methods": [NSMutableArray new],
+    @"name": [NSString stringWithCString:class_getName(objcClass) encoding:NSUTF8StringEncoding],
+    @"address": [NSNumber numberWithLong:(uintptr_t) objcClass],
+    @"super": [NSNumber numberWithLong:(uintptr_t) class_getSuperclass(objcClass)],
+  };
+
+  addProtocolsToDictionary(objcClass, classDescription);
+  addIvarsToDictionary(objcClass, classDescription, nil);
+  addPropertiesToDictionary(objcClass, classDescription);
+  addMethodsToDictionary(objcClass, classDescription);
+
+  return classDescription;
+}
+
+NSString *getClassDescriptionStr(Class objcClass) {
+  NSDictionary *classDescription = getClassDescription(objcClass);
+  return getDictionaryJsonString(classDescription);
+}
+
+NSDictionary *getObjectData(id objcObject) {
+  Class objcClass = [objcObject class];
+
+  NSDictionary *objectData = @{
+    @"protocols": [NSMutableArray new],
+    @"ivars": [NSMutableArray new],
+    @"properties": [NSMutableArray new],
+    @"methods": [NSMutableArray new],
+    @"class_name": [NSString stringWithCString:class_getName(objcClass) encoding:NSUTF8StringEncoding],
+    @"class_address": [NSNumber numberWithUnsignedLongLong:(uintptr_t) objcClass],
+    @"class_super": [NSNumber numberWithLong:(uintptr_t) class_getSuperclass(objcClass)],
+  };
+
+  addProtocolsToDictionary(objcClass, objectData);
+  addIvarsToDictionary(objcClass, objectData, objcObject);
+  addPropertiesToDictionary(objcClass, objectData);
+  addMethodsToDictionary(objcClass, objectData);
+  return objectData;
+}
+
+NSString *getObjectStr(id object) {
+  NSDictionary *objectData = getObjectData(object);
+  return getDictionaryJsonString(objectData);
 }
