@@ -1,4 +1,4 @@
-PROTO_FILES = rpc.proto
+PROTO_FILES = *.proto
 PYTHON_OUT_DIR=../rpcclient/rpcclient/protos/
 C_OUT_DIR=../rpcserver/protos/
 

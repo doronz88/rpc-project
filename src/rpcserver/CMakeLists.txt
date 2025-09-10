@@ -42,7 +42,7 @@ if (APPLE)
     unset(CMAKE_OSX_DEPLOYMENT_TARGET CACHE)
     execute_process(COMMAND xcrun --sdk ${SDK} --show-sdk-path OUTPUT_VARIABLE CMAKE_OSX_SYSROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND xcrun -f --sdk ${SDK} clang OUTPUT_VARIABLE CMAKE_C_COMPILER OUTPUT_STRIP_TRAILING_WHITESPACE)
-    set(CMAKE_C_FLAGS -DSAFE_READ_WRITES)
+    set(CMAKE_C_FLAGS -DSAFE_READ_WRITES)#[[]]
     message(STATUS "CMAKE_OSX_SYSROOT: ${CMAKE_OSX_SYSROOT}")
     message(STATUS "CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
 endif ()
@@ -89,23 +89,24 @@ if (APPLE)
     message("Foundation Library: ${FOUNDATION_LIBRARY}")
 
     add_library(darwin_utils OBJECT darwin/darwin_utils.m)
-    add_library(darwin_class OBJECT darwin/darwin_class.m)
-    add_library(darwin_object OBJECT darwin/darwin_object.m)
-    add_library(darwin_get_class_list OBJECT darwin/darwin_get_class_list.m)
+    add_library(darwin_routines OBJECT darwin/darwin_routines.m
+            darwin/darwin_routines.m)
 
     # Add Apple-specific dependencies to the apple_specific variable
     set(apple_specific
             darwin_utils
-            darwin_class
-            darwin_object
-            darwin_get_class_list
+            darwin_routines
             ${COREFOUNDATION_LIBRARY}
             ${FOUNDATION_LIBRARY}
     )
 
 endif ()
 
-add_executable(${TARGET_NAME} rpcserver.c common.c protos/rpc.pb-c.c)
+add_executable(${TARGET_NAME} rpcserver.c common.c protos/rpc.pb-c.c
+        routines.c
+        call_abi.c
+        rpc_builtin.c
+)
 add_dependencies(${TARGET_NAME} protobuf-c)
 target_link_libraries(${TARGET_NAME} PRIVATE ${LIBPROTO_C}/libprotobuf-c.a ${apple_specific})
 target_compile_definitions(${TARGET_NAME} PRIVATE PLATFORM="${TARGET_UPPERCASE}")

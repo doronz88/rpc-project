@@ -6,8 +6,8 @@ from contextlib import contextmanager
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
 
-from rpcclient.core.protobuf_bridge import ARCH_ARM64
 from rpcclient.core.structs.generic import Dl_info
+from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 RETVAL_BIT_COUNT = 64
