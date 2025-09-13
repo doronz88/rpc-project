@@ -8,8 +8,8 @@ from typing import Union
 
 import requests
 
-from rpcclient.core.protosocket import ProtoSocket
 from rpcclient.exceptions import FailedToConnectError
+from rpcclient.protocol.rpc_bridge import RpcBridge
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ BINARY_NAME = "rpcserver_macosx"
 
 
 def create_tcp(*, hostname: Union[str, None] = None, host: Union[str, None] = None,
-               port: int = DEFAULT_PORT, timeout: Union[float, None] = None) -> ProtoSocket:
+               port: int = DEFAULT_PORT, timeout: Union[float, None] = None) -> RpcBridge:
     """ Connect via TCP and return a ProtoSocket. """
     target = hostname or host
     if not target:
@@ -32,11 +32,11 @@ def create_tcp(*, hostname: Union[str, None] = None, host: Union[str, None] = No
     except ConnectionRefusedError as e:
         s.close()
         raise FailedToConnectError() from e
-    return ProtoSocket(s)
+    return RpcBridge(s)
 
 
 def create_local(*, project_url: str = PROJECT_URL, binary_name: str = BINARY_NAME,
-                 poll_interval: float = 0.1) -> ProtoSocket:
+                 poll_interval: float = 0.1) -> RpcBridge:
     """
     Download the latest rpcserver release asset, spawn it locally on a free port,
     and connect via TCP. Returns a ProtoSocket.

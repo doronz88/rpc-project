@@ -30,7 +30,8 @@ class RpcEvents:
                 continue
 
             # Skip names already known to local/global/builtins.
-            if node.id in locals() or node.id in globals() or node.id in dir(builtins):
+            if node.id in locals() or node.id in globals() or node.id in dir(
+                    builtins) or node.id in self.ipython.user_ns:
                 continue
 
             # 1) Generic: SymbolsJar lazy load

@@ -6,8 +6,8 @@ from rpcclient.clients.ios.client import IosClient
 from rpcclient.clients.linux.client import LinuxClient
 from rpcclient.clients.macos.client import MacosClient
 from rpcclient.core.client import ClientEvent, CoreClient
-from rpcclient.core.protosocket import ProtoSocket
 from rpcclient.event_notifier import EventNotifier
+from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.registry import Registry
 from rpcclient.transports import create_local, create_tcp
 
@@ -29,7 +29,7 @@ class ClientManager:
             'core': CoreClient,
         })
 
-        self.transport_factory = Registry[str, Callable[..., ProtoSocket]]({
+        self.transport_factory = Registry[str, Callable[..., RpcBridge]]({
             'tcp': create_tcp,
             'local': create_local,
         })
@@ -43,18 +43,17 @@ class ClientManager:
         if transport_factory is None:
             raise ValueError(f'Unknown client mode: {mode}')
 
-        proto_sock = transport_factory(**kwargs)
-        server_type = proto_sock.handshake.platform.lower()
+        rpc_bridge = transport_factory(**kwargs)
+        server_type = rpc_bridge.handshake.platform.lower()
 
         client_factory = self.client_factory.get(server_type)
         if client_factory is None:
             raise ValueError(f'Unknown client mode: {server_type}')
 
         client: ClientType = client_factory(
-            cid=proto_sock.handshake.client_id,
-            sock=proto_sock,
-            sysname=proto_sock.handshake.sysname.lower(),
-            arch=proto_sock.handshake.arch,
+            bridge=rpc_bridge,
+            sysname=rpc_bridge.handshake.sysname.lower(),
+            arch=rpc_bridge.handshake.arch,
             server_type=server_type
         )
         client.notifier.register(ClientEvent.TERMINATED, self._on_client_terminated)
