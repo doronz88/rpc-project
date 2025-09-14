@@ -1,54 +1,29 @@
+#include <spawn.h>
 #ifndef __APPLE__
 #define _XOPEN_SOURCE (600)
 #define _GNU_SOURCE (1)
 #endif// __APPLE__
 
 #include "common.h"
-#include "protos/rpc.pb-c.h"
+#include "routines.h"
 #include <arpa/inet.h>
 #include <dirent.h>
-#include <dlfcn.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <pthread.h>
 #include <signal.h>
-#include <spawn.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
-#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
-bool handle_showobject(int sockfd, Rpc__CmdShowObject *cmd);
-
-bool handle_showclass(int sockfd, Rpc__CmdShowClass *cmd);
-
-bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd);
-
 #ifdef __APPLE__
-
 #include <CoreFoundation/CoreFoundation.h>
-#include <mach/mach.h>
-
-#else
-bool handle_showobject(int sockfd, Rpc__CmdShowObject *cmd) { return 0; }
-bool handle_showclass(int sockfd, Rpc__CmdShowClass *cmd) { return 0; }
-bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
 #endif// __APPLE__
 
 #define DEFAULT_PORT ("5910")
-#define USAGE \
+#define USAGE                                                                                                          \
     ("Usage: %s [-p port] [-o (stdout|syslog|file:filename)] [-d disable worker] \n\
 -h  show this help message \n\
 -o  output. can be all of the following: stdout, syslog and file:filename. can be passed multiple times \n\
@@ -57,94 +32,98 @@ bool handle_get_class_list(int sockfd, Rpc__CmdGetClassList *cmd) { return 0; }
 Example usage: \n\
 %s -p 5910 -o syslog -o stdout -o file:/tmp/log.txt\n")
 #define MAX_CONNECTIONS (1024)
-
 #define MAX_OPTION_LEN (256)
-#define BUFFERSIZE (64 * 1024)
-#define INVALID_PID (0xffffffff)
 #define WORKER_CLIENT_SOCKET_FD (3)
-#define CLOBBERD_LIST                                                          \
-    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x19", "x20", "x21", \
-        "x22", "x23", "x24", "x25", "x26"
-
-extern char **environ;
-
-typedef struct {
-    int sockfd;
-    pid_t pid;
-} thread_notify_client_spawn_error_t;
+#define CLOBBERD_LIST                                                                                                  \
+    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26"
 
 void *get_in_addr(struct sockaddr *sa)// get sockaddr, IPv4 or IPv6:
 {
-    return sa->sa_family == AF_INET
-        ? (void *) &(((struct sockaddr_in *) sa)->sin_addr)
-        : (void *) &(((struct sockaddr_in6 *) sa)->sin6_addr);
+    return sa->sa_family == AF_INET ? (void *) &(((struct sockaddr_in *) sa)->sin_addr)
+                                    : (void *) &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
-bool internal_spawn(bool background, char **argv, char **envp, pid_t *pid,
-                    int *master_fd) {
-    bool ret = false;
-    int slave_fd = -1;
-    *master_fd = -1;
-    *pid = INVALID_PID;
+/**
+ * Facilitates communication using a pseudo-terminal (PTY) between a server and client.
+ * This function handles bidirectional data transfer between the PTY master and the
+ * client socket, monitors for input on both file descriptors, and sends or processes data
+ * accordingly. Once the PTY process exits, it communicates the exit status to the client.
+ *
+ * @param sockfd The socket file descriptor used for communication with the client.
+ */
+static void enter_pty_mode(int sockfd) {
+    int master = g_pending_pty.master;
+    pid_t pid = g_pending_pty.pid;
 
-    // call setsid() on child so Ctrl-C and all other control characters are set
-    // in a different terminal and process group
-    posix_spawnattr_t attr;
-    CHECK(0 == posix_spawnattr_init(&attr));
-    CHECK(0 == posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID));
+    g_pending_pty.valid = false;
 
-    posix_spawn_file_actions_t actions;
-    CHECK(0 == posix_spawn_file_actions_init(&actions));
+    fd_set readfds;
+    char buf[RPC__PROTOCOL_CONSTANTS__RPC_PTY_BUFFER_SIZE];
+    int nbytes = 0;
 
-    if (!background) {
-        // We need a new pseudoterminal to avoid bufferring problems. The 'atos'
-        // tool in particular detects when it's talking to a pipe and forgets to
-        // flush the output stream after sending a response.
-        *master_fd = posix_openpt(O_RDWR);
-        CHECK(-1 != *master_fd);
-        CHECK(0 == grantpt(*master_fd));
-        CHECK(0 == unlockpt(*master_fd));
+    while (1) {
+        FD_ZERO(&readfds);
+        FD_SET(master, &readfds);
+        FD_SET(sockfd, &readfds);
+        int maxfd = (master > sockfd) ? master : sockfd;
 
-        char slave_pty_name[128];
-        CHECK(0 == ptsname_r(*master_fd, slave_pty_name, sizeof(slave_pty_name)));
+        if (select(maxfd + 1, &readfds, NULL, NULL, NULL) <= 0) {
+            break;
+        }
 
-        TRACE("slave_pty_name: %s", slave_pty_name);
+        if (FD_ISSET(master, &readfds)) {
+            nbytes = (int) read(master, buf, sizeof(buf));
+            if (nbytes <= 0) {
+                TRACE("PTY master EOF/break");
+                break;
+            }
 
-        slave_fd = open(slave_pty_name, O_RDWR);
-        CHECK(-1 != slave_fd);
-
-        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDIN_FILENO));
-        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDOUT_FILENO));
-        CHECK(0 == posix_spawn_file_actions_adddup2(&actions, slave_fd, STDERR_FILENO));
-        CHECK(0 == posix_spawn_file_actions_addclose(&actions, slave_fd));
-        CHECK(0 == posix_spawn_file_actions_addclose(&actions, *master_fd));
-    } else {
-        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0));
-        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0));
-        CHECK(0 == posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0));
+            Rpc__RpcPtyMessage pty_msg = RPC__RPC_PTY_MESSAGE__INIT;
+            pty_msg.type_case = RPC__RPC_PTY_MESSAGE__TYPE_BUFFER;
+            pty_msg.buffer.data = (uint8_t *) buf;
+            pty_msg.buffer.len = (size_t) nbytes;
+            CHECK(proto_msg_send(sockfd, (ProtobufCMessage *) &pty_msg) == MSG_SUCCESS);
+        }
+        if (FD_ISSET(sockfd, &readfds)) {
+            nbytes = (int) recv(sockfd, buf, sizeof(buf), 0);
+            if (nbytes <= 0) {
+                TRACE("Client closed input during PTY");
+                break;
+            }
+            CHECK(writeall(master, buf, (size_t) nbytes));
+        }
     }
 
-    CHECK(0 == posix_spawnp(pid, argv[0], &actions, &attr, argv, envp));
-    CHECK(*pid != INVALID_PID);
+    int status = 0;
+    (void) waitpid(pid, &status, 0);
 
-    posix_spawnattr_destroy(&attr);
-    posix_spawn_file_actions_destroy(&actions);
-
-    ret = true;
+    Rpc__RpcPtyMessage pty_msg = RPC__RPC_PTY_MESSAGE__INIT;
+    pty_msg.type_case = RPC__RPC_PTY_MESSAGE__TYPE_EXIT_CODE;
+    pty_msg.exit_code = status;
+    CHECK(proto_msg_send(sockfd, (ProtobufCMessage *) &pty_msg) == MSG_SUCCESS);
 
 error:
-    if (slave_fd != -1) {
-        close(slave_fd);
+    if (master >= 0) {
+        close(master);
     }
-    if (!ret) {
-        if (*master_fd != -1) {
-            close(*master_fd);
-        }
-        *pid = INVALID_PID;
-    }
-    return ret;
+    g_pending_pty.pid = 0;
+    g_pending_pty.master = -1;
+    g_pending_pty.valid = false;
 }
 
+/**
+ * Spawns a worker server process for handling communications with a client.
+ * This function creates a new process using `posix_spawnp`, passing modified
+ * arguments to include a worker mode flag (-w). It establishes necessary file
+ * descriptor mappings for standard input/output/error and the client socket.
+ * The function also ensures the appropriate cleanup for allocated resources and
+ * the client socket.
+ *
+ * @param client_socket The file descriptor for the client socket to be passed to the worker.
+ * @param argv The original argument array to modify and pass to the worker process.
+ * @param argc The number of arguments in the original argument array.
+ * @return True if the worker process was successfully spawned; false otherwise.
+ */
 bool spawn_worker_server(int client_socket, const char *argv[], int argc) {
     bool ret = false;
 
@@ -179,630 +158,6 @@ error:
     return ret;
 }
 
-void thread_waitpid(pid_t pid) {
-    TRACE("enter");
-    s32 err;
-    waitpid(pid, &err, 0);
-}
-
-bool handle_exec(int sockfd, Rpc__CmdExec *cmd) {
-    bool ret = false;
-    Rpc__ResponseCmdExec resp_exec = RPC__RESPONSE_CMD_EXEC__INIT;
-
-    pthread_t thread = 0;
-    thread_notify_client_spawn_error_t *thread_params = NULL;
-    pid_t pid = INVALID_PID;
-    int master = -1;
-    char **argv = NULL;
-    char **envp = NULL;
-
-    CHECK(cmd->n_argv > 0);
-
-    CHECK(copy_arr_with_null(&argv, cmd->argv, cmd->n_argv));
-    CHECK(copy_arr_with_null(&envp, cmd->envp, cmd->n_envp));
-
-    CHECK(internal_spawn(cmd->background, argv, cmd->n_envp ? envp : environ, &pid, &master));
-
-    resp_exec.pid = pid;
-    CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_exec));
-
-    if (cmd->background) {
-        CHECK(0 == pthread_create(&thread, NULL, (void *(*) (void *) ) thread_waitpid, (void *) (intptr_t) pid));
-    } else {
-        Rpc__ResponseCmdExecChunk resp_exec_chunk = RPC__RESPONSE_CMD_EXEC_CHUNK__INIT;
-        // make sure we have the process fd for its stdout and stderr
-        CHECK(master >= 0);
-        fd_set readfds;
-        char buf[BUFFERSIZE];
-        int maxfd = master > sockfd ? master : sockfd;
-        int nbytes = 0;
-
-        fd_set errfds;
-
-        while (true) {
-            FD_ZERO(&readfds);
-            FD_SET(master, &readfds);
-            FD_SET(sockfd, &readfds);
-
-            CHECK(select(maxfd + 1, &readfds, NULL, &errfds, NULL) != -1);
-
-            if (FD_ISSET(master, &readfds)) {
-                nbytes = read(master, buf, BUFFERSIZE);
-                if (nbytes < 1) {
-                    TRACE("read master failed. break");
-                    break;
-                }
-
-                TRACE("master->sock");
-                resp_exec_chunk.buffer.len = nbytes;
-                resp_exec_chunk.buffer.data = (uint8_t *) buf;
-                resp_exec_chunk.type_case = RPC__RESPONSE_CMD_EXEC_CHUNK__TYPE_BUFFER;
-                CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_exec_chunk));
-            }
-            if (FD_ISSET(sockfd, &readfds)) {
-                nbytes = recv(sockfd, buf, BUFFERSIZE, 0);
-                if (nbytes < 1) {
-                    break;
-                }
-                TRACE("sock->master");
-                CHECK(writeall(master, buf, nbytes));
-            }
-        }
-        s32 error;
-        TRACE("wait for process to finish");
-#ifndef SINGLE_THREAD
-        CHECK(pid == waitpid(pid, &error, 0));
-#endif
-        resp_exec_chunk.type_case = RPC__RESPONSE_CMD_EXEC_CHUNK__TYPE_EXIT_CODE;
-        resp_exec_chunk.exit_code = error;
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_exec_chunk));
-    }
-
-    ret = true;
-
-error:
-    safe_free((void **) &argv);
-    safe_free((void **) &envp);
-    safe_free((void **) &thread_params);
-
-    if (INVALID_PID == pid) {
-        TRACE("invalid pid");
-        // failed to create process somewhere in the prolog, at least notify
-        Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
-        error.code = RPC__ERROR_CODE__ERROR_SPAWN_FAILED;
-        send_response(sockfd, (ProtobufCMessage *) &error);
-    }
-
-    if (-1 != master) {
-        TRACE("close master: %d", master);
-        if (0 != close(master)) {
-            perror("close");
-        }
-    }
-    return ret;
-}
-
-bool handle_dlopen(int sockfd, Rpc__CmdDlopen *cmd) {
-    Rpc__ResponseDlopen resp_dlopen = RPC__RESPONSE_DLOPEN__INIT;
-    resp_dlopen.handle = (uint64_t) dlopen(cmd->filename, cmd->mode);
-    return send_response(sockfd, (ProtobufCMessage *) &resp_dlopen);
-}
-
-bool handle_dlclose(int sockfd, Rpc__CmdDlclose *cmd) {
-    Rpc__ResponseDlclose resp_dlclose = RPC__RESPONSE_DLCLOSE__INIT;
-    resp_dlclose.res = (uint64_t) dlclose((void *) cmd->handle);
-    return send_response(sockfd, (ProtobufCMessage *) &resp_dlclose);
-}
-
-bool handle_dlsym(int sockfd, Rpc__CmdDlsym *cmd) {
-    Rpc__ResponseDlsym resp_dlsym = RPC__RESPONSE_DLSYM__INIT;
-    resp_dlsym.ptr = (uint64_t) dlsym((void *) cmd->handle, cmd->symbol_name);
-    TRACE("%s = %p", cmd->symbol_name, resp_dlsym.ptr);
-    return send_response(sockfd, (ProtobufCMessage *) &resp_dlsym);
-}
-
-#ifdef __ARM_ARCH_ISA_A64
-
-void call_function(intptr_t address, size_t va_list_index, size_t argc,
-                   Rpc__Argument **p_argv, Rpc__ResponseCall *resp) {
-
-    arm_args_t args = {0};
-    uint64_t regs_backup[GPR_COUNT] = {0};
-    uint32_t idx_fp = 0, idx_gp = 0, idx_stack = 0, idx_argv = 0;
-    intptr_t *current_target = NULL, *current_arg = NULL;
-    for (idx_argv = 0; idx_argv < argc; idx_argv++) {
-        switch (p_argv[idx_argv]->type_case) {
-        case RPC__ARGUMENT__TYPE_V_STR:
-        case RPC__ARGUMENT__TYPE_V_BYTES:
-        case RPC__ARGUMENT__TYPE_V_INT:
-            // Assign target register if available, otherwise set to `NULL`
-            current_target =
-                (idx_gp < MAX_REGS_ARGS) ? (intptr_t *) &args.x[idx_gp++] : NULL;
-            break;
-        case RPC__ARGUMENT__TYPE_V_DOUBLE:
-            // Assign target register if available, otherwise set to `NULL`
-            current_target =
-                (idx_fp < MAX_REGS_ARGS) ? (intptr_t *) &args.d[idx_fp++] : NULL;
-            break;
-        default:
-            break;
-        }
-        // Use the stack if `va_list_index` or if the target register is not
-        // available
-        if (idx_argv >= va_list_index || !current_target) {
-            current_target = (intptr_t *) &args.stack[idx_stack++];
-        }
-        // `v_int`, `v_str`, and `v_double` all point to the same place, so we use
-        // `v_int` for convenience. However, `v_bytes` requires access to
-        // `v_bytes.data`.
-        current_arg = (p_argv[idx_argv]->type_case == RPC__ARGUMENT__TYPE_V_BYTES
-                           ? (intptr_t *) &p_argv[idx_argv]->v_bytes.data
-                           : (intptr_t *) &p_argv[idx_argv]->v_int);
-        *current_target = *current_arg;
-    }
-
-    __asm__ __volatile__(
-        "mov x19, %[address]\n"
-        "mov x20, %[args_registers]\n"
-        "mov x21, %[max_args]\n"
-        "mov x22, %[args_stack]\n"
-        "mov x23, %[regs_backup]\n"
-        "mov x24, %[result_registers]\n"
-        "mov x25, #0\n"// counter
-        "mov x26, #0\n"// temp stack current_arg
-
-        // Backup registers
-        "stp x8,  x9,  [x23]\n"
-        "stp x10, x11, [x23, #16]\n"
-        "stp x12, x13, [x23, #32]\n"
-        "stp x14, x15, [x23, #48]\n"
-        "stp x16, x17, [x23, #64]\n"
-        "stp x18, x19, [x23, #80]\n"
-        "stp x20, x21, [x23, #96]\n"
-        "stp x22, x23, [x23, #112]\n"
-        "stp x24, x25, [x23, #128]\n"
-        "stp x26, x27, [x23, #144]\n"
-
-        // Prepare register arguments
-        "ldp x0, x1, [x20]\n"
-        "ldp x2, x3, [x20, #16]\n"
-        "ldp x4, x5, [x20, #32]\n"
-        "ldp x6, x7, [x20, #48]\n"
-        "ldp d0, d1, [x20, #64]\n"
-        "ldp d2, d3, [x20, #80]\n"
-        "ldp d4, d5, [x20, #96]\n"
-        "ldp d6, d7, [x20, #112]\n"
-
-        // Prepare stack arguments
-        "sub sp, sp, x21\n"
-        "1:\n"
-        "ldr x26, [x22, x25, lsl #3]\n"
-        "str x26, [sp, x25, lsl #3]\n"
-        "add x25, x25, #1\n"
-        "cmp x25, x21\n"
-        "bne 1b\n"
-
-        // Call function
-        "blr x19\n"
-
-        // Deallocate space on the stack
-        "add sp, sp, x21\n"
-
-        // Get return values
-        "stp x0, x1, [x24]\n"
-        "stp x2, x3, [x24, #16]\n"
-        "stp x4, x5, [x24, #32]\n"
-        "stp x6, x7, [x24, #48]\n"
-        "stp d0, d1, [x24, #64]\n"
-        "stp d2, d3, [x24, #80]\n"
-        "stp d4, d5, [x24, #96]\n"
-        "stp d6, d7, [x24, #112]\n"
-
-        // Restore
-        "ldp x8,  x9,  [x23]\n"
-        "ldp x10, x11, [x23, #16]\n"
-        "ldp x12, x13, [x23, #32]\n"
-        "ldp x14, x15, [x23, #48]\n"
-        "ldp x16, x17, [x23, #64]\n"
-        "ldp x18, x19, [x23, #80]\n"
-        "ldp x20, x21, [x23, #96]\n"
-        "ldp x22, x23, [x23, #112]\n"
-        "ldp x24, x25, [x23, #128]\n"
-        "ldp x26, x27, [x23, #144]\n"
-        :
-        : [regs_backup] "r"(&regs_backup), [args_registers] "r"(&args),
-          [args_stack] "r"(&args.stack), [max_args] "r"((uint64_t) MAX_STACK_ARGS),
-          [address] "r"(address), [result_registers] "r"(&resp->arm_registers->x0)
-        : CLOBBERD_LIST);
-}
-
-#else
-
-typedef u64 (*call_argc_t)(u64, u64, u64, u64, u64, u64, u64, u64, u64, u64,
-                           u64, u64, u64, u64, u64, u64, u64);
-
-void call_function(intptr_t address, size_t va_list_index, size_t argc,
-                   Rpc__Argument **p_argv,
-                   Rpc__ResponseCall *response) {
-    s64 return_val;
-    TRACE("enter");
-    call_argc_t call = (call_argc_t) address;
-    u64 args[MAX_ARGS] = {0};
-    for (size_t i = 0; i < argc; i++) {
-        switch (p_argv[i]->type_case) {
-        case RPC__ARGUMENT__TYPE_V_DOUBLE:
-            args[i] = p_argv[i]->v_double;
-            break;
-        case RPC__ARGUMENT__TYPE_V_INT:
-            args[i] = p_argv[i]->v_int;
-            break;
-        case RPC__ARGUMENT__TYPE_V_STR:
-            args[i] = (uint64_t) p_argv[i]->v_str;
-            break;
-        case RPC__ARGUMENT__TYPE_V_BYTES:
-            args[i] = (uint64_t) p_argv[i]->v_bytes.data;
-            break;
-        default:
-            break;
-        }
-    }
-    return_val = call(args[0], args[1], args[2], args[3], args[4], args[5],
-                      args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[15], args[16]);
-    response->return_values_case = RPC__RESPONSE_CALL__RETURN_VALUES_RETURN_VALUE;
-    response->return_value = return_val;
-}
-
-#endif// __ARM_ARCH_ISA_A64
-
-bool handle_call(int sockfd, Rpc__CmdCall *cmd) {
-    TRACE("enter");
-    Rpc__ResponseCall resp_call = RPC__RESPONSE_CALL__INIT;
-#ifdef __ARM_ARCH_ISA_A64
-    Rpc__ReturnRegistersArm regs = RPC__RETURN_REGISTERS_ARM__INIT;
-    resp_call.arm_registers = &regs;
-    resp_call.return_values_case = RPC__RESPONSE_CALL__RETURN_VALUES_ARM_REGISTERS;
-#else
-    resp_call.return_values_case = RPC__RESPONSE_CALL__RETURN_VALUES_RETURN_VALUE;
-#endif
-    TRACE("address: %p", cmd->address);
-    call_function(cmd->address, cmd->va_list_index, cmd->n_argv, cmd->argv,
-                  &resp_call);
-    return send_response(sockfd, (ProtobufCMessage *) &resp_call);
-}
-
-bool handle_peek(int sockfd, Rpc__CmdPeek *cmd) {
-    TRACE("enter");
-    uint8_t *buffer = NULL;
-    Rpc__ResponsePeek resp_peek = RPC__RESPONSE_PEEK__INIT;
-    bool ret = false;
-
-#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
-    mach_msg_type_number_t size;
-    if (vm_read(mach_task_self(), cmd->address, cmd->size, (vm_offset_t *) &buffer,
-                &size)
-        == KERN_SUCCESS) {
-        resp_peek.data.data = (uint8_t *) buffer;
-        resp_peek.data.len = size;
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_peek));
-        CHECK(vm_deallocate(mach_task_self(), (vm_address_t) buffer, size) == KERN_SUCCESS);
-        buffer = NULL;
-        ret = true;
-
-    } else {
-        Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
-        error.code = RPC__ERROR_CODE__ERROR_MEMORY_ACCESS;
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &error))
-    }
-#else // __APPLE__
-    resp_peek.data.data = (uint8_t *) cmd->address;
-    resp_peek.data.len = cmd->size;
-    CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_peek));
-#endif// __APPLE__
-    ret = true;
-error:
-    safe_free((void **) &buffer);
-    return ret;
-}
-
-bool handle_poke(int sockfd, Rpc__CmdPoke *cmd) {
-    TRACE("Enter");
-    bool ret = false;
-    char *data = NULL;
-    Rpc__ResponsePoke resp_poke = RPC__RESPONSE_POKE__INIT;
-
-#if defined(SAFE_READ_WRITES) && defined(__APPLE__)
-    if (vm_write(mach_task_self(), cmd->address, (vm_offset_t) cmd->data.data, cmd->data.len) == KERN_SUCCESS) {
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_poke));
-    } else {
-        Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
-        error.code = RPC__ERROR_CODE__ERROR_MEMORY_ACCESS;
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
-    }
-
-#else // __APPLE__
-    memcpy((uint64_t *) cmd->address, cmd->data.data, cmd->data.len);
-    CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_poke));
-#endif// __APPLE__
-    ret = true;
-
-error:
-    safe_free((void **) &data);
-    return ret;
-}
-
-// exported for client hooks
-bool get_true() { return true; }
-
-// exported for client hooks
-bool get_false() { return false; }
-
-// exported for testing
-void test_16args(uint64_t *out, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6,
-                 uint64_t arg7, uint64_t arg8, uint64_t arg9, uint64_t arg10, uint64_t arg11, uint64_t arg12,
-                 uint64_t arg13, uint64_t arg14, uint64_t arg15, uint64_t arg16) {
-    out[0] = arg1;
-    out[1] = arg2;
-    out[2] = arg3;
-    out[3] = arg4;
-    out[4] = arg5;
-    out[5] = arg6;
-    out[6] = arg7;
-    out[7] = arg8;
-    out[8] = arg9;
-    out[9] = arg10;
-    out[10] = arg11;
-    out[11] = arg12;
-    out[12] = arg13;
-    out[13] = arg14;
-    out[14] = arg15;
-    out[15] = arg16;
-}
-
-#if __APPLE__
-
-void (^dummy_block)(void) = ^{
-};
-
-bool handle_get_dummy_block(int sockfd, Rpc__CmdDummyBlock *cmd) {
-    TRACE("enter");
-    Rpc__ResponseDummyBlock resp_dummy_block = RPC__RESPONSE_DUMMY_BLOCK__INIT;
-    resp_dummy_block.address = (uint64_t) dummy_block;
-    resp_dummy_block.size = sizeof(dummy_block);
-    return send_response(sockfd, (ProtobufCMessage *) &resp_dummy_block);
-}
-
-#else// !__APPLE__
-
-bool handle_get_dummy_block(int sockfd, Rpc__CmdDummyBlock *cmd) {
-    return true;
-}
-
-#endif// __APPLE__
-
-bool handle_listdir(int sockfd, Rpc__CmdListDir *cmd) {
-
-    TRACE("enter");
-    bool ret = false;
-    DIR *dirp = NULL;
-    size_t entry_count = 0;
-    size_t idx = 0;
-    struct dirent *entry = {0};
-
-    Rpc__ResponseListdir resp_list_dir = RPC__RESPONSE_LISTDIR__INIT;
-    Rpc__DirEntry *d_entry = NULL;
-    Rpc__DirEntryStat *d_stat = NULL, *l_stat = NULL;
-    Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
-
-    dirp = opendir(cmd->path);
-    if (NULL == dirp) {
-        error.code = RPC__ERROR_CODE__ERROR_FILE_SYSTEM;
-        CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
-        return true;
-    }
-    for (entry = readdir(dirp); entry != NULL; entry = readdir(dirp)) {
-        entry_count++;
-    }
-    CHECK(0 == closedir(dirp));
-
-    dirp = opendir(cmd->path);
-    CHECK(dirp != NULL);
-
-    resp_list_dir.magic = RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC;
-    resp_list_dir.dirp = (uint64_t) dirp;
-    resp_list_dir.n_dir_entries = entry_count;
-    resp_list_dir.dir_entries =
-        (Rpc__DirEntry **) malloc(sizeof(Rpc__DirEntry *) * entry_count);
-    CHECK(resp_list_dir.dir_entries != NULL);
-
-    while ((entry = readdir(dirp)) != NULL && entry_count > idx) {
-        struct stat system_lstat = {0};
-        struct stat system_stat = {0};
-        char fullpath[FILENAME_MAX] = {0};
-        CHECK(0 < sprintf(fullpath, "%s/%s", cmd->path, entry->d_name));
-
-        u64 lstat_error = 0;
-        u64 stat_error = 0;
-
-        if (lstat(fullpath, &system_lstat)) {
-            lstat_error = errno;
-        }
-        if (stat(fullpath, &system_stat)) {
-            stat_error = errno;
-        }
-
-        d_entry = (Rpc__DirEntry *) malloc(sizeof(Rpc__DirEntry));
-        d_stat = (Rpc__DirEntryStat *) malloc(sizeof(Rpc__DirEntryStat));
-        l_stat = (Rpc__DirEntryStat *) malloc(sizeof(Rpc__DirEntryStat));
-        CHECK(d_entry != NULL && d_stat != NULL && l_stat != NULL);
-
-        rpc__dir_entry__init(d_entry);
-        rpc__dir_entry_stat__init(d_stat);
-        rpc__dir_entry_stat__init(l_stat);
-
-        // Init d_stat
-        d_stat->errno1 = stat_error;
-        d_stat->st_dev = system_stat.st_dev;
-        d_stat->st_mode = system_stat.st_mode;
-        d_stat->st_nlink = system_stat.st_nlink;
-        d_stat->st_ino = system_stat.st_ino;
-        d_stat->st_uid = system_stat.st_uid;
-        d_stat->st_gid = system_stat.st_gid;
-        d_stat->st_rdev = system_stat.st_rdev;
-        d_stat->st_size = system_stat.st_size;
-        d_stat->st_blocks = system_stat.st_blocks;
-        d_stat->st_blksize = system_stat.st_blksize;
-        d_stat->st_atime1 = system_stat.st_atime;
-        d_stat->st_mtime1 = system_stat.st_mtime;
-        d_stat->st_ctime1 = system_stat.st_ctime;
-
-        // Init l_stat
-        l_stat->errno1 = lstat_error;
-        l_stat->st_dev = system_lstat.st_dev;
-        l_stat->st_mode = system_lstat.st_mode;
-        l_stat->st_nlink = system_lstat.st_nlink;
-        l_stat->st_ino = system_lstat.st_ino;
-        l_stat->st_uid = system_lstat.st_uid;
-        l_stat->st_gid = system_lstat.st_gid;
-        l_stat->st_rdev = system_lstat.st_rdev;
-        l_stat->st_size = system_lstat.st_size;
-        l_stat->st_blocks = system_lstat.st_blocks;
-        l_stat->st_blksize = system_lstat.st_blksize;
-        l_stat->st_atime1 = system_lstat.st_atime;
-        l_stat->st_mtime1 = system_lstat.st_mtime;
-        l_stat->st_ctime1 = system_lstat.st_ctime;
-
-        d_entry->d_type = entry->d_type;
-        d_entry->d_name = strdup(entry->d_name);
-        d_entry->stat = d_stat;
-        d_entry->lstat = l_stat;
-
-        resp_list_dir.dir_entries[idx] = d_entry;
-        idx++;
-    }
-    CHECK(send_response(sockfd, (ProtobufCMessage *) &resp_list_dir));
-    ret = true;
-
-error:
-    if (dirp) {
-        closedir(dirp);
-    }
-
-    for (uint64_t i = 0; i < entry_count; i++) {
-        safe_free((void **) &resp_list_dir.dir_entries[i]->d_name);
-        safe_free((void **) &resp_list_dir.dir_entries[i]->stat);
-        safe_free((void **) &resp_list_dir.dir_entries[i]->lstat);
-        safe_free((void **) &resp_list_dir.dir_entries[i]);
-    }
-    safe_free((void **) &resp_list_dir.dir_entries);
-    TRACE("exit");
-
-    return ret;
-}
-
-void handle_client(int sockfd) {
-    TRACE("enter. fd: %d", sockfd);
-
-    struct utsname uname_buf;
-    uint8_t buffer[BUFFERSIZE] = {0};
-    size_t message_size;
-
-    CHECK(0 == uname(&uname_buf));
-    Rpc__Handshake handshake = RPC__HANDSHAKE__INIT;
-    handshake.magic = RPC__PROTOCOL_CONSTANTS__SERVER_VERSION;
-    handshake.arch = RPC__ARCH__ARCH_UNKNOWN;
-    handshake.sysname = uname_buf.sysname;
-    handshake.machine = uname_buf.machine;
-    handshake.client_id = getpid();
-    handshake.platform = PLATFORM;
-
-    CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
-
-#ifdef __ARM_ARCH_ISA_A64
-    handshake.arch = RPC__ARCH__ARCH_ARM64;
-#endif
-    message_size = rpc__handshake__pack(&handshake, buffer);
-    CHECK(0 != message_size);
-    CHECK(send_message(sockfd, (const uint8_t *) &buffer, message_size));
-
-    while (true) {
-        Rpc__Command *cmd;
-        char *recv_buff = NULL;
-        message_size = 0;
-        CHECK(receive_message(sockfd, &recv_buff, &message_size))
-
-        TRACE("recv");
-        cmd = rpc__command__unpack(NULL, message_size, (uint8_t *) recv_buff);
-        CHECK(cmd != NULL);
-        TRACE("client fd: %d, client_id %d, cmd type: %d", sockfd, cmd->client_id, cmd->type_case);
-        CHECK(cmd->magic == RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC);
-
-        switch (cmd->type_case) {
-        case RPC__COMMAND__TYPE_EXEC: {
-            CHECK(handle_exec(sockfd, cmd->exec));
-            break;
-        }
-        case RPC__COMMAND__TYPE_DLOPEN: {
-            CHECK(handle_dlopen(sockfd, cmd->dlopen));
-            break;
-        }
-        case RPC__COMMAND__TYPE_DLSYM: {
-            CHECK(handle_dlsym(sockfd, cmd->dlsym));
-            break;
-        }
-        case RPC__COMMAND__TYPE_DLCLOSE: {
-            CHECK(handle_dlclose(sockfd, cmd->dlclose));
-            break;
-        }
-        case RPC__COMMAND__TYPE_CALL: {
-            CHECK(handle_call(sockfd, cmd->call));
-            break;
-        }
-        case RPC__COMMAND__TYPE_PEEK: {
-            CHECK(handle_peek(sockfd, cmd->peek));
-            break;
-        }
-        case RPC__COMMAND__TYPE_POKE: {
-            CHECK(handle_poke(sockfd, cmd->poke));
-            break;
-        }
-        case RPC__COMMAND__TYPE_DUMMY_BLOCK: {
-            CHECK(handle_get_dummy_block(sockfd, cmd->dummy_block));
-            break;
-        }
-        case RPC__COMMAND__TYPE_LIST_DIR: {
-            CHECK(handle_listdir(sockfd, cmd->list_dir));
-            break;
-        }
-        case RPC__COMMAND__TYPE_SHOW_OBJECT: {
-            CHECK(handle_showobject(sockfd, cmd->show_object));
-            break;
-        }
-        case RPC__COMMAND__TYPE_SHOW_CLASS: {
-            CHECK(handle_showclass(sockfd, cmd->show_class));
-            break;
-        }
-        case RPC__COMMAND__TYPE_CLASS_LIST: {
-            CHECK(handle_get_class_list(sockfd, cmd->class_list));
-            break;
-        }
-        case RPC__COMMAND__TYPE_CLOSE: {// client requested to close connection
-            goto error;
-        }
-        default: {
-            TRACE("unknown cmd: %d", cmd->type_case);
-            Rpc__ResponseError error = RPC__RESPONSE_ERROR__INIT;
-            error.code = RPC__ERROR_CODE__ERROR_UNSUPPORTED_COMMAND;
-            CHECK(send_response(sockfd, (ProtobufCMessage *) &error));
-        }
-        }
-        rpc__command__free_unpacked(cmd, NULL);
-        safe_free((void **) &recv_buff);
-    }
-
-error:
-    close(sockfd);
-}
-
 void signal_handler(int sig) {
     int status;
     pid_t pid;
@@ -816,6 +171,73 @@ void signal_handler(int sig) {
     TRACE("entered with signal code: %d", sig);
 }
 
+/**
+ * Manages client communication over a socket using the RPC (Remote Procedure Call) protocol.
+ * This function performs message exchange with the connected client, processes incoming requests,
+ * and sends appropriate responses. It ensures data integrity and protocol compliance and manages
+ * specific client requests, such as pseudo-terminal handling or connection termination.
+ *
+ * @param sockfd The socket file descriptor associated with the connected client.
+ */
+void handle_client(int sockfd) {
+    TRACE("enter. fd: %d", sockfd);
+
+    CHECK(-1 != fcntl(sockfd, F_SETFD, FD_CLOEXEC));
+
+    // Send handshake
+    CHECK(rpc_send_handshake(sockfd) == MSG_SUCCESS);
+
+    while (true) {
+        Rpc__RpcMessage *request = NULL;
+        Rpc__RpcMessage reply = RPC__RPC_MESSAGE__INIT;
+
+        CHECK(rpc_msg_recv(sockfd, &request) == MSG_SUCCESS);
+        CHECK(request->magic == RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC);
+
+        TRACE("client fd: %d, msg_id: %d", sockfd, request->msg_id);
+
+        rpc_dispatch(request, &reply);
+
+        CHECK(proto_msg_send(sockfd, (ProtobufCMessage *) &reply) == MSG_SUCCESS);
+
+        rpc__rpc_message__free_unpacked(request, NULL);
+        if (reply.payload.data) {
+            free(reply.payload.data);
+        }
+
+        // If a user requested pty (foreground process spawn), now handle it.
+        if (g_pending_pty.valid) {
+            enter_pty_mode(sockfd);
+        }
+
+        // Break if the connection closed (e.g., CLOSE command)
+        if (request->msg_id == RPC__API__MSG_ID__REQ_CLOSE_CLIENT) {
+            break;
+        }
+    }
+
+error:
+    close(sockfd);
+}
+
+/**
+ * The main entry point for the RPC server. Processes command-line arguments, initializes the server,
+ * and manages client connections.
+ *
+ * Command-line options:
+ * - `-p <port>`: Sets the port on which the server listens for incoming connections.
+ * - `-o <output>`: Configures the output destination. Values:
+ *   - `"stdout"`: Enables output to the standard output.
+ *   - `"syslog"`: Enables output to the system logger.
+ *   - `"file:<filename>"`: Enables logging output to the specified file.
+ * - `-w`: Spawns a worker to handle incoming client connections.
+ * - `-d`: Disables worker spawning, and handles the client directly.
+ * - `-h`: Displays usage information and exits.
+ *
+ * @param argc The number of command-line arguments.
+ * @param argv The array of command-line argument strings.
+ * @return Returns 0 on success; non-zero if an error occurs during execution.
+ */
 int main(int argc, const char *argv[]) {
     int opt;
     bool worker_spawn = false;
@@ -883,12 +305,10 @@ int main(int argc, const char *argv[]) {
 
     struct addrinfo *servinfo2 = servinfo;// servinfo->ai_next;
     char ipstr[INET6_ADDRSTRLEN];
-    CHECK(inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr,
-                    sizeof(ipstr)));
+    CHECK(inet_ntop(servinfo2->ai_family, get_in_addr(servinfo2->ai_addr), ipstr, sizeof(ipstr)));
     TRACE("Waiting for connections on [%s]:%s", ipstr, port);
 
-    server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype,
-                       servinfo2->ai_protocol);
+    server_fd = socket(servinfo2->ai_family, servinfo2->ai_socktype, servinfo2->ai_protocol);
     CHECK(server_fd >= 0);
     CHECK(-1 != fcntl(server_fd, F_SETFD, FD_CLOEXEC));
 
@@ -910,15 +330,12 @@ int main(int argc, const char *argv[]) {
     while (1) {
         struct sockaddr_storage their_addr;// connector's address information
         socklen_t addr_size = sizeof(their_addr);
-        int client_fd =
-            accept(server_fd, (struct sockaddr *) &their_addr, &addr_size);
+        const int client_fd = accept(server_fd, (struct sockaddr *) &their_addr, &addr_size);
         CHECK(client_fd >= 0);
         CHECK(-1 != fcntl(client_fd, F_SETFD, FD_CLOEXEC));
 
         char ipstr[INET6_ADDRSTRLEN];
-        CHECK(inet_ntop(their_addr.ss_family,
-                        get_in_addr((struct sockaddr *) &their_addr), ipstr,
-                        sizeof(ipstr)));
+        CHECK(inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *) &their_addr), ipstr, sizeof(ipstr)));
         TRACE("Got a connection from %s [%d]", ipstr, client_fd);
         if (disable_worker) {
             TRACE("Direct mode: handling client without spawning worker");
@@ -930,8 +347,6 @@ int main(int argc, const char *argv[]) {
 
 error:
     err = 1;
-
-clean:
     if (-1 != server_fd) {
         close(server_fd);
     }

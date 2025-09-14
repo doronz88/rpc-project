@@ -24,19 +24,30 @@ class Registry(Generic[K, V]):
         self.notifier: EventNotifier = notifier or EventNotifier()
 
         if initial_data is not None:
-            self._data.update(initial_data)
+            self.update(initial_data)
 
-    def register(self, key: K, value: V) -> None:
+    def register(self, key: K, value: V, overwrite=False) -> None:
         """ Add or replace a value for a key. """
+        if key in self._data and not overwrite:
+            raise KeyError(f'key already exists: {key}, use overwrite=True to overwrite')
         with self._lock:
             self._data[key] = value
         self.notifier.notify(RegistryEvent.REGISTERED, *(key, value))
 
-    def unregister(self, key: K) -> Optional[V]:
+    def unregister(self, key: K) -> None:
         """ Remove the key """
         with self._lock:
             self._data.pop(key, None)
         self.notifier.notify(RegistryEvent.UNREGISTERED, key)
+
+    def update(self, entries: dict[K, V], overwrite: bool = False) -> None:
+        for key, value in entries.items():
+            self.register(key, value, overwrite)
+
+    def clone(self) -> "Registry":
+        copied = Registry()
+        copied.update(dict(self.items()), overwrite=True)
+        return copied
 
     def clear(self) -> None:
         """ Remove all entries. """
@@ -52,9 +63,21 @@ class Registry(Generic[K, V]):
     def items(self) -> list[tuple[K, V]]:
         """ Snapshot of all (key, value) pairs. """
         with self._lock:
-            return list(self._data.items())
+            return list(sorted(self._data.items()))
 
     def __contains__(self, key: K) -> bool:
         """ Return True if the key exists. """
         with self._lock:
             return key in self._data
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({self.items()!r})'
+
+    def __str__(self) -> str:
+        items = self.items()
+        lines = [f'{self.__class__.__name__} ({len(items)} entries):']
+        lines += [f'  {k!r}: {v!r}' for k, v in items]
+        return '\n'.join(lines)
+
+    def __len__(self):
+        return len(self._data)

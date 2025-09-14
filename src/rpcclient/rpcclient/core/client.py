@@ -8,6 +8,7 @@ import threading
 import typing
 from collections import namedtuple
 from enum import Enum, auto
+from functools import wraps
 from pathlib import Path
 from select import select
 from typing import Any, Optional
@@ -17,9 +18,6 @@ from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
 from rpcclient.core.capture_fd import CaptureFD
-from rpcclient.core.protobuf_bridge import Argument, CmdCall, CmdDlclose, CmdDlopen, CmdDlsym, CmdDummyBlock, CmdExec, \
-    CmdListDir, CmdPeek, CmdPoke, Response
-from rpcclient.core.protosocket import ProtoSocket
 from rpcclient.core.structs.consts import EAGAIN, ECONNREFUSED, EEXIST, EISDIR, ENOENT, ENOTDIR, ENOTEMPTY, EPERM, \
     EPIPE, RTLD_NEXT
 from rpcclient.core.subsystems.decorator import subsystem
@@ -34,6 +32,9 @@ from rpcclient.event_notifier import EventNotifier
 from rpcclient.exceptions import ArgumentError, BadReturnValueError, RpcBrokenPipeError, RpcConnectionRefusedError, \
     RpcFileExistsError, RpcFileNotFoundError, RpcIsADirectoryError, RpcNotADirectoryError, RpcNotEmptyError, \
     RpcPermissionError, RpcResourceTemporarilyUnavailableError, ServerResponseError, SpawnError
+from rpcclient.protocol.rpc_bridge import RpcBridge
+from rpcclient.protos.rpc_api_pb2 import Argument, MsgId
+from rpcclient.protos.rpc_pb2 import ProtocolConstants
 
 tty_support = False
 try:
@@ -95,15 +96,39 @@ class ClientEvent(Enum):
     TERMINATED = auto()
 
 
+def null_pointer_guard(func: typing.Callable) -> typing.Callable:
+    """
+    A decorator to prevent dereferencing a null pointer by checking if the given
+    address is zero before calling the wrapped function. If the address is zero,
+    an ArgumentError is raised.
+
+    Parameters:
+        func (Callable): The function to be wrapped by the decorator.
+
+    Returns:
+        Callable: The wrapped function with null pointer guard applied.
+
+    Raises:
+        ArgumentError: If the 'address' argument is zero.
+    """
+    @wraps(func)
+    def wrapper(self: typing.Any, address: int, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        if address == 0:
+            raise ArgumentError('Unable dereference null pointer.')
+        return func(self, address, *args, **kwargs)
+
+    return wrapper
+
+
 class CoreClient:
-    """ Main client interface to access remote rpcserver """
+    """ Main client interface to access the remote rpcserver """
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, cid: int, sock: ProtoSocket, sysname: str, arch, server_type: str = 'core',
+    def __init__(self, bridge: RpcBridge, sysname: str, arch, server_type: str = 'core',
                  dlsym_global_handle=RTLD_NEXT):
         self._arch = arch
-        self._sock = sock
+        self._bridge = bridge
         self._old_settings = None
         self._endianness = '<'
         self._sysname = sysname
@@ -113,7 +138,10 @@ class CoreClient:
         self.notifier = EventNotifier()
         self.symbols = SymbolsJar.create(self)
         self.type = server_type
-        self.id = cid
+
+    @cached_property
+    def id(self) -> int:
+        return self._bridge.handshake.client_id
 
     @subsystem
     def fs(self) -> Fs:
@@ -163,33 +191,31 @@ class CoreClient:
         """ get remote arch """
         return self._arch
 
-    def send_recv(self, command):
+    def rpc_call(self, msg_id: MsgId.ValueType, **kwargs):
         try:
-            return self._sock.send_recv(command, self.id)
+            return self._bridge.rpc_call(msg_id, **kwargs)
         except ConnectionError:
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
+            raise
+        except ServerResponseError:
+            raise
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
         """ call dlopen() at remote and return its handle. see the man page for more details. """
-        command = CmdDlopen(filename=filename, mode=mode)
-        response = self.send_recv(command)
-        return self.symbol(response.handle)
+        return self.symbol(self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode).handle)
 
-    def dlclose(self, lib: int):
+    def dlclose(self, lib: int) -> int:
         """ call dlclose() at remote and return its handle. see the man page for more details. """
-        command = CmdDlclose(handle=ctypes.c_uint64(lib).value)
-        response = self.send_recv(command)
-        return response.res
+        return self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value).res
 
-    def dlsym(self, lib: int, symbol_name: str):
+    def dlsym(self, lib: int, symbol_name: str) -> int:
         """ call dlsym() at remote and return its handle. see the man page for more details. """
-        command = CmdDlsym(handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)
-        response = self.send_recv(command)
-        return response.ptr
+        return self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name).ptr
 
+    @null_pointer_guard
     def call(self, address: int, argv: list[int] = None, return_float64=False, return_float32=False,
              return_raw=False, va_list_index: int = 0xffff) -> typing.Union[float, Symbol, Any]:
-        """ call a remote function and retrieve its return value as Symbol object """
+        """ call a remote function and retrieve its return value as a Symbol object """
         args = []
         for arg in argv:
             if isinstance(arg, float):
@@ -205,51 +231,47 @@ class CoreClient:
             else:
                 raise ArgumentError()
 
-        command = CmdCall(address=address, va_list_index=va_list_index, argv=args)
-        response = self.send_recv(command)
-        if response.HasField('arm_registers'):
-            double = response.arm_registers.d0
+        ret = self.rpc_call(MsgId.REQ_CALL, address=address, va_list_index=va_list_index, argv=args)
+        if ret.HasField('arm_registers'):
+            d0 = ret.arm_registers.d0
             if return_float32:
-                return ctypes.c_float(double).value
+                return ctypes.c_float(d0).value
             if return_float64:
-                return double
+                return d0
             if return_raw:
-                return response.arm_registers
-            return self.symbol(response.arm_registers.x0)
-        return self.symbol(response.return_value)
+                return ret.arm_registers
+            return self.symbol(ret.arm_registers.x0)
+        return self.symbol(ret.return_value)
 
+    @null_pointer_guard
     def peek(self, address: int, size: int) -> bytes:
-        """ peek data at given address """
-        command = CmdPeek(address=address, size=size)
+        """ peek data at the given address """
         try:
-            return self.send_recv(command).data
+            return self.rpc_call(MsgId.REQ_PEEK, address=address, size=size).data
         except ServerResponseError:
             raise ArgumentError()
 
+    @null_pointer_guard
     def poke(self, address: int, data: bytes):
-        """ poke data at given address """
-        command = CmdPoke(address=address, data=data)
+        """ poke data at a given address """
         try:
-            self.send_recv(command)
+            return self.rpc_call(MsgId.REQ_POKE, address=address, data=data)
         except ServerResponseError:
             raise ArgumentError()
 
     def get_dummy_block(self) -> Symbol:
         """ get an address for a stub block containing nothing """
-        command = CmdDummyBlock()
-        response = self.send_recv(command)
-        return self.symbol(response.address)
+        return self.symbol(self.rpc_call(MsgId.REQ_DUMMY_BLOCK).address)
 
-    def listdir(self, filename: str):
+    def listdir(self, path: str):
         """ get an address for a stub block containing nothing """
-        command = CmdListDir(path=filename)
         entries = []
         try:
-            response = self.send_recv(command)
+            ret = self.rpc_call(MsgId.REQ_LIST_DIR, path=path)
         except ServerResponseError:
-            self.raise_errno_exception(f'failed to listdir: {filename}')
+            self.raise_errno_exception(f'failed to listdir: {path}')
 
-        for entry in response.dir_entries:
+        for entry in ret.dir_entries:
             lstat = ProtocolDitentStat(
                 errno=entry.lstat.errno1, st_blocks=entry.lstat.st_blocks, st_blksize=entry.lstat.st_blksize,
                 st_atime=entry.lstat.st_atime1, st_ctime=entry.lstat.st_ctime1, st_mtime=entry.lstat.st_mtime1,
@@ -302,20 +324,13 @@ class CoreClient:
             if raw_tty:
                 self._prepare_terminal()
             try:
-                # the socket must be non-blocking for using select()
-                self._sock.raw_socket.setblocking(False)
-                error = self._execution_loop(stdin, stdout)
+                error = self.enter_pty_mode(stdin, stdout)
             except Exception:  # noqa: E722
                 # this is important to really catch every exception here, even exceptions not inheriting from Exception
                 # so the controlling terminal will remain working with its previous settings
                 if raw_tty:
                     self._restore_terminal()
                 raise
-            finally:
-                self._sock.raw_socket.setblocking(True)
-
-        if raw_tty:
-            self._restore_terminal()
 
         return SpawnResult(error=error, pid=pid, stdout=stdout)
 
@@ -387,8 +402,9 @@ class CoreClient:
                 self.symbols.free(symbol)
 
     def close(self):
-        self._sock.close()
+        self.rpc_call(MsgId.REQ_CLOSE_CLIENT)
         self.notifier.notify(ClientEvent.TERMINATED, self.id)
+        self._bridge.close()
 
     def shell(self):
         self._logger.disabled = True
@@ -410,11 +426,59 @@ class CoreClient:
             self._logger.disabled = False
 
     def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
-        command = CmdExec(background=background, argv=argv, envp=envp)
         try:
-            return self.send_recv(command).pid
+            return self.rpc_call(MsgId.REQ_EXEC, background=background, argv=argv, envp=envp).pid
         except ServerResponseError:
             raise SpawnError(f'failed to spawn: {argv}')
+
+    def enter_pty_mode(self, stdin=sys.stdin, stdout=sys.stdout):
+        # the socket must be non-blocking for using select()
+        sock = self._bridge.sock.raw_socket
+        sock.setblocking(False)
+        exit_code = None
+        try:
+            fds = []
+            if hasattr(stdin, 'fileno'):
+                fds.append(stdin)
+            else:
+                data = stdin
+                if isinstance(data, str):
+                    data = data.encode()
+                sock.sendall(data)
+            fds.append(sock)
+
+            running = True
+            while running:
+                rlist, _, _ = select(fds, [], [])
+                for fd in rlist:
+                    if fd == stdin or (stdin is sys.stdin and fd == sys.stdin):
+                        if stdin is sys.stdin:
+                            buf = os.read(stdin.fileno(), ProtocolConstants.RPC_PTY_BUFFER_SIZE)
+                        else:
+                            buf = stdin.read(ProtocolConstants.RPC_PTY_BUFFER_SIZE)
+                            if isinstance(buf, str):
+                                buf = buf.encode()
+                        if buf:
+                            sock.sendall(buf)
+                    elif fd == sock:
+                        try:
+                            response = self._bridge.sock.rpc_msg_recv_pty()
+                        except ConnectionResetError:
+                            print('Bye. 👋')
+                            running = False
+                            break
+                        msg_type = response.WhichOneof('type')
+                        if msg_type == 'buffer':
+                            stdout.write(response.buffer.decode())
+                            if hasattr(stdout, 'flush'):
+                                stdout.flush()
+                        elif msg_type == 'exit_code':
+                            exit_code = response.exit_code
+                            running = False
+                            break
+        finally:
+            sock.setblocking(True)
+        return exit_code
 
     def _restore_terminal(self):
         if not tty_support:
@@ -427,45 +491,6 @@ class CoreClient:
         fd = sys.stdin
         self._old_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
-
-    def _execution_loop(self, stdin: io_or_str = sys.stdin, stdout=sys.stdout):
-        """
-        if stdin is a file object, we need to select between the fds and give higher priority to stdin.
-        otherwise, we can simply write all stdin contents directly to the process
-        """
-        fds = []
-        raw_socket = self._sock.raw_socket
-        if hasattr(stdin, 'fileno'):
-            fds.append(stdin)
-        else:
-            # assume it's just raw bytes
-            raw_socket.sendall(stdin.encode())
-        fds.append(raw_socket)
-
-        while True:
-            response = Response()
-            rlist, _, _ = select(fds, [], [])
-
-            for fd in rlist:
-                if fd == sys.stdin:
-                    if stdin == sys.stdin:
-                        buf = os.read(stdin.fileno(), CHUNK_SIZE)
-                    else:
-                        buf = stdin.read(CHUNK_SIZE)
-                    raw_socket.sendall(buf)
-                elif fd == raw_socket:
-                    try:
-                        size, buf = self._sock._receive()
-                        response.ParseFromString(buf)
-                    except ConnectionResetError:
-                        print('Bye. 👋')
-                        return
-                    _type = response.exec_chunk.WhichOneof('type')
-                    if _type == 'buffer':
-                        stdout.write(response.exec_chunk.buffer.decode())
-                        stdout.flush()
-                    elif _type == 'exit_code':
-                        return response.exec_chunk.exit_code
 
     def raise_errno_exception(self, message: str):
         message += f' ({self.last_error})'

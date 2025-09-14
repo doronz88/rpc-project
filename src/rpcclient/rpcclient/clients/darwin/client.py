@@ -34,11 +34,12 @@ from rpcclient.clients.darwin.subsystems.time import Time
 from rpcclient.clients.darwin.subsystems.xpc import Xpc
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.client import CoreClient
-from rpcclient.core.protobuf_bridge import CmdGetClassList, CmdShowClass, CmdShowObject
 from rpcclient.core.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.core.subsystems.decorator import subsystem
 from rpcclient.core.symbol import Symbol
 from rpcclient.exceptions import CfSerializationError, MissingLibraryError
+from rpcclient.protocol.rpc_bridge import RpcBridge
+from rpcclient.protos.rpc_api_pb2 import MsgId
 
 IsaMagic = namedtuple('IsaMagic', 'mask value')
 ISA_MAGICS = [
@@ -70,8 +71,8 @@ class DyldImage:
 
 
 class DarwinClient(CoreClient):
-    def __init__(self, cid: int, sock, sysname: str, arch, server_type):
-        super().__init__(cid, sock, sysname, arch, server_type, dlsym_global_handle=RTLD_GLOBAL)
+    def __init__(self, bridge: RpcBridge, sysname: str, arch, server_type):
+        super().__init__(bridge, sysname, arch, server_type, dlsym_global_handle=RTLD_GLOBAL)
 
         if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')
@@ -149,18 +150,6 @@ class DarwinClient(CoreClient):
         return Location(self)
 
     @property
-    def errno(self) -> int:
-        p_error = self.symbols['__error']()
-        p_error.item_size = 4
-        return p_error[0]
-
-    @errno.setter
-    def errno(self, value: int) -> None:
-        p_error = self.symbols['__error']()
-        p_error.item_size = 4
-        p_error[0] = value
-
-    @property
     def images(self) -> list[DyldImage]:
         m = []
         for i in range(self.symbols._dyld_image_count()):
@@ -187,18 +176,15 @@ class DarwinClient(CoreClient):
         return ['/', '/var/root']
 
     def showobject(self, object_address: Symbol) -> dict:
-        response = self.send_recv(CmdShowObject(address=object_address))
-        return json.loads(response.description)
+        return json.loads(self.rpc_call(MsgId.REQ_SHOW_OBJECT, address=object_address).description)
 
     def showclass(self, class_address: Symbol) -> dict:
-        response = self.send_recv(CmdShowClass(address=class_address))
-        return json.loads(response.description)
+        return json.loads(self.rpc_call(MsgId.REQ_SHOW_CLASS, address=class_address).description)
 
     def get_class_list(self) -> dict[str, objective_c_class.Class]:
+        ret = self.rpc_call(MsgId.REQ_GET_CLASS_LIST)
         result = {}
-        command = CmdGetClassList()
-        response = self.send_recv(command)
-        for _class in response.classes:
+        for _class in ret.classes:
             result[_class.name] = objective_c_class.Class(self, self.symbol(_class.address), lazy=True)
         return result
 
