@@ -200,8 +200,6 @@ static void reply_error(Rpc__RpcMessage *out, const char *fmt, ...) {
     va_end(args);
 
     err.message = error_buffer;
-    err.errno_code = errno;
-
     out->msg_id = RPC__PROTOCOL_CONSTANTS__REP_ERROR;
 
     const size_t size = rpc__api__reply_error__get_packed_size(&err);
