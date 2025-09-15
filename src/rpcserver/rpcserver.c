@@ -153,7 +153,7 @@ bool spawn_worker_server(int client_socket, const char *argv[], int argc) {
 
 error:
     posix_spawn_file_actions_destroy(&actions);
-    free(new_argv);
+    safe_free(new_argv);
     close(client_socket);
     return ret;
 }

@@ -1,6 +1,7 @@
 #include <Foundation/Foundation.h>
 #include <objc/objc.h>
 #include <objc/runtime.h>
+#include "../common.h"
 
 
 void addToIvars(Class objcClass, NSDictionary *outDictionary, id objcObject, Ivar ivar) {
@@ -26,9 +27,7 @@ void addProtocolsToDictionary(Class objcClass, NSDictionary *outDictionary) {
   for (uint i = 0; i < outCount; ++i) {
     [outDictionary[@"protocols"] addObject:[NSString stringWithCString:protocol_getName(protocols[i]) encoding:NSUTF8StringEncoding]];
   }
-  if (protocols) {
-    free(protocols);
-  }
+  safe_free(protocols);
 }
 
 void addIvarsToDictionary(Class objcClass, NSDictionary *outDictionary, id objcObject) {
@@ -37,18 +36,14 @@ void addIvarsToDictionary(Class objcClass, NSDictionary *outDictionary, id objcO
   for (uint i = 0; i < outCount; ++i) {
     addToIvars(objcClass, outDictionary, objcObject, ivars[i]);
   }
-  if (ivars) {
-    free(ivars);
-  }
+  safe_free(ivars);
 
   for (Class superClass = class_getSuperclass(objcClass); superClass; superClass = class_getSuperclass(superClass)) {
     ivars = class_copyIvarList(superClass, &outCount);
     for (size_t i = 0; i < outCount; ++i) {
       addToIvars(objcClass, outDictionary, objcObject, ivars[i]);
     }
-    if (ivars) {
-      free(ivars);
-    }
+    safe_free(ivars);
   }
 }
 
@@ -69,9 +64,7 @@ void addPropertiesToDictionary(Class objcClass, NSDictionary *outDictionary) {
       @"attributes": [NSString stringWithCString:property_getAttributes(properties[i]) encoding:NSUTF8StringEncoding],
     }];
   }
-  if (properties) {
-    free(properties);
-  }
+  safe_free(properties);
 
   for (Class superClass = class_getSuperclass(objcClass); superClass; superClass = class_getSuperclass(superClass)) {
     properties = class_copyPropertyList(superClass, &outCount);
@@ -87,9 +80,7 @@ void addPropertiesToDictionary(Class objcClass, NSDictionary *outDictionary) {
         @"attributes": [NSString stringWithCString:property_getAttributes(properties[i]) encoding:NSUTF8StringEncoding],
       }];
     }
-    if (properties) {
-      free(properties);
-    }
+    safe_free(properties);
   }
 }
 
@@ -106,9 +97,7 @@ void addMethodsToDictionary(Class objcClass, NSDictionary *outDictionary) {
     for (uint j = 0; j < argsCount; ++j) {
       methodArgumentsTypes = method_copyArgumentType(methods[i], j);
       [argsTypes addObject:[NSString stringWithCString:methodArgumentsTypes encoding:NSUTF8StringEncoding]];
-      if (methodArgumentsTypes) {
-        free(methodArgumentsTypes);
-      }
+      safe_free(methodArgumentsTypes);
     }
     methodReturnType = method_copyReturnType(methods[i]);
     [outDictionary[@"methods"] addObject:@{
@@ -120,13 +109,9 @@ void addMethodsToDictionary(Class objcClass, NSDictionary *outDictionary) {
       @"return_type": [NSString stringWithCString:methodReturnType encoding:NSUTF8StringEncoding],
       @"args_types": argsTypes,
     }];
-    if (methodReturnType) {
-      free(methodReturnType);
-    }
+    safe_free(methodReturnType);
   }
-  if (methods) {
-    free(methods);
-  }
+  safe_free(methods);
 
   methods = class_copyMethodList(objcClass, &outCount);
   for (uint i = 0; i < outCount; ++i) {
@@ -135,9 +120,7 @@ void addMethodsToDictionary(Class objcClass, NSDictionary *outDictionary) {
     for (uint j = 0; j < argsCount; ++j) {
       methodArgumentsTypes = method_copyArgumentType(methods[i], j);
       [argsTypes addObject:[NSString stringWithCString:methodArgumentsTypes encoding:NSUTF8StringEncoding]];
-      if (methodArgumentsTypes) {
-        free(methodArgumentsTypes);
-      }
+      safe_free(methodArgumentsTypes);
     }
     methodReturnType = method_copyReturnType(methods[i]);
     [outDictionary[@"methods"] addObject:@{
@@ -149,13 +132,9 @@ void addMethodsToDictionary(Class objcClass, NSDictionary *outDictionary) {
       @"return_type": [NSString stringWithCString:methodReturnType encoding:NSUTF8StringEncoding],
       @"args_types": argsTypes,
     }];
-    if (methodReturnType) {
-      free(methodReturnType);
-    }
+    safe_free(methodReturnType);
   }
-  if (methods) {
-    free(methods);
-  }
+  safe_free(methods);
 }
 
 NSString *getDictionaryJsonString(NSDictionary *classDescription) {

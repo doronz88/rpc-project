@@ -108,23 +108,23 @@ const rpc_routine_entry_t rpc_routines[RPC__PROTOCOL_CONSTANTS__RPC_MAX_REQ_MSG_
                                         .name = "LISTDIR",
                                         .cleanup = cleanup_listdir},
     [RPC__API__MSG_ID__REQ_CLOSE_CLIENT] =
-    {
-        .routine = routine_close_client,
-        .request_descriptor = &rpc__api__request_close_client__descriptor,
-        .reply_descriptor = &rpc__api__reply_close_client__descriptor,
-        .name = "CLOSE_CLIENT",
-        .cleanup = NULL,
-    },
+        {
+            .routine = routine_close_client,
+            .request_descriptor = &rpc__api__request_close_client__descriptor,
+            .reply_descriptor = &rpc__api__reply_close_client__descriptor,
+            .name = "CLOSE_CLIENT",
+            .cleanup = NULL,
+        },
     [RPC__API__MSG_ID__REQ_EXEC] =
-    {
-        .routine = routine_exec,
-        .request_descriptor = &rpc__api__request_exec__descriptor,
-        .reply_descriptor = &rpc__api__reply_exec__descriptor,
-        .name = "EXEC",
-        .cleanup = NULL,
-    },
+        {
+            .routine = routine_exec,
+            .request_descriptor = &rpc__api__request_exec__descriptor,
+            .reply_descriptor = &rpc__api__reply_exec__descriptor,
+            .name = "EXEC",
+            .cleanup = NULL,
+        },
 
-    /* Apple-specific routines */
+/* Apple-specific routines */
 #if __APPLE__
     [RPC__API__MSG_ID__REQ_DUMMY_BLOCK] = {.routine = routine_get_dummy_block,
                                            .request_descriptor = &rpc__api__request_dummy_block__descriptor,
@@ -170,10 +170,14 @@ typedef enum { MSG_ID_VALID = 0, MSG_ID_OUT_OF_BOUNDS, MSG_ID_NO_ROUTINE } msg_i
  *         - MSG_ID_NO_ROUTINE: The routine entry is incomplete or not initialized correctly.
  */
 static msg_id_error_t routine_lookup(uint32_t msg_id, const rpc_routine_entry_t **out_entry) {
-    if (msg_id <= 0 || msg_id >= RPC__PROTOCOL_CONSTANTS__RPC_MAX_REQ_MSG_ID) { return MSG_ID_OUT_OF_BOUNDS; }
+    if (msg_id <= 0 || msg_id >= RPC__PROTOCOL_CONSTANTS__RPC_MAX_REQ_MSG_ID) {
+        return MSG_ID_OUT_OF_BOUNDS;
+    }
 
     const rpc_routine_entry_t *entry = &rpc_routines[msg_id];
-    if (!entry->routine || !entry->request_descriptor || !entry->reply_descriptor) { return MSG_ID_NO_ROUTINE; }
+    if (!entry->routine || !entry->request_descriptor || !entry->reply_descriptor) {
+        return MSG_ID_NO_ROUTINE;
+    }
 
     *out_entry = entry;
     return MSG_ID_VALID;
@@ -237,10 +241,12 @@ void rpc_dispatch(const Rpc__RpcMessage *request_msg, Rpc__RpcMessage *reply_msg
     reply_msg->magic = RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC;
 
     switch (routine_lookup(request_msg->msg_id, &entry)) {
-    case MSG_ID_OUT_OF_BOUNDS: reply_error(reply_msg, "Out of bound msg_id %d: must be 1-%d", request_msg->msg_id,
-                                           RPC__PROTOCOL_CONSTANTS__RPC_MAX_REQ_MSG_ID - 1);
+    case MSG_ID_OUT_OF_BOUNDS:
+        reply_error(reply_msg, "Out of bound msg_id %d: must be 1-%d", request_msg->msg_id,
+                    RPC__PROTOCOL_CONSTANTS__RPC_MAX_REQ_MSG_ID - 1);
         goto error;
-    case MSG_ID_NO_ROUTINE: reply_error(reply_msg, "No routine configured for msg_id %d", request_msg->msg_id);
+    case MSG_ID_NO_ROUTINE:
+        reply_error(reply_msg, "No routine configured for msg_id %d", request_msg->msg_id);
         goto error;
     case MSG_ID_VALID: break;
     }
@@ -271,7 +277,9 @@ void rpc_dispatch(const Rpc__RpcMessage *request_msg, Rpc__RpcMessage *reply_msg
         protobuf_c_message_pack(reply, packed_data);
         reply_msg->payload.data = packed_data;
         reply_msg->payload.len = packed_size;
-        if (entry->cleanup) { entry->cleanup(reply); }
+        if (entry->cleanup) {
+            entry->cleanup(reply);
+        }
         break;
     }
     }
@@ -407,7 +415,9 @@ static routine_status_t routine_peek(const ProtobufCMessage *in_msg, ProtobufCMe
 
     if (vm_read(mach_task_self(), (vm_address_t) request_peek->address, (mach_vm_size_t) request_peek->size,
                 (vm_offset_t *) &buffer, &size)
-        != KERN_SUCCESS) { return ROUTINE_PROTOCOL_ERROR; }
+        != KERN_SUCCESS) {
+        return ROUTINE_PROTOCOL_ERROR;
+    }
     reply_peek->data.data = buffer;
     reply_peek->data.len = (size_t) size;
 
@@ -454,7 +464,9 @@ static routine_status_t routine_poke(const ProtobufCMessage *in_msg, ProtobufCMe
 #if defined(__APPLE__) && defined(SAFE_READ_WRITES)
     if (vm_write(mach_task_self(), (vm_address_t) request_poke->address, (vm_offset_t) request_poke->data.data,
                  (mach_msg_type_number_t) request_poke->data.len)
-        != KERN_SUCCESS) { return ROUTINE_PROTOCOL_ERROR; }
+        != KERN_SUCCESS) {
+        return ROUTINE_PROTOCOL_ERROR;
+    }
 #else
     // Best-effort write; may fault if the address is invalid.
     memcpy((void *) (uintptr_t) request_poke->address, request_poke->data.data, request_poke->data.len);
@@ -509,8 +521,7 @@ static routine_status_t routine_call(const ProtobufCMessage *in_msg, ProtobufCMe
 error:
 #ifdef __ARM_ARCH_ISA_A64
     if (reply_poke && reply_poke->arm_registers) {
-        free(reply_poke->arm_registers);
-        reply_poke->arm_registers = NULL;
+        safe_free(reply_poke->arm_registers);
     }
 #endif
     safe_free(reply_poke);
@@ -571,15 +582,21 @@ static routine_status_t routine_listdir(const ProtobufCMessage *in_msg, Protobuf
 
     // First pass: count entries
     dirp = opendir(request_list_dir->path);
-    if (dirp == NULL) { return ROUTINE_PROTOCOL_ERROR; }
-    while ((entry = readdir(dirp)) != NULL) { entry_count++; }
+    if (dirp == NULL) {
+        return ROUTINE_PROTOCOL_ERROR;
+    }
+    while ((entry = readdir(dirp)) != NULL) {
+        entry_count++;
+    }
     CHECK(closedir(dirp) == 0);
     dirp = NULL;
 
     reply_list_dir->dir_entries = NULL;
     reply_list_dir->n_dir_entries = 0;
 
-    if (entry_count == 0) { return ROUTINE_SUCCESS; }
+    if (entry_count == 0) {
+        return ROUTINE_SUCCESS;
+    }
 
     reply_list_dir->dir_entries = (Rpc__Api__DirEntry **) calloc(entry_count, sizeof(Rpc__Api__DirEntry *));
     CHECK(reply_list_dir->dir_entries != NULL);
@@ -603,8 +620,12 @@ static routine_status_t routine_listdir(const ProtobufCMessage *in_msg, Protobuf
         CHECK(n > 0 && (size_t) n < sizeof(fullpath));
 
         u64 stat_err = 0, lstat_err = 0;
-        if (lstat(fullpath, &system_lstat) != 0) { lstat_err = (u64) errno; }
-        if (stat(fullpath, &system_stat) != 0) { stat_err = (u64) errno; }
+        if (lstat(fullpath, &system_lstat) != 0) {
+            lstat_err = (u64) errno;
+        }
+        if (stat(fullpath, &system_stat) != 0) {
+            stat_err = (u64) errno;
+        }
 
         d_entry = (Rpc__Api__DirEntry *) malloc(sizeof *d_entry);
         s_stat = (Rpc__Api__DirEntryStat *) malloc(sizeof *s_stat);
@@ -664,19 +685,7 @@ static routine_status_t routine_listdir(const ProtobufCMessage *in_msg, Protobuf
 
 error:
     safe_free(dirp);
-    if (reply_list_dir) {
-        if (reply_list_dir->dir_entries) {
-            for (size_t i = 0; i < reply_list_dir->n_dir_entries; ++i) {
-                if (!reply_list_dir->dir_entries[i]) { continue; }
-                safe_free(reply_list_dir->dir_entries[i]->d_name);
-                safe_free(reply_list_dir->dir_entries[i]->stat);
-                safe_free(reply_list_dir->dir_entries[i]->lstat);
-                safe_free(reply_list_dir->dir_entries[i]);
-            }
-            safe_free(reply_list_dir->dir_entries);
-        }
-        free(reply_list_dir);
-    }
+    cleanup_listdir((ProtobufCMessage *) reply_list_dir);
     return ROUTINE_SERVER_ERROR;
 }
 
@@ -745,7 +754,9 @@ static routine_status_t routine_exec(const ProtobufCMessage *in_msg, ProtobufCMe
     reply_exec->pid = pid;
 
     if (request_exec->background) {
-        if (master >= 0) { close(master); }
+        if (master >= 0) {
+            close(master);
+        }
         CHECK(0 == pthread_create(&thread, NULL, (void *(*) (void *) ) thread_waitpid, (void *) (intptr_t) pid));
     } else {
         g_pending_pty.pid = pid;
@@ -796,26 +807,18 @@ static void cleanup_peek(ProtobufCMessage *reply) {
  */
 static void cleanup_listdir(ProtobufCMessage *reply) {
     Rpc__Api__ReplyListDir *reply_list_dir = (Rpc__Api__ReplyListDir *) reply;
-    if (!reply_list_dir || !reply_list_dir->dir_entries) { return; }
+    if (!reply_list_dir || !reply_list_dir->dir_entries) {
+        return;
+    }
     for (size_t i = 0; i < reply_list_dir->n_dir_entries; ++i) {
         Rpc__Api__DirEntry *e = reply_list_dir->dir_entries[i];
-        if (!e) { continue; }
-        if (e->d_name) {
-            free(e->d_name);
-            e->d_name = NULL;
+        if (!e) {
+            continue;
         }
-        if (e->stat) {
-            free(e->stat);
-            e->stat = NULL;
-        }
-        if (e->lstat) {
-            free(e->lstat);
-            e->lstat = NULL;
-        }
-        free(e);
-        reply_list_dir->dir_entries[i] = NULL;
+        safe_free(e->d_name);
+        safe_free(e->stat);
+        safe_free(e->lstat);
+        safe_free(e);
     }
-    free(reply_list_dir->dir_entries);
-    reply_list_dir->dir_entries = NULL;
-    reply_list_dir->n_dir_entries = 0;
+    safe_free(reply_list_dir->dir_entries);
 }

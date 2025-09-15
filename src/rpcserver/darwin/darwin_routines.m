@@ -15,6 +15,10 @@ NSString *getDictionaryJsonString(NSDictionary *classDescription);
 NSString *getClassDescriptionStr(Class objcClass);
 NSString *getObjectStr(id object);
 
+void cleanup_show_class(ProtobufCMessage *reply);
+void cleanup_show_object(ProtobufCMessage *reply);
+void cleanup_get_class_list(ProtobufCMessage *reply);
+
 void (^dummy_block)(void) = ^{
 };
 
@@ -63,30 +67,12 @@ routine_status_t routine_get_class_list(const ProtobufCMessage *in_msg, Protobuf
   }
 
   *out_msg = (ProtobufCMessage *) reply_get_class_list;
-  free(class_list);
   return ROUTINE_SUCCESS;
 
 error:
-  if (reply_get_class_list) {
-    if (reply_get_class_list->classes) {
-      for (size_t i = 0; i < reply_get_class_list->n_classes; ++i) {
-        if (reply_get_class_list->classes[i]) {
-          if (reply_get_class_list->classes[i]->name) {
-            free(reply_get_class_list->classes[i]->name);
-            reply_get_class_list->classes[i]->name = NULL;
-          }
-          free(reply_get_class_list->classes[i]);
-          reply_get_class_list->classes[i] = NULL;
-        }
-      }
-      free(reply_get_class_list->classes);
-      reply_get_class_list->classes = NULL;
-    }
-    free(reply_get_class_list);
-  }
-  if (class_list) {
-    free(class_list);
-  }
+  cleanup_get_class_list((ProtobufCMessage *)reply_get_class_list);
+  safe_free(class_list);
+
   return ROUTINE_SERVER_ERROR;
 }
 
@@ -110,14 +96,9 @@ routine_status_t routine_show_class(const ProtobufCMessage *in_msg, ProtobufCMes
   return ROUTINE_SUCCESS;
 
 error:
-  if (reply_show_class) {
-    if (reply_show_class->description) {
-      free(reply_show_class->description);
-      reply_show_class->description = NULL;
-    }
-    free(reply_show_class);
-    reply_show_class = NULL;
-  }
+  cleanup_show_class((ProtobufCMessage *)reply_show_class);
+  safe_free(reply_show_class);
+
   return ROUTINE_SERVER_ERROR;
 }
 
@@ -140,14 +121,9 @@ routine_status_t routine_show_object(const ProtobufCMessage *in_msg, ProtobufCMe
   return ROUTINE_SUCCESS;
 
 error:
-  if (reply_show_object) {
-    if (reply_show_object->description) {
-      free(reply_show_object->description);
-      reply_show_object->description = NULL;
-    }
-    free(reply_show_object);
-    reply_show_object = NULL;
-  }
+    cleanup_show_object((ProtobufCMessage *)reply_show_object);
+    safe_free(reply_show_object);
+
   return ROUTINE_SERVER_ERROR;
 }
 
@@ -170,30 +146,18 @@ void cleanup_get_class_list(ProtobufCMessage *reply) {
     for (size_t i = 0; i < r->n_classes; ++i) {
         Rpc__Api__ObjcClass *cls = r->classes[i];
         if (!cls) continue;
-        if (cls->name) {
-            free(cls->name);
-            cls->name = NULL;
-        }
-        free(cls);
-        r->classes[i] = NULL;
+        safe_free(cls->name);
+        safe_free(cls);
     }
-    free(r->classes);
-    r->classes = NULL;
-    r->n_classes = 0;
+    safe_free(r->classes);
 }
 
 void cleanup_show_class(ProtobufCMessage *reply) {
     Rpc__Api__ReplyShowClass *r = (Rpc__Api__ReplyShowClass *) reply;
-    if (r && r->description) {
-        free(r->description);
-        r->description = NULL;
-    }
+    safe_free(r->description);
 }
 
 void cleanup_show_object(ProtobufCMessage *reply) {
     Rpc__Api__ReplyShowObject *r = (Rpc__Api__ReplyShowObject *) reply;
-    if (r && r->description) {
-        free(r->description);
-        r->description = NULL;
-    }
+    safe_free(r->description);
 }
