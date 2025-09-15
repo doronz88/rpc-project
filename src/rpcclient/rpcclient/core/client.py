@@ -111,6 +111,7 @@ def null_pointer_guard(func: typing.Callable) -> typing.Callable:
     Raises:
         ArgumentError: If the 'address' argument is zero.
     """
+
     @wraps(func)
     def wrapper(self: typing.Any, address: int, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         if address == 0:
@@ -191,7 +192,7 @@ class CoreClient:
         """ get remote arch """
         return self._arch
 
-    def rpc_call(self, msg_id: MsgId.ValueType, **kwargs):
+    def rpc_call(self, msg_id: int, **kwargs):
         try:
             return self._bridge.rpc_call(msg_id, **kwargs)
         except ConnectionError:
