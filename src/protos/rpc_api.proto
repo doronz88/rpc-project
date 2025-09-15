@@ -104,7 +104,6 @@ message ReplyGetClassList {repeated ObjcClass classes = 1;}
 
 message ReplyError {
   string message = 1;
-  int32 errno_code = 2;
 }
 
 message ReplyListDir {
