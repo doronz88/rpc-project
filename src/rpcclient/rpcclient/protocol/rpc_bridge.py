@@ -36,7 +36,7 @@ class RpcBridge:
         rep.ParseFromString(rep_msg.payload)
         if rep_msg.msg_id == ProtocolConstants.REP_ERROR:
             logger.error(f'Server error: {rep.message}')
-            raise ServerResponseError(rep.errno_code, rep.message)
+            raise ServerResponseError(rep.message)
         return rep
 
     def _do_handshake(self) -> None:
