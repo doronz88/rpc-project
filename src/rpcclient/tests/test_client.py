@@ -1,6 +1,16 @@
 import pytest
 
+from rpcclient.core.subsystems.decorator import SubsystemNotAvailable, subsystem
 from rpcclient.exceptions import ArgumentError
+
+
+def _get_subsystems(client) -> list[str]:
+    names: set[str] = set()
+    for cls in client.__class__.mro():
+        for name, attr in vars(cls).items():
+            if isinstance(attr, subsystem):
+                names.add(name)
+    return sorted(names)
 
 
 def test_peek(client):
@@ -116,12 +126,20 @@ def test_environ(client):
     assert len(client.environ) > 0
     for e in client.environ:
         assert '=' in e
-#
-#
-# def test_reconnect(client):
-#     """
-#     :param rpcclient.client.Client client:
-#     """
-#     test_listdir(client)
-#     client.reconnect()
-#     test_listdir(client)
+
+
+def test_all_subsystems_initialize(client):
+    """
+    :param rpcclient.client.Client client:
+
+    Ensure each @subsystem property is initialized and not SubsystemNotAvailable.
+    """
+    subsystem_names = _get_subsystems(client)
+    failures: dict[str, str] = {}
+
+    for name in subsystem_names:
+        value = getattr(client, name)
+        if isinstance(value, SubsystemNotAvailable):
+            failures[name] = repr(value)
+
+    assert not failures, f'Subsystems failed to initialize: {failures}'

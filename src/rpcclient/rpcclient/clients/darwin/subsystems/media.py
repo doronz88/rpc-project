@@ -185,7 +185,6 @@ class DarwinMedia:
         """
         self._client = client
         self._client.load_framework('AVFoundation')
-        self._load_av_foundation()
         self.session = AudioSession(self._client)
 
     @path_to_str('filename')
