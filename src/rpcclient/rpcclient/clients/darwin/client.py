@@ -71,8 +71,8 @@ class DyldImage:
 
 
 class DarwinClient(CoreClient):
-    def __init__(self, bridge: RpcBridge, sysname: str, arch, server_type):
-        super().__init__(bridge, sysname, arch, server_type, dlsym_global_handle=RTLD_GLOBAL)
+    def __init__(self, bridge: RpcBridge):
+        super().__init__(bridge, dlsym_global_handle=RTLD_GLOBAL)
 
         if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
             raise MissingLibraryError('failed to load CoreFoundation')

@@ -2,6 +2,8 @@ import logging
 import socket
 from typing import Optional
 
+from cached_property import cached_property
+
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError
 from rpcclient.protocol.messages import RpcMessageRegistry
 from rpcclient.protocol.rpc_socket import RpcSocket
@@ -13,13 +15,20 @@ BASIC_MESSAGES = RpcMessageRegistry(modules=['rpcclient.protos.rpc_api_pb2'])
 
 
 class RpcBridge:
-    def __init__(self, sock: socket.socket, messages: Optional[RpcMessageRegistry] = None) -> None:
-        # Maps request class -> binding
+    def __init__(self, sock: RpcSocket, handshake: Handshake, messages: Optional[RpcMessageRegistry] = None) -> None:
         self.messages: RpcMessageRegistry = messages or BASIC_MESSAGES.clone()
-        self.handshake: Optional[Handshake] = None
-        self.sock = RpcSocket(sock)
+        self._handshake = handshake
+        self.sock = sock
 
-        self._do_handshake()
+    @classmethod
+    def connect(cls, raw_sock: socket.socket, messages: Optional[RpcMessageRegistry] = None) -> "RpcBridge":
+        sock = RpcSocket(raw_sock)
+        handshake = sock.rpc_handshake_recv()
+        if handshake.server_version != ProtocolConstants.SERVER_VERSION:
+            raise InvalidServerVersionMagicError(
+                f'got {handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}'
+            )
+        return cls(sock, handshake, messages)
 
     def rpc_call(self, msg_id: int, **kwargs):
         """
@@ -27,7 +36,7 @@ class RpcBridge:
         """
         req = self.messages.get(msg_id)(**kwargs)
         msg = RpcMessage(
-            client_id=self.handshake.client_id,
+            client_id=self.client_id,
             msg_id=msg_id,
             payload=req.SerializeToString(),
         )
@@ -39,11 +48,21 @@ class RpcBridge:
             raise ServerResponseError(rep.message)
         return rep
 
-    def _do_handshake(self) -> None:
-        self.handshake = self.sock.rpc_handshake_recv()
-        if self.handshake.server_version != ProtocolConstants.SERVER_VERSION:
-            raise InvalidServerVersionMagicError(
-                f'got {self.handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}')
-
     def close(self) -> None:
         self.sock.raw_socket.close()
+
+    @cached_property
+    def client_id(self) -> int:
+        return self._handshake.client_id
+
+    @cached_property
+    def platform(self) -> str:
+        return self._handshake.platform.lower()
+
+    @cached_property
+    def sysname(self) -> str:
+        return self._handshake.sysname.lower()
+
+    @cached_property
+    def arch(self) -> int:
+        return self._handshake.arch
