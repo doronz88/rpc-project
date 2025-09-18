@@ -21,7 +21,7 @@ class RpcPrompt(Prompts):
         try:
             client = get_ipython().user_ns.get("p")
             return [
-                (base_token, f"[{client.type}| "),
+                (base_token, f"[{client.platform}| "),
                 (num_token, f"({client.id}) "),
                 (base_token, f"{client.progname}]: "),
             ]

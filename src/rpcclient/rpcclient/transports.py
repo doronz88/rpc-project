@@ -67,3 +67,9 @@ def create_local(*, project_url: str = PROJECT_URL, binary_name: str = BINARY_NA
             return create_tcp(hostname='127.0.0.1', port=port)
         except FailedToConnectError:
             time.sleep(poll_interval)
+
+
+def create_using_protocol(*, client, path: str) -> RpcBridge:
+    if not hasattr(client, 'create_worker') and callable(getattr(client, 'create_worker')):
+        raise ValueError('No existing client supports protocol worker creation.')
+    return client.create_worker(path)

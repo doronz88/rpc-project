@@ -9,7 +9,8 @@ from rpcclient.core.client import ClientEvent, CoreClient
 from rpcclient.event_notifier import EventNotifier
 from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.registry import Registry
-from rpcclient.transports import create_local, create_tcp
+from rpcclient.transports import create_local, create_tcp, create_using_protocol
+from rpcclient.utils import prompt_selection
 
 logger = logging.getLogger(__name__)
 ClientType = Union[IosClient, MacosClient, LinuxClient, CoreClient]
@@ -32,6 +33,7 @@ class ClientManager:
         self.transport_factory = Registry[str, Callable[..., RpcBridge]]({
             'tcp': create_tcp,
             'local': create_local,
+            'protocol': create_using_protocol,
         })
 
         self._lock = threading.RLock()
@@ -42,6 +44,11 @@ class ClientManager:
         transport_factory = self.transport_factory.get(mode)
         if transport_factory is None:
             raise ValueError(f'Unknown client mode: {mode}')
+
+        # If using protocol-based spawn/routing and no explicit client provided,
+        # try to pick a capable existing client (with create_worker).
+        if mode == 'protocol' and 'client' not in kwargs:
+            kwargs['client'] = self._select_capable_client()
 
         rpc_bridge = transport_factory(**kwargs)
         server_type = rpc_bridge.platform
@@ -56,6 +63,15 @@ class ClientManager:
         self.add(client)
 
         return client
+
+    def _select_capable_client(self):
+        capable = [c for c in self.clients.values() if hasattr(c, 'create_worker') and callable(getattr(c, 'create_worker'))]
+        if not capable:
+            raise ValueError('No existing client supports protocol worker creation.')
+        if len(capable) == 1:
+            return capable[0]
+        else:
+            return prompt_selection(capable, 'Select a client client ID')
 
     def add(self, client: ClientType) -> None:
         self._clients.register(client.id, client)
