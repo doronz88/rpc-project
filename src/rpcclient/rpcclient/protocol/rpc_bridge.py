@@ -2,12 +2,10 @@ import logging
 import socket
 from typing import Optional
 
-from cached_property import cached_property
-
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError
 from rpcclient.protocol.messages import RpcMessageRegistry
 from rpcclient.protocol.rpc_socket import RpcSocket
-from rpcclient.protos.rpc_pb2 import Handshake, ProtocolConstants, RpcMessage
+from rpcclient.protos.rpc_pb2 import ProtocolConstants, RpcMessage
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +13,16 @@ BASIC_MESSAGES = RpcMessageRegistry(modules=['rpcclient.protos.rpc_api_pb2'])
 
 
 class RpcBridge:
-    def __init__(self, sock: RpcSocket, handshake: Handshake, messages: Optional[RpcMessageRegistry] = None) -> None:
+    def __init__(self, sock: RpcSocket, client_id: int, platform_name: str,
+                 arch: int, sysname: str, messages: Optional[RpcMessageRegistry] = None,
+                 owns_socket: bool = False) -> None:
         self.messages: RpcMessageRegistry = messages or BASIC_MESSAGES.clone()
-        self._handshake = handshake
         self.sock = sock
+        self.client_id = client_id
+        self.platform = platform_name
+        self.arch = arch
+        self.sysname = sysname
+        self._owns_socket = owns_socket
 
     @classmethod
     def connect(cls, raw_sock: socket.socket, messages: Optional[RpcMessageRegistry] = None) -> "RpcBridge":
@@ -28,7 +32,7 @@ class RpcBridge:
             raise InvalidServerVersionMagicError(
                 f'got {handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}'
             )
-        return cls(sock, handshake, messages)
+        return cls(sock, handshake.client_id, handshake.platform.lower(), handshake.arch, handshake.sysname.lower(), messages)
 
     def rpc_call(self, msg_id: int, **kwargs):
         """
@@ -49,20 +53,11 @@ class RpcBridge:
         return rep
 
     def close(self) -> None:
+        if not self._owns_socket:
+            raise RuntimeError('socket is owned by another client')
         self.sock.raw_socket.close()
 
-    @cached_property
-    def client_id(self) -> int:
-        return self._handshake.client_id
-
-    @cached_property
-    def platform(self) -> str:
-        return self._handshake.platform.lower()
-
-    @cached_property
-    def sysname(self) -> str:
-        return self._handshake.sysname.lower()
-
-    @cached_property
-    def arch(self) -> int:
-        return self._handshake.arch
+    def clone(self) -> 'RpcBridge':
+        return RpcBridge(self.sock, self.client_id, self.platform,
+                         self.arch, self.sysname, self.messages.clone(),
+                         owns_socket=False)
