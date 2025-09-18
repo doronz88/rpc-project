@@ -526,8 +526,5 @@ class CoreClient:
         """
         return CaptureFD(self, fd, sock_buf_size)
 
-    def clone_bridge(self):
-        return self._bridge.clone()
-
     def __repr__(self):
         return f'<{self.__class__.__name__}: {self.pid} | {self.progname}>'
