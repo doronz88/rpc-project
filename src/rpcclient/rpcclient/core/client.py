@@ -126,23 +126,15 @@ class CoreClient:
     DEFAULT_ARGV = ['/bin/sh']
     DEFAULT_ENVP = []
 
-    def __init__(self, bridge: RpcBridge, sysname: str, arch, server_type: str = 'core',
-                 dlsym_global_handle=RTLD_NEXT):
-        self._arch = arch
+    def __init__(self, bridge: RpcBridge, dlsym_global_handle=RTLD_NEXT):
         self._bridge = bridge
         self._old_settings = None
         self._endianness = '<'
-        self._sysname = sysname
         self._dlsym_global_handle = dlsym_global_handle
         self._protocol_lock = threading.Lock()
         self._logger = logging.getLogger(self.__module__)
         self.notifier = EventNotifier()
         self.symbols = SymbolsJar.create(self)
-        self.type = server_type
-
-    @cached_property
-    def id(self) -> int:
-        return self._bridge.handshake.client_id
 
     @subsystem
     def fs(self) -> Fs:
@@ -187,10 +179,21 @@ class CoreClient:
         """ get the utsname struct from remote """
         raise NotImplementedError()
 
-    @cached_property
-    def arch(self):
-        """ get remote arch """
-        return self._arch
+    @property
+    def id(self) -> int:
+        return self._bridge.client_id
+
+    @property
+    def platform(self) -> str:
+        return self._bridge.platform
+
+    @property
+    def sysname(self) -> str:
+        return self._bridge.sysname
+
+    @property
+    def arch(self) -> int:
+        return self._bridge.arch
 
     def rpc_call(self, msg_id: int, **kwargs):
         try:

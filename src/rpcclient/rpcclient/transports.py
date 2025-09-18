@@ -32,7 +32,7 @@ def create_tcp(*, hostname: Union[str, None] = None, host: Union[str, None] = No
     except ConnectionRefusedError as e:
         s.close()
         raise FailedToConnectError() from e
-    return RpcBridge(s)
+    return RpcBridge.connect(s)
 
 
 def create_local(*, project_url: str = PROJECT_URL, binary_name: str = BINARY_NAME,

@@ -44,18 +44,13 @@ class ClientManager:
             raise ValueError(f'Unknown client mode: {mode}')
 
         rpc_bridge = transport_factory(**kwargs)
-        server_type = rpc_bridge.handshake.platform.lower()
+        server_type = rpc_bridge.platform
 
         client_factory = self.client_factory.get(server_type)
         if client_factory is None:
             raise ValueError(f'Unknown client mode: {server_type}')
 
-        client: ClientType = client_factory(
-            bridge=rpc_bridge,
-            sysname=rpc_bridge.handshake.sysname.lower(),
-            arch=rpc_bridge.handshake.arch,
-            server_type=server_type
-        )
+        client: ClientType = client_factory(bridge=rpc_bridge)
         client.notifier.register(ClientEvent.TERMINATED, self._on_client_terminated)
         client.notifier.register(ClientEvent.CREATED, self._on_client_created)
         self.add(client)
