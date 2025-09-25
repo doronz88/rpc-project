@@ -171,8 +171,12 @@ class CoreClient:
         print(f'progname: {self.progname}')
 
     @cached_property
-    def progname(self):
-        return self.symbols.getprogname().peek_str()
+    def progname(self) -> str:
+        """ get the program name from remote """
+        # bugfix https://github.com/doronz88/rpc-project/issues/405
+        # Default Linux libraries don't expose `getprogname()`, so instead we use the `__progname` global symbol.
+        # Tested on both macOS and Ubuntu.
+        return self.symbols['__progname'][0].peek_str()
 
     @cached_property
     def uname(self):
