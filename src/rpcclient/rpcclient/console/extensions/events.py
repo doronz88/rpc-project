@@ -25,6 +25,10 @@ class RpcEvents:
         if client is None:
             return
 
+        # Skip parsing of this cell if it's an IPython's magic transformation (like '!', '?', '%')
+        if info.raw_cell != info.transformed_cell.rstrip('\n'):
+            return
+
         for node in ast.walk(ast.parse(info.raw_cell)):
             if not isinstance(node, ast.Name):
                 continue
