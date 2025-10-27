@@ -5,14 +5,28 @@ from typing import Optional
 
 from rpcclient.clients.darwin.structs import timeval
 from rpcclient.core.allocated import Allocated
-from rpcclient.core.structs.consts import AF_INET, AF_INET6, AF_UNIX, EPIPE, F_GETFL, F_SETFL, MSG_NOSIGNAL, \
-    O_NONBLOCK, SO_RCVBUF, SO_RCVTIMEO, SO_SNDBUF, SO_SNDTIMEO, SOCK_STREAM, SOL_SOCKET
+from rpcclient.core.structs.consts import (
+    AF_INET,
+    AF_INET6,
+    AF_UNIX,
+    EPIPE,
+    F_GETFL,
+    F_SETFL,
+    MSG_NOSIGNAL,
+    O_NONBLOCK,
+    SO_RCVBUF,
+    SO_RCVTIMEO,
+    SO_SNDBUF,
+    SO_SNDTIMEO,
+    SOCK_STREAM,
+    SOL_SOCKET,
+)
 from rpcclient.core.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un, uint32_t
 from rpcclient.core.symbol import Symbol
 from rpcclient.exceptions import BadReturnValueError
 
-Interface = namedtuple('Interface', 'name address netmask broadcast')
-Hostentry = namedtuple('Hostentry', 'name aliases addresses')
+Interface = namedtuple("Interface", "name address netmask broadcast")
+Hostentry = namedtuple("Hostentry", "name aliases addresses")
 
 
 class Socket(Allocated):
@@ -30,12 +44,12 @@ class Socket(Allocated):
         self._timeout = None
 
     def _deallocate(self):
-        """ close(fd) at remote. read man for more details. """
+        """close(fd) at remote. read man for more details."""
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
-            raise BadReturnValueError(f'failed to close fd: {fd}')
+            raise BadReturnValueError(f"failed to close fd: {fd}")
 
-    def send(self, buf: typing.Union[bytes, Symbol], size: int = None, flags: int = 0) -> int:
+    def send(self, buf: typing.Union[bytes, Symbol], size: Optional[int] = None, flags: int = 0) -> int:
         """
         send(fd, buf, size, 0) at remote. read man for more details.
 
@@ -46,17 +60,17 @@ class Socket(Allocated):
         """
         if size is None:
             if isinstance(buf, Symbol):
-                raise ValueError('cannot calculate size argument for Symbol objects')
+                raise ValueError("cannot calculate size argument for Symbol objects")
             size = len(buf)
         n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | flags).c_int64
         if n < 0:
             if self._client.errno == EPIPE:
                 self.deallocate()
-            self._client.raise_errno_exception(f'failed to send on fd: {self.fd}')
+            self._client.raise_errno_exception(f"failed to send on fd: {self.fd}")
         return n
 
     def sendall(self, buf: bytes, flags: int = 0) -> None:
-        """ continue call send() until """
+        """continue call send() until"""
         size = len(buf)
         offset = 0
         with self._client.safe_malloc(size) as block:
@@ -68,9 +82,9 @@ class Socket(Allocated):
     def _recv(self, chunk: Symbol, size: int, flags: int = 0) -> bytes:
         err = self._client.symbols.recv(self.fd, chunk, size, MSG_NOSIGNAL | flags).c_int64
         if err < 0:
-            self._client.raise_errno_exception(f'recv() failed for fd: {self.fd}')
+            self._client.raise_errno_exception(f"recv() failed for fd: {self.fd}")
         elif err == 0:
-            self._client.raise_errno_exception(f'recv() failed for fd: {self.fd} (peer closed)')
+            self._client.raise_errno_exception(f"recv() failed for fd: {self.fd} (peer closed)")
         return chunk.peek(err)
 
     def recv(self, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
@@ -85,16 +99,16 @@ class Socket(Allocated):
             return self._recv(chunk, size, flags=flags)
 
     def recvall(self, size: int, flags: int = 0) -> bytes:
-        """ recv at remote until all buffer is received """
-        buf = b''
+        """recv at remote until all buffer is received"""
+        buf = b""
         with self._client.safe_malloc(size) as chunk:
             while len(buf) < size:
                 buf += self._recv(chunk, size - len(buf), flags=flags)
         return buf
 
     def setsockopt(self, level: int, option_name: int, option_value: bytes):
-        if 0 != self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)):
-            self._client.raise_errno_exception(f'setsockopt() failed: {self._client.last_error}')
+        if self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)) != 0:
+            self._client.raise_errno_exception(f"setsockopt() failed: {self._client.last_error}")
 
     def setbufsize(self, size: int) -> None:
         self.setsockopt(SOL_SOCKET, SO_SNDBUF, uint32_t.build(size))
@@ -102,8 +116,8 @@ class Socket(Allocated):
 
     def settimeout(self, seconds: int):
         self._timeout = seconds
-        self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
-        self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({'tv_sec': seconds, 'tv_usec': 0}))
+        self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
+        self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
 
     def gettimeout(self) -> typing.Optional[int]:
         return self._timeout
@@ -114,8 +128,8 @@ class Socket(Allocated):
             opts |= O_NONBLOCK
         else:
             opts &= ~O_NONBLOCK
-        if 0 != self._client.symbols.fcntl(self.fd, F_SETFL, opts):
-            self._client.raise_errno_exception(f'fcntl() failed: {self._client.last_error}')
+        if self._client.symbols.fcntl(self.fd, F_SETFL, opts) != 0:
+            self._client.raise_errno_exception(f"fcntl() failed: {self._client.last_error}")
         self._blocking = blocking
 
     def getblocking(self) -> bool:
@@ -125,7 +139,7 @@ class Socket(Allocated):
         return not bool(self._client.symbols.fcntl(self.fd, F_GETFL, 0) & O_NONBLOCK)
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} FD:{self.fd} BLOCKING:{self._blocking}>'
+        return f"<{self.__class__.__name__} FD:{self.fd} BLOCKING:{self._blocking}>"
 
 
 class Network:
@@ -135,43 +149,41 @@ class Network:
         """
         self._client = client
 
-    def socket(self, family=AF_INET, type=SOCK_STREAM, proto=0) -> int:
-        """ socket(family, type, proto) at remote. read man for more details. """
-        result = self._client.symbols.socket(family, type, proto).c_int64
-        if 0 == result:
-            self._client.raise_errno_exception(f'failed to create socket: {result}')
+    def socket(self, family=AF_INET, socktype=SOCK_STREAM, proto=0) -> int:
+        """socket(family, type, proto) at remote. read man for more details."""
+        result = self._client.symbols.socket(family, socktype, proto).c_int64
+        if result == 0:
+            self._client.raise_errno_exception(f"failed to create socket: {result}")
         return result
 
     def tcp_connect(self, address: str, port: int) -> Socket:
-        """ make target connect to given address:port and get socket object """
-        family = AF_INET6 if ':' in address else AF_INET
-        sockfd = self.socket(family=family, type=SOCK_STREAM, proto=0)
+        """make target connect to given address:port and get socket object"""
+        family = AF_INET6 if ":" in address else AF_INET
+        sockfd = self.socket(family=family, socktype=SOCK_STREAM, proto=0)
         if family == AF_INET:
-            servaddr = sockaddr_in.build(
-                {'sin_addr': pysock.inet_pton(family, address), 'sin_port': port})
+            servaddr = sockaddr_in.build({"sin_addr": pysock.inet_pton(family, address), "sin_port": port})
         else:
-            servaddr = sockaddr_in6.build(
-                {'sin6_addr': pysock.inet_pton(family, address), 'sin6_port': port})
+            servaddr = sockaddr_in6.build({"sin6_addr": pysock.inet_pton(family, address), "sin6_port": port})
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.symbols.close(sockfd)
-            self._client.raise_errno_exception(f'failed connecting to: {address}:{port}')
+            self._client.raise_errno_exception(f"failed connecting to: {address}:{port}")
         return Socket(self._client, sockfd)
 
     def unix_connect(self, filename: str) -> Socket:
-        """ make target connect to given unix path and get socket object """
-        sockfd = self.socket(family=AF_UNIX, type=SOCK_STREAM, proto=0)
-        servaddr = sockaddr_un.build({'sun_path': filename})
+        """make target connect to given unix path and get socket object"""
+        sockfd = self.socket(family=AF_UNIX, socktype=SOCK_STREAM, proto=0)
+        servaddr = sockaddr_un.build({"sun_path": filename})
         self._client.errno = 0
         error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
         if error == -1:
             self._client.symbols.close(sockfd)
-            self._client.raise_errno_exception(f'failed connecting to: {filename}')
+            self._client.raise_errno_exception(f"failed connecting to: {filename}")
         return Socket(self._client, sockfd)
 
     def gethostbyname(self, name: str) -> Optional[Hostentry]:
-        """ Query DNS record. Returns None if not found. """
+        """Query DNS record. Returns None if not found."""
         aliases = []
         addresses = []
         result = self._client.symbols.gethostbyname(name)
@@ -196,12 +208,12 @@ class Network:
 
     @property
     def interfaces(self) -> list[Interface]:
-        """ get current interfaces """
+        """get current interfaces"""
         results = []
         my_ifaddrs = ifaddrs(self._client)
         with self._client.safe_calloc(8) as addresses:
             if self._client.symbols.getifaddrs(addresses).c_int64 < 0:
-                self._client.raise_errno_exception('getifaddrs failed')
+                self._client.raise_errno_exception("getifaddrs failed")
 
             current = my_ifaddrs.parse_stream(addresses[0])
 
@@ -213,7 +225,8 @@ class Network:
                     netmask = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_netmask).sin_addr)
                     broadcast = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_dstaddr).sin_addr)
                     results.append(
-                        Interface(name=current.ifa_name, address=address, netmask=netmask, broadcast=broadcast))
+                        Interface(name=current.ifa_name, address=address, netmask=netmask, broadcast=broadcast)
+                    )
 
                 current = current.ifa_next
 

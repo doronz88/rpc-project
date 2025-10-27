@@ -16,9 +16,9 @@ def prompt_selection(choices: list[Any], message: str, idx: bool = False) -> Any
     Raises:
         click.ClickException: if the user cancels the prompt (Ctrl-C).
     """
-    question = [inquirer3.List('selection', message=message, choices=choices, carousel=True)]
+    question = [inquirer3.List("selection", message=message, choices=choices, carousel=True)]
     try:
         result = inquirer3.prompt(question, theme=GreenPassion(), raise_keyboard_interrupt=True)
-    except KeyboardInterrupt:
-        raise click.ClickException('No selection was made')
-    return result['selection'] if not idx else choices.index(result['selection'])
+    except KeyboardInterrupt as e:
+        raise click.ClickException("No selection was made") from e
+    return result["selection"] if not idx else choices.index(result["selection"])

@@ -6,7 +6,7 @@ from rpcclient.exceptions import LaunchError
 from rpcclient.transports import DEFAULT_PORT
 
 LAUNCHD_PID = 1
-LAUNCHD_PATH = '/sbin/launchd'
+LAUNCHD_PATH = "/sbin/launchd"
 
 
 def test_list_sanity(client):
@@ -40,10 +40,10 @@ def test_get_memgraph_snapshot(client):
 
 @pytest.mark.ios
 def test_launch_process(client):
-    client.processes.launch('com.apple.calculator').kill()
+    client.processes.launch("com.apple.calculator").kill()
 
 
 @pytest.mark.ios
 def test_launch_invalid_process(client):
     with pytest.raises(LaunchError):
-        client.processes.launch('com.apple.cyber')
+        client.processes.launch("com.apple.cyber")

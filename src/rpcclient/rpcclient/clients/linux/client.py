@@ -5,9 +5,8 @@ from rpcclient.core.client import CoreClient
 
 
 class LinuxClient(CoreClient):
-
     @cached_property
     def uname(self):
         with self.safe_calloc(utsname.sizeof()) as uname:
-            assert 0 == self.symbols.uname(uname)
+            assert self.symbols.uname(uname) == 0
             return utsname.parse_stream(uname)

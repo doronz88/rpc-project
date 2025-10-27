@@ -4,14 +4,14 @@ from threading import Thread
 
 def test_same_socket_different_threads(client):
     # get an expected result once on main thread
-    expected_result = client.fs.listdir('/')
+    expected_result = client.fs.listdir("/")
 
     # global to tell threads when to exit
     should_exit = False
 
     def listdir_thread(client):
         while not should_exit:
-            assert client.fs.listdir('/') == expected_result
+            assert client.fs.listdir("/") == expected_result
         return 0
 
     # launch the two threads

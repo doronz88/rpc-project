@@ -18,7 +18,8 @@ from rpcclient.exceptions import RpcClientException
 
 
 class SettingIvarError(RpcClientException):
-    """ Raise when trying to set an Ivar too early or when the Ivar doesn't exist. """
+    """Raise when trying to set an Ivar too early or when the Ivar doesn't exist."""
+
     pass
 
 
@@ -60,18 +61,16 @@ class ObjectiveCSymbol(DarwinSymbol):
         object_data = self._client.showobject(self)
 
         ivars_list = [
-            Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'],
-                 value=self._client.symbol(ivar['value'])) for ivar in object_data['ivars']
+            Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"], value=self._client.symbol(ivar["value"]))
+            for ivar in object_data["ivars"]
         ]
-        methods_list = [
-            objc.Method.from_data(method, self._client) for method in object_data['methods']
-        ]
+        methods_list = [objc.Method.from_data(method, self._client) for method in object_data["methods"]]
         properties_list = [
-            objc.Property(name=prop['name'], attributes=objc.convert_encoded_property_attributes(prop['attributes']))
-            for prop in object_data['properties']
+            objc.Property(name=prop["name"], attributes=objc.convert_encoded_property_attributes(prop["attributes"]))
+            for prop in object_data["properties"]
         ]
 
-        class_object = Symbol.create(object_data['class_address'], self._client)
+        class_object = Symbol.create(object_data["class_address"], self._client)
         class_wrapper = Class(self._client, class_object)
 
         self.ivars = ivars_list
@@ -86,11 +85,11 @@ class ObjectiveCSymbol(DarwinSymbol):
         :param recursive: Show methods of super classes.
         """
         formatted = self._to_str(recursive)
-        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style="native")))
 
         if dump_to is None:
             return
-        (Path(dump_to) / f'{self.class_.name}.m').expanduser().write_text(formatted)
+        (Path(dump_to) / f"{self.class_.name}.m").expanduser().write_text(formatted)
 
     def objc_call(self, selector: str, *params, **kwargs):
         """
@@ -101,7 +100,7 @@ class ObjectiveCSymbol(DarwinSymbol):
         """
         symbol = super().objc_call(selector, *params, **kwargs)
         try:
-            is_objc_type = self.get_method(selector).return_type == 'id'
+            is_objc_type = self.get_method(selector).return_type == "id"
         except AttributeError:
             is_objc_type = False
         return symbol.objc_symbol if is_objc_type else symbol
@@ -114,8 +113,8 @@ class ObjectiveCSymbol(DarwinSymbol):
 
     def _set_ivar(self, name, value):
         try:
-            ivars = self.__getattribute__('ivars')
-            class_name = self.__getattribute__('class_').name
+            ivars = self.__getattribute__("ivars")
+            class_name = self.__getattribute__("class_").name
         except AttributeError as e:
             raise SettingIvarError from e
 
@@ -131,26 +130,26 @@ class ObjectiveCSymbol(DarwinSymbol):
         raise SettingIvarError(f'Ivar "{name}" does not exist in "{class_name}"')
 
     def _to_str(self, recursive=False):
-        protocols_buf = f'<{",".join(self.class_.protocols)}>' if self.class_.protocols else ''
+        protocols_buf = f"<{','.join(self.class_.protocols)}>" if self.class_.protocols else ""
 
         if self.class_.super is not None:
-            buf = f'@interface {self.class_.name}: {self.class_.super.name} {protocols_buf}\n'
+            buf = f"@interface {self.class_.name}: {self.class_.super.name} {protocols_buf}\n"
         else:
-            buf = f'@interface {self.class_.name} {protocols_buf}\n'
+            buf = f"@interface {self.class_.name} {protocols_buf}\n"
 
         # Add ivars
-        buf += '{\n'
+        buf += "{\n"
         for ivar in self.ivars:
-            buf += f'\t{ivar.type_} {ivar.name} = 0x{int(ivar.value):x}; // 0x{ivar.offset:x}\n'
-        buf += '}\n'
+            buf += f"\t{ivar.type_} {ivar.name} = 0x{int(ivar.value):x}; // 0x{ivar.offset:x}\n"
+        buf += "}\n"
 
         # Add properties
         for prop in self.properties:
             attrs = prop.attributes
-            buf += f'@property ({",".join(attrs.list)}) {prop.attributes.type_} {prop.name};\n'
+            buf += f"@property ({','.join(attrs.list)}) {prop.attributes.type_} {prop.name};\n"
 
             if attrs.synthesize is not None:
-                buf += f'@synthesize {prop.name} = {attrs.synthesize};\n'
+                buf += f"@synthesize {prop.name} = {attrs.synthesize};\n"
 
         # Add methods
         methods = self.methods.copy()
@@ -167,12 +166,12 @@ class ObjectiveCSymbol(DarwinSymbol):
         for method in methods:
             buf += str(method)
 
-        buf += '@end'
+        buf += "@end"
         return buf
 
     @property
     def symbols_jar(self) -> SymbolsJar:
-        """ Get a SymbolsJar object for quick operations on all methods """
+        """Get a SymbolsJar object for quick operations on all methods"""
         jar = SymbolsJar.create(self._client)
 
         for m in self.methods:
@@ -187,11 +186,11 @@ class ObjectiveCSymbol(DarwinSymbol):
             result.add(ivar.name)
 
         for method in self.methods:
-            result.add(method.name.replace(':', '_'))
+            result.add(method.name.replace(":", "_"))
 
         for sup in self.class_.iter_supers():
             for method in sup.methods:
-                result.add(method.name.replace(':', '_'))
+                result.add(method.name.replace(":", "_"))
 
         result.update(list(super().__dir__()))
         return list(result)
@@ -222,7 +221,7 @@ class ObjectiveCSymbol(DarwinSymbol):
                 if method.name == item:
                     return partial(self.class_.objc_call, item) if method.is_class else partial(self.objc_call, item)
 
-        raise AttributeError(f''''{self.class_.name}' has no attribute {item}''')
+        raise AttributeError(f"""'{self.class_.name}' has no attribute {item}""")
 
     def __getattr__(self, item: str):
         return self[self.class_.sanitize_name(item)]
@@ -237,10 +236,8 @@ class ObjectiveCSymbol(DarwinSymbol):
             return
 
     def __setattr__(self, key, value):
-        try:
-            key = self.__getattribute__('class_').sanitize_name(key)
-        except AttributeError:
-            pass
+        with suppress(AttributeError):
+            key = self.__getattribute__("class_").sanitize_name(key)
         try:
             self._set_ivar(key, value)
         except SettingIvarError:
@@ -250,4 +247,4 @@ class ObjectiveCSymbol(DarwinSymbol):
         return self._to_str(False)
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} 0x{int(self):x} Class: {self.class_.name}>'
+        return f"<{self.__class__.__name__} 0x{int(self):x} Class: {self.class_.name}>"

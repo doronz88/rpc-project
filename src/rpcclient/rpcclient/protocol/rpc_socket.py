@@ -22,24 +22,25 @@ class RpcSocket:
     Attributes:
         raw_socket: The underlying socket used for communication with the remote server.
     """
+
     def __init__(self, sock: socket):
         self.raw_socket = sock
         self._protocol_lock = threading.Lock()
 
     def _msg_recv(self) -> bytes:
         try:
-            size = struct.unpack('<Q', self.raw_socket.recv(8))[0]
+            size = struct.unpack("<Q", self.raw_socket.recv(8))[0]
             buff = self._recvall(size)
-            return buff
-        except struct.error:
-            raise ConnectionError()
+        except struct.error as e:
+            raise ConnectionError() from e
+        return buff
 
     def _msg_send(self, message: bytes) -> None:
-        buff = struct.pack('<Q', len(message)) + message
+        buff = struct.pack("<Q", len(message)) + message
         self.raw_socket.sendall(buff)
 
     def _recvall(self, size: int) -> bytes:
-        buf = b''
+        buf = b""
         while size:
             try:
                 chunk = self.raw_socket.recv(size)

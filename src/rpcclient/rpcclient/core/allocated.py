@@ -2,7 +2,7 @@ from abc import abstractmethod
 
 
 class Allocated:
-    """ resource allocated on remote host that needs to be free """
+    """resource allocated on remote host that needs to be free"""
 
     def __init__(self):
         self._deallocated = False

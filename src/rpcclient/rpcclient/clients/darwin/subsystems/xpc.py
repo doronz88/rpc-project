@@ -1,5 +1,5 @@
 from datetime import datetime
-from functools import lru_cache
+from functools import cache
 from uuid import UUID
 
 from rpcclient.clients.darwin.common import CfSerializable
@@ -75,7 +75,7 @@ class XPCDictionary(XPCObject):
     def get_uuid(self, key: str) -> str:
         return self._client.symbols.xpc_dictionary_get_uuid(self, key).peek_str()
 
-    def get_dictionary(self, key: str) -> 'XPCDictionary':
+    def get_dictionary(self, key: str) -> "XPCDictionary":
         return XPCDictionary.create(self._client.symbols.xpc_dictionary_get_dictionary(self, key), self._client)
 
     def get_object(self, key: str) -> XPCObject:
@@ -91,8 +91,8 @@ class Xpc:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._client.load_framework('DuetActivityScheduler')
-        self.sharedScheduler = self._client.symbols.objc_getClass('_DASScheduler').objc_call('sharedScheduler')
+        self._client.load_framework("DuetActivityScheduler")
+        self.sharedScheduler = self._client.symbols.objc_getClass("_DASScheduler").objc_call("sharedScheduler")
 
     def create_xpc_dictionary(self) -> XPCDictionary:
         return XPCDictionary.create(self._client.symbols.xpc_dictionary_create(0, 0, 0), self._client)
@@ -111,7 +111,8 @@ class Xpc:
         return XPCDictionary.create(self.send_message_raw(service_name, message), self._client)
 
     def send_message_using_cf_serialization(
-            self, service_name: str, message: CfSerializable, decode_cf: bool = True) -> CfSerializable:
+        self, service_name: str, message: CfSerializable, decode_cf: bool = True
+    ) -> CfSerializable:
         """
         Send a CFObject serialized over an XPC object to a XPC service synchronously and return reply.
 
@@ -126,8 +127,11 @@ class Xpc:
         response = self.send_message_raw(service_name, message_raw)
         if response == 0:
             raise RpcXpcSerializationError()
-        return self.decode_xpc_message_using_cf_serialization(
-            response) if decode_cf else self.decode_xpc_object_using_cf_serialization(response)
+        return (
+            self.decode_xpc_message_using_cf_serialization(response)
+            if decode_cf
+            else self.decode_xpc_object_using_cf_serialization(response)
+        )
 
     def send_object_using_cf_serialization(self, service_name: str, message: CfSerializable) -> CfSerializable:
         """
@@ -170,26 +174,26 @@ class Xpc:
         return self._client.symbols._CFXPCCreateXPCMessageWithCFObject(self._client.cf(obj))
 
     def send_message_raw(self, service_name: str, message_raw: DarwinSymbol) -> DarwinSymbol:
-        """ Send a RAW xpc object to given service_name and wait reply. """
+        """Send a RAW xpc object to given service_name and wait reply."""
         conn = self._connect_to_mach_service(service_name)
         return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
 
     def force_run_activities(self, activities: list[str]) -> None:
-        self.sharedScheduler.objc_call('forceRunActivities:', self._client.cf(activities))
+        self.sharedScheduler.objc_call("forceRunActivities:", self._client.cf(activities))
 
     @property
     def loaded_activities(self) -> dict:
-        return self._client.preferences.cf.get_dict('com.apple.xpc.activity2', 'root')
+        return self._client.preferences.cf.get_dict("com.apple.xpc.activity2", "root")
 
     def set_activity_base_date(self, name: str, date: datetime) -> None:
-        activity_base_dates = self.loaded_activities['ActivityBaseDates']
+        activity_base_dates = self.loaded_activities["ActivityBaseDates"]
         activity_base_dates[name] = date
-        self._client.preferences.cf.set('ActivityBaseDates', activity_base_dates, 'com.apple.xpc.activity2', 'root')
+        self._client.preferences.cf.set("ActivityBaseDates", activity_base_dates, "com.apple.xpc.activity2", "root")
 
-    @lru_cache(maxsize=None)
+    @cache
     def _connect_to_mach_service(self, service_name) -> DarwinSymbol:
         conn = self._client.symbols.xpc_connection_create_mach_service(service_name, 0, 0)
-        assert conn != 0, 'failed to create xpc connection'
+        assert conn != 0, "failed to create xpc connection"
         self._client.symbols.xpc_connection_set_event_handler(conn, self._client.get_dummy_block())
         self._client.symbols.xpc_connection_resume(conn)
         return conn

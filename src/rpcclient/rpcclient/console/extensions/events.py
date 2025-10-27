@@ -10,10 +10,10 @@ from rpcclient.exceptions import GettingObjectiveCClassError, SymbolAbsentError
 
 
 class RpcEvents:
-    """ Small IPython event handler that lazy-loads symbols and Obj-C classes. """
+    """Small IPython event handler that lazy-loads symbols and Obj-C classes."""
 
     def __init__(self, ip: TerminalInteractiveShell) -> None:
-        """ Store the IPython shell reference. """
+        """Store the IPython shell reference."""
         self.ipython = ip
 
     def pre_run_cell(self, info: Any) -> None:
@@ -21,12 +21,12 @@ class RpcEvents:
         Before each cell: inject missing names by lazy-loading SymbolsJar or Objective-C classes.
         Expects `info.raw_cell` to contain the cell source.
         """
-        client = self.ipython.user_ns.get('p')
+        client = self.ipython.user_ns.get("p")
         if client is None:
             return
 
         # Skip parsing of this cell if it's an IPython's magic transformation (like '!', '?', '%')
-        if info.raw_cell != info.transformed_cell.rstrip('\n'):
+        if info.raw_cell != info.transformed_cell.rstrip("\n"):
             return
 
         for node in ast.walk(ast.parse(info.raw_cell)):
@@ -34,8 +34,12 @@ class RpcEvents:
                 continue
 
             # Skip names already known to local/global/builtins.
-            if node.id in locals() or node.id in globals() or node.id in dir(
-                    builtins) or node.id in self.ipython.user_ns:
+            if (
+                node.id in locals()
+                or node.id in globals()
+                or node.id in dir(builtins)
+                or node.id in self.ipython.user_ns
+            ):
                 continue
 
             # 1) Generic: SymbolsJar lazy load
@@ -49,9 +53,9 @@ class RpcEvents:
                     continue
 
             # 2) Darwin-specific: Objective-C class autoload / lazy reload
-            if hasattr(client, 'objc_get_class'):
+            if hasattr(client, "objc_get_class"):
                 existing = self.ipython.user_ns.get(node.id)
-                if isinstance(existing, objective_c_class.Class) and existing.name == '':
+                if isinstance(existing, objective_c_class.Class) and existing.name == "":
                     existing.reload()
                     continue
 
@@ -65,6 +69,6 @@ class RpcEvents:
 
 
 def load_ipython_extension(ip: TerminalInteractiveShell) -> None:
-    """ IPython extension hook: register the pre_run_cell handler. """
+    """IPython extension hook: register the pre_run_cell handler."""
     handlers = RpcEvents(ip)
-    ip.events.register('pre_run_cell', handlers.pre_run_cell)
+    ip.events.register("pre_run_cell", handlers.pre_run_cell)

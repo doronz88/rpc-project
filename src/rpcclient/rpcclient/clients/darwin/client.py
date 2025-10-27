@@ -3,8 +3,7 @@ import logging
 import plistlib
 from collections import namedtuple
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import List
+from functools import cache
 
 from cached_property import cached_property
 from IPython import get_ipython
@@ -41,25 +40,34 @@ from rpcclient.exceptions import CfSerializationError, MissingLibraryError
 from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.protos.rpc_api_pb2 import MsgId
 
-IsaMagic = namedtuple('IsaMagic', 'mask value')
+IsaMagic = namedtuple("IsaMagic", "mask value")
 ISA_MAGICS = [
     # ARM64
-    IsaMagic(mask=0x000003f000000001, value=0x000001a000000001),
+    IsaMagic(mask=0x000003F000000001, value=0x000001A000000001),
     # X86_64
-    IsaMagic(mask=0x001f800000000001, value=0x001d800000000001),
+    IsaMagic(mask=0x001F800000000001, value=0x001D800000000001),
 ]
 # Mask for tagged pointer, from objc-internal.h
-OBJC_TAG_MASK = (1 << 63)
+OBJC_TAG_MASK = 1 << 63
 
-FRAMEWORKS_PATH = '/System/Library/Frameworks'
-PRIVATE_FRAMEWORKS_PATH = '/System/Library/PrivateFrameworks'
-LIB_PATH = '/usr/lib'
+FRAMEWORKS_PATH = "/System/Library/Frameworks"
+PRIVATE_FRAMEWORKS_PATH = "/System/Library/PrivateFrameworks"
+LIB_PATH = "/usr/lib"
 
 FRAMEWORKS_BLACKLIST = (
-    'PowerlogLiteOperators.framework', 'PowerlogCore.framework', 'PowerlogHelperdOperators.framework',
-    'PowerlogFullOperators.framework', 'PowerlogAccounting.framework', 'JavaVM.framework', 'ActionKit.framework',
-    'DashBoard.framework', 'CoverSheet.framework', 'StoreKitMacHelper.framework', 'ReplayKitMacHelper.framework',
-    'PassKitMacHelper.framework')
+    "PowerlogLiteOperators.framework",
+    "PowerlogCore.framework",
+    "PowerlogHelperdOperators.framework",
+    "PowerlogFullOperators.framework",
+    "PowerlogAccounting.framework",
+    "JavaVM.framework",
+    "ActionKit.framework",
+    "DashBoard.framework",
+    "CoverSheet.framework",
+    "StoreKitMacHelper.framework",
+    "ReplayKitMacHelper.framework",
+    "PassKitMacHelper.framework",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +82,11 @@ class DarwinClient(CoreClient):
     def __init__(self, bridge: RpcBridge):
         super().__init__(bridge, dlsym_global_handle=RTLD_GLOBAL)
 
-        if 0 == self.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', RTLD_NOW):
-            raise MissingLibraryError('failed to load CoreFoundation')
+        if self.dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW) == 0:
+            raise MissingLibraryError("failed to load CoreFoundation")
 
         self.loaded_objc_classes = []
-        self._NSPropertyListSerialization = self.symbols.objc_getClass('NSPropertyListSerialization')
+        self._NSPropertyListSerialization = self.symbols.objc_getClass("NSPropertyListSerialization")
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
 
     @subsystem
@@ -155,25 +163,23 @@ class DarwinClient(CoreClient):
         for i in range(self.symbols._dyld_image_count()):
             module_name = self.symbols._dyld_get_image_name(i).peek_str()
             base_address = self.symbols._dyld_get_image_header(i)
-            m.append(
-                DyldImage(module_name, base_address)
-            )
+            m.append(DyldImage(module_name, base_address))
         return m
 
     @cached_property
     def uname(self):
         with self.safe_calloc(utsname.sizeof()) as uname:
-            assert 0 == self.symbols.uname(uname)
+            assert self.symbols.uname(uname) == 0
             return utsname.parse_stream(uname)
 
     @cached_property
     def is_idevice(self):
-        return self.uname.machine.startswith('i')
+        return self.uname.machine.startswith("i")
 
     @property
     def roots(self) -> list[str]:
-        """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
-        return ['/', '/var/root']
+        """get a list of all accessible darwin roots when used for lookup of files/preferences/..."""
+        return ["/", "/var/root"]
 
     def showobject(self, object_address: Symbol) -> dict:
         return json.loads(self.rpc_call(MsgId.REQ_SHOW_OBJECT, address=object_address).description)
@@ -189,7 +195,7 @@ class DarwinClient(CoreClient):
         return result
 
     def symbol(self, symbol: int):
-        """ at a symbol object from a given address """
+        """at a symbol object from a given address"""
         return DarwinSymbol.create(symbol, self)
 
     def decode_cf(self, symbol: Symbol) -> CfSerializable:
@@ -198,21 +204,24 @@ class DarwinClient(CoreClient):
 
         with self.safe_malloc(8) as p_error:
             p_error[0] = 0
-            objc_data = self._NSPropertyListSerialization.objc_call('dataWithPropertyList:format:options:error:',
-                                                                    symbol,
-                                                                    CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0,
-                                                                    0, p_error)
+            objc_data = self._NSPropertyListSerialization.objc_call(
+                "dataWithPropertyList:format:options:error:",
+                symbol,
+                CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0,
+                0,
+                p_error,
+            )
             if p_error[0] != 0:
                 raise CfSerializationError()
         if objc_data == 0:
             return None
         count = self.symbols.CFDataGetLength(objc_data)
         result = plistlib.loads(self.symbols.CFDataGetBytePtr(objc_data).peek(count))
-        objc_data.objc_call('release')
+        objc_data.objc_call("release")
         return result
 
     def cf(self, o: CfSerializable) -> DarwinSymbol:
-        """ construct a CFObject from a given python object """
+        """construct a CFObject from a given python object"""
         if o is None:
             return self.symbols.kCFNull[0]
 
@@ -221,10 +230,12 @@ class DarwinClient(CoreClient):
         with self.safe_malloc(8) as p_error:
             p_error[0] = 0
             result = self._NSPropertyListSerialization.objc_call(
-                'propertyListWithData:options:format:error:',
+                "propertyListWithData:options:format:error:",
                 plist_objc_bytes,
                 CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves,
-                0, p_error)
+                0,
+                p_error,
+            )
             if p_error[0] != 0:
                 raise CfSerializationError()
             return result
@@ -237,7 +248,7 @@ class DarwinClient(CoreClient):
         """
         return ObjectiveCSymbol.create(int(address), self)
 
-    @lru_cache(maxsize=None)
+    @cache
     def objc_get_class(self, name: str):
         """
         Get ObjC class object
@@ -255,13 +266,13 @@ class DarwinClient(CoreClient):
         class_info = self.processes.get_self().get_symbol_class_info(symbol)
         if class_info == 0:
             return False
-        return 'ObjC' == class_info.objc_call('typeName').py()
+        return class_info.objc_call("typeName").py() == "ObjC"
 
     def rebind_symbols(self, populate_global_scope=True) -> None:
         ip = get_ipython()
         if ip is None:
-            raise RuntimeError('ipython is not running')
-        logger.debug('rebinding symbols')
+            raise RuntimeError("ipython is not running")
+        logger.debug("rebinding symbols")
         self.loaded_objc_classes.clear()
 
         # enumerate all loaded objc classes
@@ -271,23 +282,23 @@ class DarwinClient(CoreClient):
                 ip.user_ns[name] = class_
 
     def load_framework(self, name: str) -> None:
-        lib = self.dlopen(f'{FRAMEWORKS_PATH}/{name}.framework/{name}', RTLD_NOW)
+        lib = self.dlopen(f"{FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
         if lib == 0:
-            lib = self.dlopen(f'{PRIVATE_FRAMEWORKS_PATH}/{name}.framework/{name}', RTLD_NOW)
+            lib = self.dlopen(f"{PRIVATE_FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
         if lib == 0:
-            raise MissingLibraryError(f'failed to load {name}')
+            raise MissingLibraryError(f"failed to load {name}")
 
     def load_all_libraries(self, rebind_symbols=True) -> None:
-        logger.debug(f'loading frameworks: {FRAMEWORKS_PATH}')
+        logger.debug(f"loading frameworks: {FRAMEWORKS_PATH}")
         self._load_frameworks(FRAMEWORKS_PATH)
-        logger.debug(f'loading frameworks: {PRIVATE_FRAMEWORKS_PATH}')
+        logger.debug(f"loading frameworks: {PRIVATE_FRAMEWORKS_PATH}")
         self._load_frameworks(PRIVATE_FRAMEWORKS_PATH)
 
-        logger.debug(f'loading libraries: {LIB_PATH}')
+        logger.debug(f"loading libraries: {LIB_PATH}")
         for filename in tqdm(self.fs.listdir(LIB_PATH)):
-            if not filename.endswith('.dylib'):
+            if not filename.endswith(".dylib"):
                 continue
-            self.dlopen(f'{LIB_PATH}/{filename}', RTLD_NOW)
+            self.dlopen(f"{LIB_PATH}/{filename}", RTLD_NOW)
 
         if rebind_symbols:
             self.rebind_symbols()
@@ -296,9 +307,9 @@ class DarwinClient(CoreClient):
         for filename in tqdm(self.fs.listdir(frameworks_path)):
             if filename in FRAMEWORKS_BLACKLIST:
                 continue
-            if 'SpringBoard' in filename or 'UI' in filename:
+            if "SpringBoard" in filename or "UI" in filename:
                 continue
-            self.dlopen(f'{frameworks_path}/{filename}/{filename.split(".", 1)[0]}', RTLD_NOW)
+            self.dlopen(f"{frameworks_path}/{filename}/{filename.split('.', 1)[0]}", RTLD_NOW)
 
     def create_autorelease_pool_ctx(self) -> autorelease_pool.AutorelesePoolCtx:
         """
@@ -310,7 +321,7 @@ class DarwinClient(CoreClient):
         """
         return autorelease_pool.AutorelesePoolCtx(self)
 
-    def get_autorelease_pools(self) -> List[autorelease_pool.AutoreleasePool]:
+    def get_autorelease_pools(self) -> list[autorelease_pool.AutoreleasePool]:
         """
         Get all autorelease pools currently in the thread.
 

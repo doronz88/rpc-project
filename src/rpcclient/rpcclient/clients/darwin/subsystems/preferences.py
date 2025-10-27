@@ -3,7 +3,7 @@ from rpcclient.clients.darwin.subsystems.scpreferences import SCPreferences
 
 
 class Preferences:
-    """ Preferences utils """
+    """Preferences utils"""
 
     def __init__(self, client):
         """

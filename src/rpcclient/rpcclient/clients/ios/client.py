@@ -12,11 +12,10 @@ from rpcclient.clients.ios.subsystems.telephony import Telephony
 from rpcclient.clients.ios.subsystems.wifi import IosWifi
 from rpcclient.core.subsystems.decorator import subsystem
 
-CRASH_REPORTS_DIR = 'Library/Logs/CrashReporter'
+CRASH_REPORTS_DIR = "Library/Logs/CrashReporter"
 
 
 class IosClient(DarwinClient):
-
     @subsystem
     def backlight(self) -> Backlight:
         return Backlight(self)
@@ -63,8 +62,8 @@ class IosClient(DarwinClient):
 
     @property
     def roots(self) -> list[str]:
-        """ get a list of all accessible darwin roots when used for lookup of files/preferences/... """
-        return super().roots + ['/var/mobile']
+        """get a list of all accessible darwin roots when used for lookup of files/preferences/..."""
+        return [*super().roots, "/var/mobile"]
 
     @property
     def airplane_mode(self) -> bool:
@@ -73,7 +72,7 @@ class IosClient(DarwinClient):
 
     @airplane_mode.setter
     def airplane_mode(self, value: bool):
-        """ set whether the device should enter airplane mode (turns off baseband, bt, etc...) """
-        radio_preferences = self.symbols.objc_getClass('RadiosPreferences').objc_call('new')
-        radio_preferences.objc_call('setAirplaneMode:', value)
-        radio_preferences.objc_call('synchronize')
+        """set whether the device should enter airplane mode (turns off baseband, bt, etc...)"""
+        radio_preferences = self.symbols.objc_getClass("RadiosPreferences").objc_call("new")
+        radio_preferences.objc_call("setAirplaneMode:", value)
+        radio_preferences.objc_call("synchronize")

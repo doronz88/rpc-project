@@ -2,7 +2,7 @@ from enum import Enum, IntEnum, IntFlag, auto
 
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0
-XPC_ARRAY_APPEND = 0xffffffffffffffff
+XPC_ARRAY_APPEND = 0xFFFFFFFFFFFFFFFF
 
 TASK_FLAVOR_CONTROL = 0  # a task_t
 TASK_FLAVOR_READ = 1  # a task_read_t
@@ -32,35 +32,35 @@ EXCEPTION_IDENTITY_PROTECTED = 4
 MACH_EXCEPTION_BACKTRACE_PREFERRED = 0x20000000
 MACH_EXCEPTION_ERRORS = 0x40000000
 MACH_EXCEPTION_CODES = 0x80000000
-MACH_EXCEPTION_MASK = (MACH_EXCEPTION_CODES |
-                       MACH_EXCEPTION_ERRORS |
-                       MACH_EXCEPTION_BACKTRACE_PREFERRED)
-EXC_MASK_BAD_ACCESS = (1 << EXC_BAD_ACCESS)
-EXC_MASK_BAD_INSTRUCTION = (1 << EXC_BAD_INSTRUCTION)
-EXC_MASK_ARITHMETIC = (1 << EXC_ARITHMETIC)
-EXC_MASK_EMULATION = (1 << EXC_EMULATION)
-EXC_MASK_SOFTWARE = (1 << EXC_SOFTWARE)
-EXC_MASK_BREAKPOINT = (1 << EXC_BREAKPOINT)
-EXC_MASK_SYSCALL = (1 << EXC_SYSCALL)
-EXC_MASK_MACH_SYSCALL = (1 << EXC_MACH_SYSCALL)
-EXC_MASK_RPC_ALERT = (1 << EXC_RPC_ALERT)
-EXC_MASK_CRASH = (1 << EXC_CRASH)
-EXC_MASK_RESOURCE = (1 << EXC_RESOURCE)
-EXC_MASK_GUARD = (1 << EXC_GUARD)
-EXC_MASK_CORPSE_NOTIFY = (1 << EXC_CORPSE_NOTIFY)
+MACH_EXCEPTION_MASK = MACH_EXCEPTION_CODES | MACH_EXCEPTION_ERRORS | MACH_EXCEPTION_BACKTRACE_PREFERRED
+EXC_MASK_BAD_ACCESS = 1 << EXC_BAD_ACCESS
+EXC_MASK_BAD_INSTRUCTION = 1 << EXC_BAD_INSTRUCTION
+EXC_MASK_ARITHMETIC = 1 << EXC_ARITHMETIC
+EXC_MASK_EMULATION = 1 << EXC_EMULATION
+EXC_MASK_SOFTWARE = 1 << EXC_SOFTWARE
+EXC_MASK_BREAKPOINT = 1 << EXC_BREAKPOINT
+EXC_MASK_SYSCALL = 1 << EXC_SYSCALL
+EXC_MASK_MACH_SYSCALL = 1 << EXC_MACH_SYSCALL
+EXC_MASK_RPC_ALERT = 1 << EXC_RPC_ALERT
+EXC_MASK_CRASH = 1 << EXC_CRASH
+EXC_MASK_RESOURCE = 1 << EXC_RESOURCE
+EXC_MASK_GUARD = 1 << EXC_GUARD
+EXC_MASK_CORPSE_NOTIFY = 1 << EXC_CORPSE_NOTIFY
 
-EXC_MASK_ALL = (EXC_MASK_BAD_ACCESS |
-                EXC_MASK_BAD_INSTRUCTION |
-                EXC_MASK_ARITHMETIC |
-                EXC_MASK_EMULATION |
-                EXC_MASK_SOFTWARE |
-                EXC_MASK_BREAKPOINT |
-                EXC_MASK_SYSCALL |
-                EXC_MASK_MACH_SYSCALL |
-                EXC_MASK_RPC_ALERT |
-                EXC_MASK_RESOURCE |
-                EXC_MASK_GUARD |
-                EXC_MASK_MACHINE)
+EXC_MASK_ALL = (
+    EXC_MASK_BAD_ACCESS
+    | EXC_MASK_BAD_INSTRUCTION
+    | EXC_MASK_ARITHMETIC
+    | EXC_MASK_EMULATION
+    | EXC_MASK_SOFTWARE
+    | EXC_MASK_BREAKPOINT
+    | EXC_MASK_SYSCALL
+    | EXC_MASK_MACH_SYSCALL
+    | EXC_MASK_RPC_ALERT
+    | EXC_MASK_RESOURCE
+    | EXC_MASK_GUARD
+    | EXC_MASK_MACHINE
+)
 
 IKOT_NONE = 0
 IKOT_THREAD_CONTROL = 1
@@ -114,7 +114,7 @@ IKOT_SUID_CRED = 48
 IKOT_HYPERVISOR = 49
 
 IKOT_UNKNOWN = 50  # magic catchall
-IKOT_MAX_TYPE = (IKOT_UNKNOWN + 1)  # of IKOT_ types
+IKOT_MAX_TYPE = IKOT_UNKNOWN + 1  # of IKOT_ types
 
 MACH_PORT_RIGHT_SEND = 0
 MACH_PORT_RIGHT_RECEIVE = 1
@@ -139,16 +139,11 @@ MACH_PORT_TYPE_LABELH = MACH_PORT_TYPE(MACH_PORT_RIGHT_LABELH)  # obsolete
 
 # Convenient combinations
 
-MACH_PORT_TYPE_SEND_RECEIVE = \
-    (MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_RECEIVE)
-MACH_PORT_TYPE_SEND_RIGHTS = \
-    (MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_SEND_ONCE)
-MACH_PORT_TYPE_PORT_RIGHTS = \
-    (MACH_PORT_TYPE_SEND_RIGHTS | MACH_PORT_TYPE_RECEIVE)
-MACH_PORT_TYPE_PORT_OR_DEAD = \
-    (MACH_PORT_TYPE_PORT_RIGHTS | MACH_PORT_TYPE_DEAD_NAME)
-MACH_PORT_TYPE_ALL_RIGHTS = \
-    (MACH_PORT_TYPE_PORT_OR_DEAD | MACH_PORT_TYPE_PORT_SET)
+MACH_PORT_TYPE_SEND_RECEIVE = MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_RECEIVE
+MACH_PORT_TYPE_SEND_RIGHTS = MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_SEND_ONCE
+MACH_PORT_TYPE_PORT_RIGHTS = MACH_PORT_TYPE_SEND_RIGHTS | MACH_PORT_TYPE_RECEIVE
+MACH_PORT_TYPE_PORT_OR_DEAD = MACH_PORT_TYPE_PORT_RIGHTS | MACH_PORT_TYPE_DEAD_NAME
+MACH_PORT_TYPE_ALL_RIGHTS = MACH_PORT_TYPE_PORT_OR_DEAD | MACH_PORT_TYPE_PORT_SET
 
 MACH_PORT_TYPE_DNREQUEST = 0x80000000
 MACH_PORT_TYPE_SPREQUEST = 0x40000000
@@ -184,8 +179,8 @@ class CFPropertyListFormat(IntEnum):
 
 class CFPropertyListMutabilityOptions(IntEnum):
     kCFPropertyListImmutable = 0
-    kCFPropertyListMutableContainers = 1 << 0,
-    kCFPropertyListMutableContainersAndLeaves = 1 << 1,
+    kCFPropertyListMutableContainers = (1 << 0,)
+    kCFPropertyListMutableContainersAndLeaves = (1 << 1,)
 
 
 class IOPMUserActiveType(IntEnum):
@@ -220,12 +215,12 @@ kCFNumberMaxType = 14
 # Types from IOKitKeys.h
 
 # registry plane names
-kIOServicePlane = 'IOService'
-kIOPowerPlane = 'IOPower'
-kIODeviceTreePlane = 'IODeviceTree'
-kIOAudioPlane = 'IOAudio'
-kIOFireWirePlane = 'IOFireWire'
-kIOUSBPlane = 'IOUSB'
+kIOServicePlane = "IOService"
+kIOPowerPlane = "IOPower"
+kIODeviceTreePlane = "IODeviceTree"
+kIOAudioPlane = "IOAudio"
+kIOFireWirePlane = "IOFireWire"
+kIOUSBPlane = "IOUSB"
 
 VM_REGION_INFO_MAX = 1024
 VM_REGION_BASIC_INFO_64 = 9
@@ -305,9 +300,9 @@ class CFStringEncoding(Enum):
     kCFStringEncodingUTF16BE = 0x10000100  # kTextEncodingUnicodeDefault + kUnicodeUTF16BEFormat
     kCFStringEncodingUTF16LE = 0x14000100  # kTextEncodingUnicodeDefault + kUnicodeUTF16LEFormat
 
-    kCFStringEncodingUTF32 = 0x0c000100  # kTextEncodingUnicodeDefault + kUnicodeUTF32Format
+    kCFStringEncodingUTF32 = 0x0C000100  # kTextEncodingUnicodeDefault + kUnicodeUTF32Format
     kCFStringEncodingUTF32BE = 0x18000100  # kTextEncodingUnicodeDefault + kUnicodeUTF32BEFormat
-    kCFStringEncodingUTF32LE = 0x1c000100  # kTextEncodingUnicodeDefault + kUnicodeUTF32LEFormat
+    kCFStringEncodingUTF32LE = 0x1C000100  # kTextEncodingUnicodeDefault + kUnicodeUTF32LEFormat
 
 
 class NSStringEncoding(Enum):
@@ -334,9 +329,9 @@ class NSStringEncoding(Enum):
     NSUTF16BigEndianStringEncoding = 0x90000100  # NSUTF16StringEncoding encoding with explicit endianness specified
     NSUTF16LittleEndianStringEncoding = 0x94000100  # NSUTF16StringEncoding encoding with explicit endianness specified
 
-    NSUTF32StringEncoding = 0x8c000100
+    NSUTF32StringEncoding = 0x8C000100
     NSUTF32BigEndianStringEncoding = 0x98000100  # NSUTF32StringEncoding encoding with explicit endianness specified
-    NSUTF32LittleEndianStringEncoding = 0x9c000100  # NSUTF32StringEncoding encoding with explicit endianness specified
+    NSUTF32LittleEndianStringEncoding = 0x9C000100  # NSUTF32StringEncoding encoding with explicit endianness specified
 
 
 # Taken from:
@@ -820,12 +815,12 @@ kHIDUsage_Csmr_ACFormat = 0x23C  # Selector
 # 0x23D - 0xFFFF Reserved
 kHIDUsage_Csmr_Reserved = 0xFFFF
 
-kSecCodeMagicRequirement = 0xfade0c00  # single requirement
-kSecCodeMagicRequirementSet = 0xfade0c01  # requirement set
-kSecCodeMagicCodeDirectory = 0xfade0c02  # CodeDirectory
-kSecCodeMagicEmbeddedSignature = 0xfade0cc0  # single-architecture embedded signature
-kSecCodeMagicDetachedSignature = 0xfade0cc1  # detached multi-architecture signature
-kSecCodeMagicEntitlement = 0xfade7171  # entitlement blob
+kSecCodeMagicRequirement = 0xFADE0C00  # single requirement
+kSecCodeMagicRequirementSet = 0xFADE0C01  # requirement set
+kSecCodeMagicCodeDirectory = 0xFADE0C02  # CodeDirectory
+kSecCodeMagicEmbeddedSignature = 0xFADE0CC0  # single-architecture embedded signature
+kSecCodeMagicDetachedSignature = 0xFADE0CC1  # detached multi-architecture signature
+kSecCodeMagicEntitlement = 0xFADE7171  # entitlement blob
 
 
 class IOHIDDigitizerTransducerType(Enum):
@@ -856,7 +851,7 @@ def IOHIDEventFieldBase(type_):
 
 
 def IOHIDEventFieldOffsetOf(field):
-    return field & 0xffff
+    return field & 0xFFFF
 
 
 class IOHIDEventType(Enum):
@@ -1075,7 +1070,7 @@ CG_KEY_UP = 126
 
 
 class OsLogLevel(IntEnum):
-    """ LogLevel. Extracted by reversing LevelForKey(id prefs, NSString *key) """
+    """LogLevel. Extracted by reversing LevelForKey(id prefs, NSString *key)"""
 
     OFF = 0
     NONE = 0
@@ -1088,7 +1083,7 @@ class OsLogLevel(IntEnum):
 # Definitions of flags stored in file flags word.
 # Super-user and owner changeable flags.
 
-UF_SETTABLE = 0x0000ffff  # mask of owner changeable flags
+UF_SETTABLE = 0x0000FFFF  # mask of owner changeable flags
 UF_NODUMP = 0x00000001  # do not dump file
 UF_IMMUTABLE = 0x00000002  # file may not be changed
 UF_APPEND = 0x00000004  # writes to file may only append
@@ -1113,9 +1108,9 @@ UF_HIDDEN = 0x00008000  # hint that this item should not be
 #
 # Super-user changeable flags.
 
-SF_SUPPORTED = 0x009f0000  # mask of superuser supported flags
-SF_SETTABLE = 0x3fff0000  # mask of superuser changeable flags
-SF_SYNTHETIC = 0xc0000000  # mask of system read-only synthetic flags
+SF_SUPPORTED = 0x009F0000  # mask of superuser supported flags
+SF_SETTABLE = 0x3FFF0000  # mask of superuser changeable flags
+SF_SYNTHETIC = 0xC0000000  # mask of system read-only synthetic flags
 SF_ARCHIVED = 0x00010000  # file is archived
 SF_IMMUTABLE = 0x00020000  # file may not be changed
 SF_APPEND = 0x00040000  # writes to file may only append

@@ -9,21 +9,21 @@ Callback = Callable[..., Any]
 
 
 class EventNotifier(Generic[E]):
-    """ Notifies registered callbacks when events occur """
+    """Notifies registered callbacks when events occur"""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._data: dict[E, set[Callback]] = {}
 
     def register(self, event: E, callback: Callback) -> None:
-        """ Register a callback for an event """
+        """Register a callback for an event"""
         if not callable(callback):
             raise TypeError("callback must be callable")
         with self._lock:
             self._data.setdefault(event, set()).add(callback)
 
     def unregister(self, event: E, callback: Callback) -> bool:
-        """ Unregister a callback; returns True if it was present """
+        """Unregister a callback; returns True if it was present"""
         with self._lock:
             s = self._data.get(event)
             if not s:
@@ -32,12 +32,12 @@ class EventNotifier(Generic[E]):
                 s.remove(callback)
                 if not s:
                     self._data.pop(event, None)
-                return True
             except KeyError:
                 return False
+            return True
 
     def register_once(self, event: E, callback: Callback) -> None:
-        """ Register a callback that will be invoked at most once """
+        """Register a callback that will be invoked at most once"""
 
         def _wrapper(*args: Any, **kwargs: Any) -> None:
             try:
@@ -49,7 +49,7 @@ class EventNotifier(Generic[E]):
         self.register(event, _wrapper)
 
     def clear(self, event: Optional[E] = None) -> None:
-        """ Remove all callbacks (optionally only for one event) """
+        """Remove all callbacks (optionally only for one event)"""
         with self._lock:
             if event is None:
                 self._data.clear()
@@ -57,7 +57,7 @@ class EventNotifier(Generic[E]):
                 self._data.pop(event, None)
 
     def listeners(self, event: E) -> tuple[Callback, ...]:
-        """ Return current listeners for an event (snapshot) """
+        """Return current listeners for an event (snapshot)"""
         with self._lock:
             return tuple(self._data.get(event, ()))
 
@@ -67,7 +67,7 @@ class EventNotifier(Generic[E]):
             return bool(s)
 
     def notify(self, event: E, *args: Any, **kwargs: Any) -> None:
-        """ Invoke all callbacks registered for the given event """
+        """Invoke all callbacks registered for the given event"""
         with self._lock:
             callbacks = self._data.get(event, set()).copy()
 

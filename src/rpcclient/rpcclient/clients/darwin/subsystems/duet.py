@@ -14,20 +14,20 @@ class Duet:
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._client.load_framework('DuetActivityScheduler')
-        self.NSArray_cls = client.symbols.objc_getClass('NSArray')
-        self.CDPaths_cls = client.symbols.objc_getClass('_CDPaths')
-        self.DKEventQuery_cls = client.symbols.objc_getClass('_DKEventQuery')
-        self.DKKnowledgeStore_cls = client.symbols.objc_getClass('_DKKnowledgeStore')
-        self.DKKnowledgeStorage_cls = client.symbols.objc_getClass('_DKKnowledgeStorage')
-        self.DKSystemEventStreams_cls = client.symbols.objc_getClass('_DKSystemEventStreams')
+        self._client.load_framework("DuetActivityScheduler")
+        self.NSArray_cls = client.symbols.objc_getClass("NSArray")
+        self.CDPaths_cls = client.symbols.objc_getClass("_CDPaths")
+        self.DKEventQuery_cls = client.symbols.objc_getClass("_DKEventQuery")
+        self.DKKnowledgeStore_cls = client.symbols.objc_getClass("_DKKnowledgeStore")
+        self.DKKnowledgeStorage_cls = client.symbols.objc_getClass("_DKKnowledgeStorage")
+        self.DKSystemEventStreams_cls = client.symbols.objc_getClass("_DKSystemEventStreams")
         self.DKSystemEventStreams_cls_cls = client.symbols.object_getClass(self.DKSystemEventStreams_cls)
 
-    def knowledge_store(self) -> 'KnowledgeStoreDup':
+    def knowledge_store(self) -> "KnowledgeStoreDup":
         """Copy the on device knowledge store to a temp directory and open it read only."""
         return KnowledgeStoreDup(self._client, self)
 
-    def knowledge_store_xpc(self) -> 'KnowledgeStoreXPC':
+    def knowledge_store_xpc(self) -> "KnowledgeStoreXPC":
         """Connect directly to the live knowledge store via XPC."""
         return KnowledgeStoreXPC(self._client, self)
 
@@ -48,7 +48,7 @@ class DKEvent:
 
         :returns: Event start time.
         """
-        return self.native.objc_call('startDate').py()
+        return self.native.objc_call("startDate").py()
 
     @cached_property
     def end(self) -> datetime:
@@ -56,7 +56,7 @@ class DKEvent:
 
         :returns: Event end time.
         """
-        return self.native.objc_call('endDate').py()
+        return self.native.objc_call("endDate").py()
 
     @cached_property
     def metadata(self) -> str:
@@ -64,7 +64,7 @@ class DKEvent:
 
         :returns: Metadata mapping or `None` when absent.
         """
-        return self.native.objc_call('metadata').cfdesc
+        return self.native.objc_call("metadata").cfdesc
 
     @cached_property
     def stream(self) -> str:
@@ -72,7 +72,7 @@ class DKEvent:
 
         :returns: Stream name.
         """
-        return self.native.objc_call('stream').objc_call('name').py()
+        return self.native.objc_call("stream").objc_call("name").py()
 
     @cached_property
     def value(self) -> Any:
@@ -80,18 +80,18 @@ class DKEvent:
 
         :returns: Stream specific value type.
         """
-        return self.native.objc_call('value').objc_call('primaryValue').py()
+        return self.native.objc_call("value").objc_call("primaryValue").py()
 
     def __str__(self) -> str:
         """Pretty print the event for quick inspection.
 
         :returns: Formatted multi line string representation.
         """
-        output = f'DKEvent - {self.stream}\n\n'
-        output += f' value:\t{self.value}\n'
-        output += f' start:\t{self.start}\n'
-        output += f' end:\t{self.end}'
-        output += f' metadata:\n{self.metadata}'
+        output = f"DKEvent - {self.stream}\n\n"
+        output += f" value:\t{self.value}\n"
+        output += f" start:\t{self.start}\n"
+        output += f" end:\t{self.end}"
+        output += f" metadata:\n{self.metadata}"
         return output
 
 
@@ -111,27 +111,23 @@ class KnowledgeStoreContext(ABC, Allocated):
         with client.safe_malloc(8) as count:
             methods = client.symbols.class_copyMethodList(duet.DKSystemEventStreams_cls_cls, count)
             for i in range(count[0]):
-                method_name = client.symbols.sel_getName(
-                    client.symbols.method_getName(methods[i])
-                ).peek_str()
+                method_name = client.symbols.sel_getName(client.symbols.method_getName(methods[i])).peek_str()
                 stream = duet.DKSystemEventStreams_cls.objc_call(method_name)
-                self.streams[stream.objc_call('name').py()] = stream
+                self.streams[stream.objc_call("name").py()] = stream
 
-    def query_events(self, stream: str) -> list['DKEvent']:
+    def query_events(self, stream: str) -> list["DKEvent"]:
         """Retrieve all events for a single stream.
 
         :param stream: Stream identifier.
         :returns: List of events or `None` when the stream is empty.
         """
         raw_events = self._query_raw_events(stream)
-        event_count = raw_events.objc_call('count') if 0 != raw_events else 0
+        event_count = raw_events.objc_call("count") if raw_events != 0 else 0
         return (
-            [DKEvent(raw_events.objc_call('objectAtIndex:', i)) for i in range(event_count)]
-            if event_count != 0
-            else []
+            [DKEvent(raw_events.objc_call("objectAtIndex:", i)) for i in range(event_count)] if event_count != 0 else []
         )
 
-    def query_events_streams(self, streams: Optional[list[str]] = None) -> dict[str, list['DKEvent']]:
+    def query_events_streams(self, streams: Optional[list[str]] = None) -> dict[str, list["DKEvent"]]:
         """Query multiple streams at once.
 
         :param streams: Specific streams to query. `None` queries all known streams.
@@ -141,7 +137,7 @@ class KnowledgeStoreContext(ABC, Allocated):
         streams = list(self.streams.keys()) if streams is None else streams
         for stream in streams:
             events_for_stream = self.query_events(stream)
-            if 0 != len(events_for_stream):
+            if len(events_for_stream) != 0:
                 events[stream] = events_for_stream
         return events
 
@@ -151,17 +147,15 @@ class KnowledgeStoreContext(ABC, Allocated):
         :param stream: Stream name.
         :returns: ObjectiveC array containing raw `_DKEvent` objects.
         """
-        query = self._duet.DKEventQuery_cls.objc_call('new')
+        query = self._duet.DKEventQuery_cls.objc_call("new")
         try:
             with self._client.safe_malloc(8) as buf:
                 buf[0] = self.streams[stream]
-                arr = self._duet.NSArray_cls.objc_call(
-                    'arrayWithObjects:count:', buf, 1
-                )
-                query.objc_call('setEventStreams:', arr)
+                arr = self._duet.NSArray_cls.objc_call("arrayWithObjects:count:", buf, 1)
+                query.objc_call("setEventStreams:", arr)
                 return self._execute_query(query)
         finally:
-            query.objc_call('release')
+            query.objc_call("release")
 
     def _execute_query(self, query: DarwinSymbol) -> DarwinSymbol:
         """Run *query* through the concrete :pyattr:`knowledge_store` implementation.
@@ -171,13 +165,13 @@ class KnowledgeStoreContext(ABC, Allocated):
         :raises RpcClientException: If :pyattr:`knowledge_store` is not yet initialized.
         """
         if self.knowledge_store is None:
-            raise RpcClientException('KnowledgeStore not initialized')
+            raise RpcClientException("KnowledgeStore not initialized")
         with self._client.safe_malloc(8) as error:
-            return self.knowledge_store.objc_call('executeQuery:error:', query, error)
+            return self.knowledge_store.objc_call("executeQuery:error:", query, error)
 
     def _deallocate(self):
         """Release the allocated knowledge store object"""
-        self.knowledge_store.objc_call('release')
+        self.knowledge_store.objc_call("release")
 
     @property
     @abstractmethod
@@ -199,21 +193,21 @@ class KnowledgeStoreDup(KnowledgeStoreContext):
         :param duet:
         """
         super().__init__(client, duet)
-        origin_path = client.fs.remote_path(duet.CDPaths_cls.objc_call('knowledgeDirectory').py())
+        origin_path = client.fs.remote_path(duet.CDPaths_cls.objc_call("knowledgeDirectory").py())
         self.tmp_dir = client.fs.remote_temp_dir()
         tmp_knowledge_dir = str(self.tmp_dir / origin_path.name)
         try:
             client.fs.cp([origin_path], self.tmp_dir, recursive=True, force=False)
             knowledge_storage = self._duet.DKKnowledgeStorage_cls.objc_call(
-                'storageWithDirectory:readOnly:', self._client.cf(tmp_knowledge_dir), 1
+                "storageWithDirectory:readOnly:", self._client.cf(tmp_knowledge_dir), 1
             )
-            knowledge_store = self._duet.DKKnowledgeStore_cls.objc_call('alloc')
+            knowledge_store = self._duet.DKKnowledgeStore_cls.objc_call("alloc")
             self._knowledge_store = knowledge_store.objc_call(
-                'initWithKnowledgeStoreHandle:readOnly:', knowledge_storage, 1
+                "initWithKnowledgeStoreHandle:readOnly:", knowledge_storage, 1
             )
-        except Exception as e:
+        except Exception:
             self.tmp_dir.deallocate()
-            raise e
+            raise
 
     def _deallocate(self):
         """Delete the allocated temp dir and release the allocated knowledge store object"""
@@ -239,7 +233,7 @@ class KnowledgeStoreXPC(KnowledgeStoreContext):
         :param duet:
         """
         super().__init__(client, duet)
-        self._knowledge_store: DarwinSymbol = duet.DKKnowledgeStore_cls.objc_call('knowledgeStore')
+        self._knowledge_store: DarwinSymbol = duet.DKKnowledgeStore_cls.objc_call("knowledgeStore")
 
     @property
     def knowledge_store(self) -> Optional[DarwinSymbol]:

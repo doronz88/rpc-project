@@ -3,11 +3,27 @@ import time
 from enum import Enum
 from typing import Union
 
-from rpcclient.clients.darwin.consts import IOHIDDigitizerEventMask, IOHIDDigitizerTransducerType, IOHIDEventField, \
-    IOHIDEventFieldDigitizer, kCFAllocatorDefault, kHIDPage_Consumer, kHIDUsage_Csmr_ACSearch, \
-    kHIDUsage_Csmr_FastForward, kHIDUsage_Csmr_Menu, kHIDUsage_Csmr_Mute, kHIDUsage_Csmr_Pause, kHIDUsage_Csmr_Play, \
-    kHIDUsage_Csmr_PlayOrPause, kHIDUsage_Csmr_Power, kHIDUsage_Csmr_RandomPlay, kHIDUsage_Csmr_Repeat, \
-    kHIDUsage_Csmr_Rewind, kHIDUsage_Csmr_VolumeDecrement, kHIDUsage_Csmr_VolumeIncrement
+from rpcclient.clients.darwin.consts import (
+    IOHIDDigitizerEventMask,
+    IOHIDDigitizerTransducerType,
+    IOHIDEventField,
+    IOHIDEventFieldDigitizer,
+    kCFAllocatorDefault,
+    kHIDPage_Consumer,
+    kHIDUsage_Csmr_ACSearch,
+    kHIDUsage_Csmr_FastForward,
+    kHIDUsage_Csmr_Menu,
+    kHIDUsage_Csmr_Mute,
+    kHIDUsage_Csmr_Pause,
+    kHIDUsage_Csmr_Play,
+    kHIDUsage_Csmr_PlayOrPause,
+    kHIDUsage_Csmr_Power,
+    kHIDUsage_Csmr_RandomPlay,
+    kHIDUsage_Csmr_Repeat,
+    kHIDUsage_Csmr_Rewind,
+    kHIDUsage_Csmr_VolumeDecrement,
+    kHIDUsage_Csmr_VolumeIncrement,
+)
 from rpcclient.exceptions import BadReturnValueError
 
 
@@ -22,30 +38,36 @@ TOUCH_EVENT_SLEEP = 0.1
 
 EVENT_TYPE_PARAMS = {
     TouchEventType.TOUCH_DOWN: {
-        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value |
-                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value |
-                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value),
-        'button_mask': 1,
-        'touch': True,
+        "event_flags": (
+            IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value
+            | IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value
+            | IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value
+        ),
+        "button_mask": 1,
+        "touch": True,
     },
     TouchEventType.TOUCH_MOVE: {
-        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventPosition.value |
-                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value),
-        'button_mask': 1,
-        'touch': True,
+        "event_flags": (
+            IOHIDDigitizerEventMask.kIOHIDDigitizerEventPosition.value
+            | IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value
+        ),
+        "button_mask": 1,
+        "touch": True,
     },
     TouchEventType.TOUCH_UP: {
-        'event_flags': (IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value |
-                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value |
-                        IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value),
-        'button_mask': 0,
-        'touch': False,
+        "event_flags": (
+            IOHIDDigitizerEventMask.kIOHIDDigitizerEventAttribute.value
+            | IOHIDDigitizerEventMask.kIOHIDDigitizerEventTouch.value
+            | IOHIDDigitizerEventMask.kIOHIDDigitizerEventIdentity.value
+        ),
+        "button_mask": 0,
+        "touch": False,
     },
 }
 
 
 class Hid:
-    """ Control HID devices and simulate events """
+    """Control HID devices and simulate events"""
 
     def __init__(self, client):
         self._client = client
@@ -100,11 +122,11 @@ class Hid:
         self.send_keyboard_event(page, key_code, False)
 
     def send_keyboard_event(self, page: int, key_code: int, down: bool):
-        event = self._client.symbols.IOHIDEventCreateKeyboardEvent(kCFAllocatorDefault,
-                                                                   self._client.symbols.mach_absolute_time(),
-                                                                   page, key_code, down, 0)
+        event = self._client.symbols.IOHIDEventCreateKeyboardEvent(
+            kCFAllocatorDefault, self._client.symbols.mach_absolute_time(), page, key_code, down, 0
+        )
         if not event:
-            raise BadReturnValueError('IOHIDEventCreateKeyboardEvent() failed')
+            raise BadReturnValueError("IOHIDEventCreateKeyboardEvent() failed")
 
         self.dispatch(event)
 
@@ -131,54 +153,124 @@ class Hid:
 
         timestamp = self._client.symbols.mach_absolute_time()
 
-        event_flags = params['event_flags']
-        touch = params['touch']
-        button_mask = params['button_mask']
+        event_flags = params["event_flags"]
+        touch = params["touch"]
+        button_mask = params["button_mask"]
 
-        parent = self.create_digitizer_event(IOHIDDigitizerTransducerType.kIOHIDDigitizerTransducerTypeHand,
-                                             0, 0, event_flags, 0, x, y, 0.0, 0.0, 0.0, touch, touch, 0,
-                                             timestamp=timestamp)
+        parent = self.create_digitizer_event(
+            IOHIDDigitizerTransducerType.kIOHIDDigitizerTransducerTypeHand,
+            0,
+            0,
+            event_flags,
+            0,
+            x,
+            y,
+            0.0,
+            0.0,
+            0.0,
+            touch,
+            touch,
+            0,
+            timestamp=timestamp,
+        )
 
-        child = self.create_digitizer_finger_event(2, 2, event_flags, button_mask, x, y, 0.0, pressure, 0.0,
-                                                   touch, touch, 0, timestamp=timestamp)
+        child = self.create_digitizer_finger_event(
+            2, 2, event_flags, button_mask, x, y, 0.0, pressure, 0.0, touch, touch, 0, timestamp=timestamp
+        )
         self._client.symbols.IOHIDEventAppendEvent(parent, child)
         self.dispatch(parent)
 
-    def create_digitizer_event(self, type_: Union[IOHIDDigitizerTransducerType, int], index: int, identity: int,
-                               event_mask: int, button_mask: int, x: float, y: float, z: float, tip_pressure: float,
-                               barrel_pressure: float, range_: bool, touch: bool, options: int, timestamp=None):
+    def create_digitizer_event(
+        self,
+        type_: Union[IOHIDDigitizerTransducerType, int],
+        index: int,
+        identity: int,
+        event_mask: int,
+        button_mask: int,
+        x: float,
+        y: float,
+        z: float,
+        tip_pressure: float,
+        barrel_pressure: float,
+        range_: bool,
+        touch: bool,
+        options: int,
+        timestamp=None,
+    ):
         if timestamp is None:
             timestamp = self._client.symbols.mach_absolute_time()
 
         event = self._client.symbols.IOHIDEventCreateDigitizerEvent(
-            kCFAllocatorDefault, timestamp, type_, index, identity, event_mask,
-            button_mask, x, y, z, tip_pressure, barrel_pressure, range_, touch, options)
+            kCFAllocatorDefault,
+            timestamp,
+            type_,
+            index,
+            identity,
+            event_mask,
+            button_mask,
+            x,
+            y,
+            z,
+            tip_pressure,
+            barrel_pressure,
+            range_,
+            touch,
+            options,
+        )
 
         if not event:
-            raise BadReturnValueError('IOHIDEventCreateDigitizerEvent() failed')
+            raise BadReturnValueError("IOHIDEventCreateDigitizerEvent() failed")
 
         self._client.symbols.IOHIDEventSetIntegerValue(event, IOHIDEventField.kIOHIDEventFieldIsBuiltIn, 0)
         self._client.symbols.IOHIDEventSetIntegerValue(
-            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1)
+            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1
+        )
         self._client.symbols.IOHIDEventSetSenderID(event, 0x8000000817319375)
 
         return event
 
-    def create_digitizer_finger_event(self, index: int, identity: int, event_mask: int,
-                                      button_mask: int, x: float, y: float, z: float, tip_pressure: float,
-                                      twist: float, range_: bool, touch: bool, options: int, timestamp=None):
+    def create_digitizer_finger_event(
+        self,
+        index: int,
+        identity: int,
+        event_mask: int,
+        button_mask: int,
+        x: float,
+        y: float,
+        z: float,
+        tip_pressure: float,
+        twist: float,
+        range_: bool,
+        touch: bool,
+        options: int,
+        timestamp=None,
+    ):
         if timestamp is None:
             timestamp = self._client.symbols.mach_absolute_time()
 
         event = self._client.symbols.IOHIDEventCreateDigitizerFingerEvent(
-            kCFAllocatorDefault, timestamp, index, identity, event_mask,
-            button_mask, x, y, z, tip_pressure, twist, range_, touch, options)
+            kCFAllocatorDefault,
+            timestamp,
+            index,
+            identity,
+            event_mask,
+            button_mask,
+            x,
+            y,
+            z,
+            tip_pressure,
+            twist,
+            range_,
+            touch,
+            options,
+        )
 
         if not event:
-            raise BadReturnValueError('IOHIDEventCreateDigitizerFingerEvent() failed')
+            raise BadReturnValueError("IOHIDEventCreateDigitizerFingerEvent() failed")
 
         self._client.symbols.IOHIDEventSetFloatValue(
-            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerMajorRadius, 0.5)
+            event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerMajorRadius, 0.5
+        )
         return event
 
     @contextlib.contextmanager
@@ -186,7 +278,7 @@ class Hid:
         client = self._client.symbols.IOHIDEventSystemClientCreate(0)
 
         if not client:
-            raise BadReturnValueError('IOHIDEventSystemClientCreate() failed')
+            raise BadReturnValueError("IOHIDEventSystemClientCreate() failed")
 
         try:
             yield client

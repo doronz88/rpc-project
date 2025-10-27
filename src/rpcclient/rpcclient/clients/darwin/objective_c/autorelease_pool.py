@@ -1,15 +1,12 @@
 from collections import UserList
-from typing import List, Optional
+from typing import Optional
 
 from construct import Hex, Int32ul, PaddedString, Struct
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.structs.generic import SymbolFormatField
 
-magic_t = Struct(
-    'm0' / Hex(Int32ul),
-    'm1' / PaddedString(12, 'ascii')
-)
+magic_t = Struct("m0" / Hex(Int32ul), "m1" / PaddedString(12, "ascii"))
 
 
 SIZEOF_PAGE_DATA = 0x38
@@ -17,14 +14,14 @@ SIZEOF_PAGE_DATA = 0x38
 
 def AutoreleasePoolPageData(client) -> Struct:
     return Struct(
-            'magic' / magic_t,
-            'next' / SymbolFormatField(client),
-            'thread' / SymbolFormatField(client),
-            'parent' / SymbolFormatField(client),
-            'child' / SymbolFormatField(client),
-            'depth' / Hex(Int32ul),
-            'hiwat' / Hex(Int32ul)
-        )
+        "magic" / magic_t,
+        "next" / SymbolFormatField(client),
+        "thread" / SymbolFormatField(client),
+        "parent" / SymbolFormatField(client),
+        "child" / SymbolFormatField(client),
+        "depth" / Hex(Int32ul),
+        "hiwat" / Hex(Int32ul),
+    )
 
 
 class AutoreleasePool(UserList[DarwinSymbol]):
@@ -54,19 +51,17 @@ class AutoreleasePool(UserList[DarwinSymbol]):
         get_autorelease_pool_end(self._client)  # to solve autorelease pool bug
         page_sym = find_page_for_address(self._client, self.address)
         page = AutoreleasePoolPageData(self._client).parse_stream(page_sym)
-        next = self.address + 8
-        while (next[0].c_int64 not in [0, 0xa3a3a3a3, 0xa3a3a3a3a3a3a3a3] or
-               next == page.next):
-            if next == page.next:
+        next_address = self.address + 8
+        while next_address[0].c_int64 not in [0, 0xA3A3A3A3, 0xA3A3A3A3A3A3A3A3] or next_address == page.next:
+            if next_address == page.next:
                 if page.child == 0:
                     break
-                next = page.child + SIZEOF_PAGE_DATA
-                page = AutoreleasePoolPageData(self._client).parse_stream(
-                    page.child)
+                next_address = page.child + SIZEOF_PAGE_DATA
+                page = AutoreleasePoolPageData(self._client).parse_stream(page.child)
                 continue
-            self.append(next[0] & self._mask)
-            next += 8
-        self.end = next
+            self.append(next_address[0] & self._mask)
+            next_address += 8
+        self.end = next_address
 
     def __repr__(self) -> str:
         """
@@ -74,7 +69,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
 
         :return: String representation of the pool
         """
-        return f'<{self.__class__.__name__} {hex(self.address)} contains {len(self)} objects>'
+        return f"<{self.__class__.__name__} {hex(self.address)} contains {len(self)} objects>"
 
     def __str__(self) -> str:
         """
@@ -82,10 +77,10 @@ class AutoreleasePool(UserList[DarwinSymbol]):
 
         :return: String representation of the pool
         """
-        output = f'{self.__class__.__name__} {hex(self.address)}:\n'
+        output = f"{self.__class__.__name__} {hex(self.address)}:\n"
         for idx in range(len(self)):
-            class_name = self._client.symbols.class_getName(self[idx].objc_call('class')).peek_str()
-            output += f'#{idx}:\t0x{self[idx]:x}\t{class_name}\n'
+            class_name = self._client.symbols.class_getName(self[idx].objc_call("class")).peek_str()
+            output += f"#{idx}:\t0x{self[idx]:x}\t{class_name}\n"
 
         return output
 
@@ -108,7 +103,7 @@ class AutorelesePoolCtx:
         self._pool = None
         self._create()
 
-    def __enter__(self) -> 'AutorelesePoolCtx':
+    def __enter__(self) -> "AutorelesePoolCtx":
         """
         Ensure a fresh pool exists when entering `with` block.
 
@@ -170,7 +165,7 @@ def find_page_for_address(client, address: DarwinSymbol) -> DarwinSymbol:
     :return: `DarwinSymbol` representing page
     """
     current = address - SIZEOF_PAGE_DATA
-    while current.peek(4) != b'\xa1\xa1\xa1\xa1':
+    while current.peek(4) != b"\xa1\xa1\xa1\xa1":
         current -= 8
     return current
 
@@ -200,7 +195,7 @@ def find_first_page(client) -> DarwinSymbol:
     return page_sym
 
 
-def get_autorelease_pools(client) -> List[AutoreleasePool]:
+def get_autorelease_pools(client) -> list[AutoreleasePool]:
     """
     Get and parse all autorelease pools currently in the thread.
 
@@ -210,7 +205,7 @@ def get_autorelease_pools(client) -> List[AutoreleasePool]:
     end = get_autorelease_pool_end(client)
     page_sym = find_first_page(client)
     pool = AutoreleasePool(client, page_sym + SIZEOF_PAGE_DATA)
-    pools: List[AutoreleasePool] = [pool]
+    pools: list[AutoreleasePool] = [pool]
     while pool.end != end:
         pool = AutoreleasePool(client, pool.end)
         pools.append(pool)
