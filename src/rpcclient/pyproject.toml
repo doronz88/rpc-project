@@ -45,7 +45,7 @@ exclude = ["docs*", "tests*"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
-version = {attr = "rpcclient._version.__version__"}
+version = { attr = "rpcclient._version.__version__" }
 
 [tool.setuptools_scm]
 version_file = "rpcclient/_version.py"
@@ -54,3 +54,52 @@ root = "../.."
 [build-system]
 requires = ["setuptools>=43.0.0", "setuptools_scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = [
+    # flake8-2020
+    "YTT",
+    # flake8-bugbear
+    "B",
+    # flake8-builtins
+    "A",
+    # flake8-comprehensions
+    "C4",
+    # flake8-debugger
+    "T10",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # pycodestyle
+    "E",
+    "W",
+    # pyflakes
+    "F",
+    # pygrep-hooks
+    "PGH",
+    # pyupgrade
+    "UP",
+    # ruff
+    "RUF",
+    # tryceratops
+    "TRY",
+]
+ignore = [
+    # LineTooLong
+    "E501",
+    # Custom error classes
+    "TRY003",
+    # Abstract `raise` to an inner function
+    "TRY301",
+    # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
+    "B019",
+]
+
+[tool.ruff.format]
+preview = true

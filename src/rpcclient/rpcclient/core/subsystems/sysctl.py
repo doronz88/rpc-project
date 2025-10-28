@@ -1,20 +1,21 @@
 import struct
 from enum import IntEnum
+from typing import Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 
 
 class CTL(IntEnum):
-    UNSPEC = 0,  # unused
-    KERN = 1,  # "high kernel": proc, limits
-    VM = 2,  # virtual memory
-    VFS = 3,  # file system, mount type is next
-    NET = 4,  # network, see socket.h
-    DEBUG = 5,  # debugging parameters
-    HW = 6,  # generic cpu/io
-    MACHDEP = 7,  # machine dependent
-    USER = 8,  # user-level
-    MAXID = 9,  # number of valid top-level ids
+    UNSPEC = (0,)  # unused
+    KERN = (1,)  # "high kernel": proc, limits
+    VM = (2,)  # virtual memory
+    VFS = (3,)  # file system, mount type is next
+    NET = (4,)  # network, see socket.h
+    DEBUG = (5,)  # debugging parameters
+    HW = (6,)  # generic cpu/io
+    MACHDEP = (7,)  # machine dependent
+    USER = (8,)  # user-level
+    MAXID = (9,)  # number of valid top-level ids
 
 
 class KERN(IntEnum):
@@ -97,13 +98,13 @@ MAX_SIZE = 0x40000
 
 
 class Sysctl:
-    """ sysctl utils. read man page for sysctl(3) for more details """
+    """sysctl utils. read man page for sysctl(3) for more details"""
 
     def __init__(self, client):
         self._client = client
 
-    def get(self, ctl: CTL, kern: KERN, arg: int = None, size=MAX_SIZE) -> bytes:
-        """ call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote """
+    def get(self, ctl: CTL, kern: KERN, arg: Optional[int] = None, size=MAX_SIZE) -> bytes:
+        """call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote"""
         namelen = 2
 
         with self._client.safe_malloc(4 * 3) as mib:
@@ -117,11 +118,11 @@ class Sysctl:
                 oldenp[0] = size
                 with self._client.safe_malloc(size) as oldp:
                     if self._client.symbols.sysctl(mib, namelen, oldp, oldenp, 0, 0):
-                        self._client.raise_errno_exception('sysctl() failed')
+                        self._client.raise_errno_exception("sysctl() failed")
                     return oldp.peek(oldenp[0])
 
-    def set(self, ctl: CTL, kern: KERN, oldp: DarwinSymbol, oldenp: DarwinSymbol, arg: int = None):
-        """ call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote """
+    def set(self, ctl: CTL, kern: KERN, oldp: DarwinSymbol, oldenp: DarwinSymbol, arg: Optional[int] = None):
+        """call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote"""
         namelen = 2
 
         with self._client.safe_malloc(4 * 3) as mib:
@@ -132,35 +133,35 @@ class Sysctl:
                 mib[2] = int(arg)
                 namelen += 1
             if self._client.symbols.sysctl(mib, namelen, oldp, oldenp, 0, 0):
-                self._client.raise_errno_exception('sysctl() failed')
+                self._client.raise_errno_exception("sysctl() failed")
 
     def get_str_by_name(self, name: str) -> str:
-        """ equivalent of: sysctl <name> """
-        return self.get_by_name(name).strip(b'\x00').decode()
+        """equivalent of: sysctl <name>"""
+        return self.get_by_name(name).strip(b"\x00").decode()
 
     def get_int_by_name(self, name: str) -> int:
-        """ equivalent of: sysctl <name> """
-        return struct.unpack('<I', self.get_by_name(name))[0]
+        """equivalent of: sysctl <name>"""
+        return struct.unpack("<I", self.get_by_name(name))[0]
 
     def set_int_by_name(self, name: str, value: int):
-        """ equivalent of: sysctl <name> -w value """
-        self.set_by_name(name, struct.pack('<I', value))
+        """equivalent of: sysctl <name> -w value"""
+        self.set_by_name(name, struct.pack("<I", value))
 
     def set_str_by_name(self, name: str, value: str):
-        """ equivalent of: sysctl <name> -w value """
-        self.set_by_name(name, value.encode() + b'\x00')
+        """equivalent of: sysctl <name> -w value"""
+        self.set_by_name(name, value.encode() + b"\x00")
 
     def set_by_name(self, name: str, value: bytes):
-        """ equivalent of: sysctl <name> -w value """
+        """equivalent of: sysctl <name> -w value"""
         if self._client.symbols.sysctlbyname(name, 0, 0, value, len(value)):
-            self._client.raise_errno_exception('sysctlbyname() failed')
+            self._client.raise_errno_exception("sysctlbyname() failed")
 
     def get_by_name(self, name: str, size=MAX_SIZE) -> bytes:
-        """ equivalent of: sysctl <name> """
+        """equivalent of: sysctl <name>"""
         oldval_len = size
         with self._client.safe_malloc(8) as p_oldval_len:
             p_oldval_len[0] = oldval_len
             with self._client.safe_malloc(oldval_len) as oldval:
                 if self._client.symbols.sysctlbyname(name, oldval, p_oldval_len, 0, 0):
-                    self._client.raise_errno_exception('sysctlbyname() failed')
+                    self._client.raise_errno_exception("sysctlbyname() failed")
                 return oldval.peek(p_oldval_len[0])

@@ -26,13 +26,12 @@ def test_poke(client):
     :param rpcclient.client.Client client:
     """
     with client.safe_malloc(0x100) as peekable:
-        client.poke(peekable, b'a' * 0x100)
+        client.poke(peekable, b"a" * 0x100)
 
 
-@pytest.mark.parametrize('params', [
-    ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-    ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
-])
+@pytest.mark.parametrize(
+    "params", [([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])]
+)
 def test_16args(client, params):
     """
     :param rpcclient.client.Client client:
@@ -43,14 +42,17 @@ def test_16args(client, params):
             assert peekable[i] == params[i]
 
 
-@pytest.mark.parametrize('va_list_index,params,expected', [
-    (2, ['%f', 15.5], '15.500000'),
-    (2, ['%f %f', 15.5, 7.3], '15.500000 7.300000'),
-    (2, ['%f %f %d', 15.5, 7.3, 42], '15.500000 7.300000 42'),
-    (2, ['%f %f %d %d', 15.5, 7.3, 1, 2], '15.500000 7.300000 1 2'),
-    (2, ['%f %f %d %d %s', 15.5, 7.3, 1, 2, 'test'], '15.500000 7.300000 1 2 test'),
-    (2, ['%f %f %d %d %s %s', 15.5, 7.3, 1, 2, 'test', 'test2'], '15.500000 7.300000 1 2 test test2'),
-])
+@pytest.mark.parametrize(
+    "va_list_index,params,expected",
+    [
+        (2, ["%f", 15.5], "15.500000"),
+        (2, ["%f %f", 15.5, 7.3], "15.500000 7.300000"),
+        (2, ["%f %f %d", 15.5, 7.3, 42], "15.500000 7.300000 42"),
+        (2, ["%f %f %d %d", 15.5, 7.3, 1, 2], "15.500000 7.300000 1 2"),
+        (2, ["%f %f %d %d %s", 15.5, 7.3, 1, 2, "test"], "15.500000 7.300000 1 2 test"),
+        (2, ["%f %f %d %d %s %s", 15.5, 7.3, 1, 2, "test", "test2"], "15.500000 7.300000 1 2 test test2"),
+    ],
+)
 @pytest.mark.arm
 def test_va_list_call(client, va_list_index, params, expected):
     """
@@ -84,23 +86,23 @@ def test_poke_invalid_address(client):
     """
     # Server config: -DSAFE_WRITE raises ArgumentError for invalid address; else, ConnectionError.
     with pytest.raises((ArgumentError, ConnectionError)):
-        client.poke(0, b'a')
+        client.poke(0, b"a")
 
 
 def test_get_dummy_block(client):
     """
     :param rpcclient.client.Client client:
     """
-    client.cf([1, 2, 3]).objc_call('enumerateObjectsUsingBlock:', client.get_dummy_block())
+    client.cf([1, 2, 3]).objc_call("enumerateObjectsUsingBlock:", client.get_dummy_block())
 
 
 def test_listdir(client):
     """
     :param rpcclient.client.Client client:
     """
-    entries = client.listdir('/')
-    assert entries[0].d_name == '.'
-    assert entries[1].d_name == '..'
+    entries = client.listdir("/")
+    assert entries[0].d_name == "."
+    assert entries[1].d_name == ".."
 
 
 def test_calloc(client):
@@ -108,15 +110,15 @@ def test_calloc(client):
     :param rpcclient.client.Client client:
     """
     with client.safe_calloc(0x100) as zeros:
-        assert client.peek(zeros, 0x100) == b'\x00' * 0x100
+        assert client.peek(zeros, 0x100) == b"\x00" * 0x100
 
 
 def test_env_get_set(client):
     """
     :param rpcclient.client.Client client:
     """
-    client.setenv('TEST', 'test')
-    assert client.getenv('TEST') == 'test'
+    client.setenv("TEST", "test")
+    assert client.getenv("TEST") == "test"
 
 
 def test_environ(client):
@@ -125,7 +127,7 @@ def test_environ(client):
     """
     assert len(client.environ) > 0
     for e in client.environ:
-        assert '=' in e
+        assert "=" in e
 
 
 def test_all_subsystems_initialize(client):
@@ -142,4 +144,4 @@ def test_all_subsystems_initialize(client):
         if isinstance(value, SubsystemNotAvailable):
             failures[name] = repr(value)
 
-    assert not failures, f'Subsystems failed to initialize: {failures}'
+    assert not failures, f"Subsystems failed to initialize: {failures}"

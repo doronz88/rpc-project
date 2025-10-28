@@ -15,17 +15,17 @@ disable_loggers()
 
 @click.command()
 def rpclocal() -> None:
-    """ connect to a local machine """
+    """connect to a local machine"""
     manager = ClientManager()
-    client = manager.create(mode='local')
+    client = manager.create(mode="local")
     Console(manager).interactive(switch_cid=client.id)
 
 
 @click.command()
-@click.argument('hostname', required=False)
-@click.option('-p', '--port', type=click.INT, default=DEFAULT_PORT, help='TCP port to connect to')
-@click.option('-r', '--rebind-symbols', is_flag=True, help='reload all symbols upon connection')
-@click.option('-l', '--load-all-libraries', is_flag=True, help='load all libraries')
+@click.argument("hostname", required=False)
+@click.option("-p", "--port", type=click.INT, default=DEFAULT_PORT, help="TCP port to connect to")
+@click.option("-r", "--rebind-symbols", is_flag=True, help="reload all symbols upon connection")
+@click.option("-l", "--load-all-libraries", is_flag=True, help="load all libraries")
 def rpcclient(hostname: Union[str, None], port: int, rebind_symbols: bool, load_all_libraries: bool):
     """
     Start the console.
@@ -46,5 +46,5 @@ def rpcclient(hostname: Union[str, None], port: int, rebind_symbols: bool, load_
     Console(manager).interactive(switch_cid=cid)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     rpcclient()

@@ -1,6 +1,6 @@
 import importlib
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from rpcclient.protos.rpc_api_pb2 import ReplyError
 from rpcclient.protos.rpc_pb2 import ProtocolConstants
@@ -26,7 +26,7 @@ class RpcMessageRegistry:
     """
 
     def __init__(self, init_data: Optional[dict] = None, modules: Optional[list[str]] = None):
-        self._messages: Registry[int, Type[Any]] = Registry()
+        self._messages: Registry[int, type[Any]] = Registry()
         self._messages.register(ProtocolConstants.REP_ERROR, ReplyError)
         if init_data is None:
             init_data = {}
@@ -40,40 +40,36 @@ class RpcMessageRegistry:
         mod = importlib.import_module(module_path)
 
         # Use the module descriptor for robust access to enum values
-        enum_desc = mod.DESCRIPTOR.enum_types_by_name['MsgId']
+        enum_desc = mod.DESCRIPTOR.enum_types_by_name["MsgId"]
 
         def _to_camel(s: str) -> str:
             # "DLSYM" -> "Dlsym", "DUMMY_BLOCK" -> "DummyBlock"
-            return ''.join(p.capitalize() for p in s.lower().split('_'))
+            return "".join(p.capitalize() for p in s.lower().split("_"))
 
         pair_count = 0
         for enum_value in enum_desc.values:
             name = enum_value.name
             value = enum_value.number
-            if not name.startswith('REQ_'):
+            if not name.startswith("REQ_"):
                 continue
-            camel = _to_camel(name.split('_', 1)[1])
-            req_class = getattr(mod, f'Request{camel}', None)
-            rep_class = getattr(mod, f'Reply{camel}', None)
+            camel = _to_camel(name.split("_", 1)[1])
+            req_class = getattr(mod, f"Request{camel}", None)
+            rep_class = getattr(mod, f"Reply{camel}", None)
             if req_class is None or rep_class is None:
-                logger.warning(
-                    f'Skipping {name}: missing Request{camel} or Reply{camel} in {module_path}'
-                )
+                logger.warning(f"Skipping {name}: missing Request{camel} or Reply{camel} in {module_path}")
             pair_count += 1
             self.register_pair(value, req_class, rep_class)
-        logger.debug(
-            f'Loaded {pair_count} bindings from {module_path}'
-        )
+        logger.debug(f"Loaded {pair_count} bindings from {module_path}")
 
-    def register_pair(self, msg_id: int, req_class: Type[Any], rep_class: Type[Any]):
+    def register_pair(self, msg_id: int, req_class: type[Any], rep_class: type[Any]):
         if msg_id > ProtocolConstants.RPC_MAX_REQ_MSG_ID:
-            raise ValueError(f'Invalid msg_id: {msg_id}')
+            raise ValueError(f"Invalid msg_id: {msg_id}")
         self._messages.register(msg_id, req_class)
         self._messages.register(msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID, rep_class)
 
     def unregister_pair(self, msg_id: int):
         if msg_id > ProtocolConstants.RPC_MAX_REQ_MSG_ID:
-            raise ValueError(f'Invalid msg_id: {msg_id}')
+            raise ValueError(f"Invalid msg_id: {msg_id}")
         self._messages.unregister(msg_id)
         self._messages.unregister(msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID)
 
@@ -85,10 +81,10 @@ class RpcMessageRegistry:
         new_registry.update(dict(self._messages.items()), overwrite=True)
         return new_registry
 
-    def get(self, msg_id: int) -> Type[Any]:
+    def get(self, msg_id: int) -> type[Any]:
         msg_class = self._messages.get(msg_id)
         if msg_class is None:
-            raise ValueError(f'Unknown msg_id: {msg_id}')
+            raise ValueError(f"Unknown msg_id: {msg_id}")
         return msg_class
 
     def clear(self) -> None:

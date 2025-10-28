@@ -11,7 +11,7 @@ from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import GettingObjectiveCClassError
 
-Ivar = namedtuple('Ivar', 'name type_ offset')
+Ivar = namedtuple("Ivar", "name type_ offset")
 
 
 class Class:
@@ -30,7 +30,7 @@ class Class:
         self.ivars = []
         self.properties = []
         self.methods = []
-        self.name = ''
+        self.name = ""
         self.super = None
         if not lazy:
             if class_data is None:
@@ -58,10 +58,7 @@ class Class:
         """
         Sanitize python name to ObjectiveC name.
         """
-        if name.startswith('_'):
-            name = '_' + name[1:].replace('_', ':')
-        else:
-            name = name.replace('_', ':')
+        name = "_" + name[1:].replace("_", ":") if name.startswith("_") else name.replace("_", ":")
         return name
 
     def reload(self):
@@ -72,20 +69,17 @@ class Class:
         objc_class = self._class_object if self._class_object else self._client.symbols.objc_getClass(self.name)
         class_description = self._client.showclass(objc_class)
 
-        self.super = Class(self._client, class_description['super']) if class_description['super'] else None
-        self.name = class_description['name']
-        self.protocols = class_description['protocols']
+        self.super = Class(self._client, class_description["super"]) if class_description["super"] else None
+        self.name = class_description["name"]
+        self.protocols = class_description["protocols"]
         self.ivars = [
-            Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset'])
-            for ivar in class_description['ivars']
+            Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"]) for ivar in class_description["ivars"]
         ]
         self.properties = [
-            objc.Property(name=prop['name'], attributes=objc.convert_encoded_property_attributes(prop['attributes']))
-            for prop in class_description['properties']
+            objc.Property(name=prop["name"], attributes=objc.convert_encoded_property_attributes(prop["attributes"]))
+            for prop in class_description["properties"]
         ]
-        self.methods = [
-            objc.Method.from_data(method, self._client) for method in class_description['methods']
-        ]
+        self.methods = [objc.Method.from_data(method, self._client) for method in class_description["methods"]]
 
     def show(self, dump_to: Optional[str] = None):
         """
@@ -93,11 +87,11 @@ class Class:
         :param dump_to: directory to dump.
         """
         formatted = str(self)
-        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style='native')))
+        print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style="native")))
 
         if dump_to is None:
             return
-        (Path(dump_to) / f'{self.name}.m').expanduser().write_text(formatted)
+        (Path(dump_to) / f"{self.name}.m").expanduser().write_text(formatted)
 
     def objc_call(self, sel: str, *args, **kwargs):
         """
@@ -127,70 +121,74 @@ class Class:
             sup = sup.super
 
     def _load_class_data(self, data: dict):
-        self._class_object = self._client.symbol(data['address'])
-        self.super = Class(self._client, data['super']) if data['super'] else None
-        self.name = data['name']
-        self.protocols = data['protocols']
-        self.ivars = [Ivar(name=ivar['name'], type_=ivar['type'], offset=ivar['offset']) for ivar in data['ivars']]
-        self.properties = data['properties']
-        self.methods = data['methods']
+        self._class_object = self._client.symbol(data["address"])
+        self.super = Class(self._client, data["super"]) if data["super"] else None
+        self.name = data["name"]
+        self.protocols = data["protocols"]
+        self.ivars = [Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"]) for ivar in data["ivars"]]
+        self.properties = data["properties"]
+        self.methods = data["methods"]
 
     @property
     def symbols_jar(self) -> SymbolsJar:
-        """ Get a SymbolsJar object for quick operations on all methods """
+        """Get a SymbolsJar object for quick operations on all methods"""
         jar = SymbolsJar.create(self._client)
 
         for m in self.methods:
-            jar[f'[{self.name} {m.name}]'] = m.address
+            jar[f"[{self.name} {m.name}]"] = m.address
 
         return jar
 
     @property
     def bundle_path(self) -> Path:
-        return Path(self._client.symbols.objc_getClass('NSBundle')
-                    .objc_call('bundleForClass:', self._class_object).objc_call('bundlePath').py())
+        return Path(
+            self._client.symbols.objc_getClass("NSBundle")
+            .objc_call("bundleForClass:", self._class_object)
+            .objc_call("bundlePath")
+            .py()
+        )
 
     def __dir__(self):
         result = set()
 
         for method in self.methods:
             if method.is_class:
-                result.add(method.name.replace(':', '_'))
+                result.add(method.name.replace(":", "_"))
 
         for sup in self.iter_supers():
             for method in sup.methods:
                 if method.is_class:
-                    result.add(method.name.replace(':', '_'))
+                    result.add(method.name.replace(":", "_"))
 
         result.update(list(super().__dir__()))
         return list(result)
 
     def __str__(self):
-        protocol_buf = f'<{",".join(self.protocols)}>' if self.protocols else ''
+        protocol_buf = f"<{','.join(self.protocols)}>" if self.protocols else ""
 
         if self.super is not None:
-            buf = f'@interface {self.name}: {self.super.name} {protocol_buf}\n'
+            buf = f"@interface {self.name}: {self.super.name} {protocol_buf}\n"
         else:
-            buf = f'@interface {self.name} {protocol_buf}\n'
+            buf = f"@interface {self.name} {protocol_buf}\n"
 
         # Add ivars
-        buf += '{\n'
+        buf += "{\n"
         for ivar in self.ivars:
-            buf += f'\t{ivar.type_} {ivar.name}; // 0x{ivar.offset:x}\n'
-        buf += '}\n'
+            buf += f"\t{ivar.type_} {ivar.name}; // 0x{ivar.offset:x}\n"
+        buf += "}\n"
 
         # Add properties
         for prop in self.properties:
-            buf += f'@property ({",".join(prop.attributes.list)}) {prop.attributes.type_} {prop.name};\n'
+            buf += f"@property ({','.join(prop.attributes.list)}) {prop.attributes.type_} {prop.name};\n"
 
             if prop.attributes.synthesize is not None:
-                buf += f'@synthesize {prop.name} = {prop.attributes.synthesize};\n'
+                buf += f"@synthesize {prop.name} = {prop.attributes.synthesize};\n"
 
         # Add methods
         for method in self.methods:
             buf += str(method)
 
-        buf += '@end'
+        buf += "@end"
         return buf
 
     def __repr__(self):
@@ -202,8 +200,7 @@ class Class:
                 if method.is_class:
                     return partial(self.objc_call, item)
                 else:
-                    raise AttributeError(f'{self.name} class has an instance method named {item}, '
-                                         f'not a class method')
+                    raise AttributeError(f"{self.name} class has an instance method named {item}, not a class method")
 
         for sup in self.iter_supers():
             for method in sup.methods:
@@ -211,10 +208,11 @@ class Class:
                     if method.is_class:
                         return partial(self.objc_call, item)
                     else:
-                        raise AttributeError(f'{self.name} class has an instance method named {item}, '
-                                             f'not a class method')
+                        raise AttributeError(
+                            f"{self.name} class has an instance method named {item}, not a class method"
+                        )
 
-        raise AttributeError(f''''{self.name}' class has no attribute {item}''')
+        raise AttributeError(f"""'{self.name}' class has no attribute {item}""")
 
     def __getattr__(self, item: str):
         return self[self.sanitize_name(item)]

@@ -13,22 +13,22 @@ class Call:
         """
         Disconnect the current call.
         """
-        self._send_action('CXEndCallAction')
+        self._send_action("CXEndCallAction")
 
     def answer(self):
         """
         Answer the current call.
         """
-        self._send_action('CXAnswerCallAction')
+        self._send_action("CXAnswerCallAction")
 
     def _send_action(self, action_name):
         action_class = self._client.symbols.objc_getClass(action_name)
-        action = action_class.objc_call('alloc').objc_call('initWithCallUUID:', self._uuid)
-        self._controller.objc_call('requestTransactionWithAction:completion:', action, self._client.get_dummy_block())
+        action = action_class.objc_call("alloc").objc_call("initWithCallUUID:", self._uuid)
+        self._controller.objc_call("requestTransactionWithAction:completion:", action, self._client.get_dummy_block())
 
     @property
     def _uuid(self):
-        return self._call.objc_call('UUID')
+        return self._call.objc_call("UUID")
 
 
 class Telephony:
@@ -40,10 +40,10 @@ class Telephony:
 
     def __init__(self, client):
         self._client = client
-        self._client.load_framework('CallKit')
-        self.cx_call_controller = self._client.symbols.objc_getClass('CXCallController').objc_call('new')
-        self.cx_call_observer = self.cx_call_controller.objc_call('callObserver')
-        self.ct_message_center = self._client.symbols.objc_getClass('CTMessageCenter').objc_call('sharedMessageCenter')
+        self._client.load_framework("CallKit")
+        self.cx_call_controller = self._client.symbols.objc_getClass("CXCallController").objc_call("new")
+        self.cx_call_observer = self.cx_call_controller.objc_call("callObserver")
+        self.ct_message_center = self._client.symbols.objc_getClass("CTMessageCenter").objc_call("sharedMessageCenter")
 
     def dial(self, number: str):
         """
@@ -52,7 +52,7 @@ class Telephony:
         """
         self._client.symbols.CTCallDial(self._client.cf(number))
 
-    def send_sms(self, to_address: str, text: str, smsc: str = '1111'):
+    def send_sms(self, to_address: str, text: str, smsc: str = "1111"):
         """
         Send a SMS.
         :param to_address: Phone address to send to.
@@ -60,8 +60,10 @@ class Telephony:
         :param smsc: Originator's short message service center address.
         """
         self.ct_message_center.objc_call(
-            'sendSMSWithText:serviceCenter:toAddress:', self._client.cf(text), self._client.cf(smsc),
-            self._client.cf(to_address)
+            "sendSMSWithText:serviceCenter:toAddress:",
+            self._client.cf(text),
+            self._client.cf(smsc),
+            self._client.cf(to_address),
         )
 
     @property
@@ -69,15 +71,15 @@ class Telephony:
         """
         Return on object representing the current active call.
         """
-        calls = self.cx_call_observer.objc_call('calls')
-        call_count = calls.objc_call('count')
+        calls = self.cx_call_observer.objc_call("calls")
+        call_count = calls.objc_call("count")
 
         call_list = []
         for i in range(call_count):
-            call_list.append(calls.objc_call('objectAtIndex:', i))
+            call_list.append(calls.objc_call("objectAtIndex:", i))
 
         for call_id in range(call_count):
             call = call_list[call_id]
-            if call.objc_call('hasEnded'):
+            if call.objc_call("hasEnded"):
                 continue
             return Call(self._client, self.cx_call_controller, call)

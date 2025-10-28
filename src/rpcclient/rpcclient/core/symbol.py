@@ -2,6 +2,7 @@ import ctypes
 import os
 import struct
 from contextlib import contextmanager
+from typing import ClassVar
 
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 from construct import Container
@@ -9,14 +10,14 @@ from construct import Container
 from rpcclient.core.structs.generic import Dl_info
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
 
-ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
+ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: "B", 2: "H", 4: "I", 8: "Q"}
 RETVAL_BIT_COUNT = 64
 
 
 class Symbol(int):
-    """ wrapper for a remote symbol object """
+    """wrapper for a remote symbol object"""
 
-    PROXY_METHODS = ['peek', 'poke']
+    PROXY_METHODS: ClassVar = ["peek", "poke"]
 
     @classmethod
     def create(cls, value: int, client):
@@ -49,8 +50,7 @@ class Symbol(int):
         self._offset = 0
 
         for method_name in Symbol.PROXY_METHODS:
-            getattr(self.__class__, method_name).__doc__ = \
-                getattr(client, method_name).__doc__
+            getattr(self.__class__, method_name).__doc__ = getattr(client, method_name).__doc__
 
     @contextmanager
     def change_item_size(self, new_item_size: int):
@@ -71,41 +71,41 @@ class Symbol(int):
     def poke(self, buf):
         return self._client.poke(self, buf)
 
-    def peek_str(self, encoding='utf-8') -> str:
-        """ peek string at given address """
+    def peek_str(self, encoding="utf-8") -> str:
+        """peek string at given address"""
         return self.peek(self._client.symbols.strlen(self)).decode(encoding)
 
     def close(self):
-        """ Construct compliance. """
+        """Construct compliance."""
         pass
 
     def seek(self, offset, whence):
-        """ Construct compliance. """
+        """Construct compliance."""
         if whence == os.SEEK_CUR:
             self._offset += offset
         elif whence == os.SEEK_SET:
             self._offset = offset - self
         else:
-            raise OSError('Unsupported whence')
+            raise OSError("Unsupported whence")
 
     def read(self, count: int):
-        """ Construct compliance. """
+        """Construct compliance."""
         val = (self + self._offset).peek(count)
         self._offset += count
         return val
 
     def write(self, buf):
-        """ Construct compliance. """
+        """Construct compliance."""
         val = (self + self._offset).poke(buf)
         self._offset += len(buf)
         return val
 
     def tell(self):
-        """ Construct compliance. """
+        """Construct compliance."""
         return self + self._offset
 
     def disass(self, size=40) -> list[CsInsn]:
-        """ peek disassembled lines of 'size' bytes """
+        """peek disassembled lines of 'size' bytes"""
         if self._client.arch == ARCH_ARM64:
             return list(Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN).disasm(self.peek(size), self))
         else:
@@ -114,37 +114,37 @@ class Symbol(int):
 
     @property
     def c_int64(self) -> int:
-        """ cast to c_int64 """
+        """cast to c_int64"""
         return ctypes.c_int64(self).value
 
     @property
     def c_uint64(self) -> int:
-        """ cast to c_uint64 """
+        """cast to c_uint64"""
         return ctypes.c_uint64(self).value
 
     @property
     def c_int32(self) -> int:
-        """ cast to c_int32 """
+        """cast to c_int32"""
         return ctypes.c_int32(self).value
 
     @property
     def c_uint32(self) -> int:
-        """ cast to c_uint32 """
+        """cast to c_uint32"""
         return ctypes.c_uint32(self).value
 
     @property
     def c_int16(self) -> int:
-        """ cast to c_int16 """
+        """cast to c_int16"""
         return ctypes.c_int16(self).value
 
     @property
     def c_uint16(self) -> int:
-        """ cast to c_uint16 """
+        """cast to c_uint16"""
         return ctypes.c_uint16(self).value
 
     @property
     def c_bool(self) -> bool:
-        """ cast to c_bool """
+        """cast to c_bool"""
         return ctypes.c_bool(self).value
 
     @property
@@ -152,8 +152,8 @@ class Symbol(int):
         dl_info = Dl_info(self._client)
         sizeof = dl_info.sizeof()
         with self._client.safe_malloc(sizeof) as info:
-            if 0 == self._client.symbols.dladdr(self, info):
-                self._client.raise_errno_exception(f'failed to extract info for: {self}')
+            if self._client.symbols.dladdr(self, info) == 0:
+                self._client.raise_errno_exception(f"failed to extract info for: {self}")
             return dl_info.parse_stream(info)
 
     @property
@@ -216,7 +216,8 @@ class Symbol(int):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
         return self._clone_from_value(
-            struct.unpack(self._client._endianness + fmt, self._client.peek(addr, self.item_size))[0])
+            struct.unpack(self._client._endianness + fmt, self._client.peek(addr, self.item_size))[0]
+        )
 
     def __setitem__(self, item, value):
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
@@ -224,7 +225,7 @@ class Symbol(int):
         self._client.poke(self + item * self.item_size, value)
 
     def __repr__(self):
-        return f'<{type(self).__name__}: {hex(self)}>'
+        return f"<{type(self).__name__}: {hex(self)}>"
 
     def __str__(self):
         return hex(self)

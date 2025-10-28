@@ -10,21 +10,22 @@ from rpcclient.exceptions import NoEntitlementsError
 
 
 class DarwinLief(Lief):
-    @path_to_str('path')
+    @path_to_str("path")
     def get_entitlements(self, path: str) -> dict:
-        with self._client.fs.open(path, 'r') as f:
+        with self._client.fs.open(path, "r") as f:
             buf = f.read()
         parsed = lief.parse(buf)
-        code_signature = buf[parsed.code_signature.data_offset:
-                             parsed.code_signature.data_offset + parsed.code_signature.data_size]
+        code_signature = buf[
+            parsed.code_signature.data_offset : parsed.code_signature.data_offset + parsed.code_signature.data_size
+        ]
 
-        ent_magic = struct.pack('>I', kSecCodeMagicEntitlement)
+        ent_magic = struct.pack(">I", kSecCodeMagicEntitlement)
         ent_magic_offset = code_signature.find(ent_magic)
 
         if ent_magic_offset == -1:
             raise NoEntitlementsError()
 
-        ent_buf = code_signature[ent_magic_offset + len(ent_magic) + 4:]
-        end_plist_magic = b'</plist>'
-        ent_buf = ent_buf[:ent_buf.find(end_plist_magic) + len(end_plist_magic)]
+        ent_buf = code_signature[ent_magic_offset + len(ent_magic) + 4 :]
+        end_plist_magic = b"</plist>"
+        ent_buf = ent_buf[: ent_buf.find(end_plist_magic) + len(end_plist_magic)]
         return plistlib.loads(ent_buf)

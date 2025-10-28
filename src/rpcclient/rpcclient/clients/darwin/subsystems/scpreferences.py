@@ -35,87 +35,88 @@ class SCPreference(Allocated):
 
     @property
     def keys(self) -> list[str]:
-        """ wrapper for SCPreferencesCopyKeyList """
+        """wrapper for SCPreferencesCopyKeyList"""
         return self._client.symbols.SCPreferencesCopyKeyList(self._ref).py()
 
     def _set(self, key: str, value):
-        """ wrapper for SCPreferencesSetValue """
+        """wrapper for SCPreferencesSetValue"""
         if not self._client.symbols.SCPreferencesSetValue(self._ref, self._client.cf(key), self._client.cf(value)):
-            raise RpcClientException(f'SCPreferencesSetValue failed to set: {key}')
+            raise RpcClientException(f"SCPreferencesSetValue failed to set: {key}")
 
     def set(self, key: str, value):
-        """ set key:value and commit the change """
+        """set key:value and commit the change"""
         self._set(key, value)
         self._commit()
 
     def set_dict(self, d: dict):
-        """ set the entire preference dictionary (clear if already exists) and commit the change """
+        """set the entire preference dictionary (clear if already exists) and commit the change"""
         self._clear()
         self._update_dict(d)
         self._commit()
 
     def _update_dict(self, d: dict):
-        """ update preference dictionary """
+        """update preference dictionary"""
         for k, v in d.items():
             self._set(k, v)
 
     def update_dict(self, d: dict):
-        """ update preference dictionary and commit """
+        """update preference dictionary and commit"""
         self._update_dict(d)
         self._commit()
 
     def _remove(self, key: str):
-        """ wrapper for SCPreferencesRemoveValue """
+        """wrapper for SCPreferencesRemoveValue"""
         if not self._client.symbols.SCPreferencesRemoveValue(self._ref, self._client.cf(key)):
-            raise RpcClientException(f'SCPreferencesRemoveValue failed to remove: {key}')
+            raise RpcClientException(f"SCPreferencesRemoveValue failed to remove: {key}")
 
     def remove(self, key: str):
-        """ remove given key and commit """
+        """remove given key and commit"""
         self._remove(key)
         self._commit()
 
     def get(self, key: str):
-        """ wrapper for SCPreferencesGetValue """
+        """wrapper for SCPreferencesGetValue"""
         return self._client.symbols.SCPreferencesGetValue(self._ref, self._client.cf(key)).py()
 
     def get_dict(self) -> dict:
-        """ get a dictionary representation """
+        """get a dictionary representation"""
         result = {}
         for k in self.keys:
             result[k] = self.get(k)
         return result
 
     def interactive(self):
-        """ open an interactive IPython shell for viewing and editing """
+        """open an interactive IPython shell for viewing and editing"""
         plist = Plist(self)
         IPython.embed(
-            header=highlight(SHELL_USAGE, lexers.PythonLexer(), formatters.TerminalTrueColorFormatter(style='native')),
+            header=highlight(SHELL_USAGE, lexers.PythonLexer(), formatters.TerminalTrueColorFormatter(style="native")),
             user_ns={
-                'd': plist,
-            })
+                "d": plist,
+            },
+        )
 
     def _clear(self):
-        """ clear dictionary """
+        """clear dictionary"""
         for k in self.keys:
             self._remove(k)
 
     def clear(self):
-        """ clear dictionary and commit """
+        """clear dictionary and commit"""
         self._clear()
         self._commit()
 
     def _deallocate(self):
-        """ free the preference object """
+        """free the preference object"""
         self._client.symbols.CFRelease(self._ref)
 
     def _commit(self):
-        """ commit all changes """
+        """commit all changes"""
         if not self._client.symbols.SCPreferencesCommitChanges(self._ref):
-            raise RpcClientException('SCPreferencesCommitChanges failed')
+            raise RpcClientException("SCPreferencesCommitChanges failed")
         self._client.symbols.SCPreferencesSynchronize(self._ref)
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} NAME:{self._preferences_id}>'
+        return f"<{self.__class__.__name__} NAME:{self._preferences_id}>"
 
 
 class Plist(UserDict):
@@ -140,18 +141,18 @@ class SCPreferences:
         self._client = client
 
     def open(self, preferences_id: str) -> SCPreference:
-        """ get an SCPreference from a given preferences_id """
-        ref = self._client.symbols.SCPreferencesCreate(0, self._client.cf('rpcserver'), self._client.cf(preferences_id))
+        """get an SCPreference from a given preferences_id"""
+        ref = self._client.symbols.SCPreferencesCreate(0, self._client.cf("rpcserver"), self._client.cf(preferences_id))
         if not ref:
-            raise RpcClientException(f'SCPreferencesCreate failed for: {preferences_id}')
+            raise RpcClientException(f"SCPreferencesCreate failed for: {preferences_id}")
         return SCPreference(self._client, preferences_id, ref)
 
     def get_keys(self, preferences_id: str) -> list[str]:
-        """ get all keys from given preferences_id """
+        """get all keys from given preferences_id"""
         with self.open(preferences_id) as o:
             return o.keys
 
     def get_dict(self, preferences_id: str):
-        """ get dict from given preferences_id """
+        """get dict from given preferences_id"""
         with self.open(preferences_id) as o:
             return o.get_dict()

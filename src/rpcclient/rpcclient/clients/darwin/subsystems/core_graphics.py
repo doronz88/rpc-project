@@ -6,7 +6,7 @@ from rpcclient.exceptions import BadReturnValueError
 
 
 class CoreGraphics:
-    """ Manage Core Graphics events. """
+    """Manage Core Graphics events."""
 
     def __init__(self, client):
         self._client = client
@@ -36,6 +36,6 @@ class CoreGraphics:
         """
         event = self._client.symbols.CGEventCreateKeyboardEvent(0, key_code, down)
         if not event:
-            raise BadReturnValueError('CGEventCreateKeyboardEvent() failed')
+            raise BadReturnValueError("CGEventCreateKeyboardEvent() failed")
 
         self._client.symbols.CGEventPost(kCGHIDEventTap, event)
