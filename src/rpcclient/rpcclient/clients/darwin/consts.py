@@ -1131,3 +1131,6 @@ SF_FIRMLINK = 0x00800000  # file is a firmlink
 # attempts to set them will fail.
 
 SF_DATALESS = 0x40000000  # file is dataless object
+
+# CoreSymbolication.h
+kCSNow = 0x8000000000000000

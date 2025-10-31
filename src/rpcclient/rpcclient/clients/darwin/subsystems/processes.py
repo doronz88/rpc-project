@@ -31,6 +31,7 @@ from rpcclient.clients.darwin.consts import (
     THREAD_IDENTIFIER_INFO,
     VM_FLAGS_ANYWHERE,
     ARMThreadFlavors,
+    kCSNow,
     x86_THREAD_STATE64,
 )
 from rpcclient.clients.darwin.structs import (
@@ -419,6 +420,40 @@ class MachPortCrossRefInfo:
     recv_right_proc_name: str
 
 
+class SymbolOwner:
+    def __init__(
+        self, client, process, symbol_owner_opaque1: ProcessSymbol, symbol_owner_opaque2: ProcessSymbol
+    ) -> None:
+        self._client = client
+        self._process = process
+        self.symbol_owner_opaque1 = symbol_owner_opaque1
+        self.symbol_owner_opaque2 = symbol_owner_opaque2
+
+    def get_symbol_address(self, name: str) -> ProcessSymbol:
+        symbol = self._client.symbols.CSSymbolOwnerGetSymbolWithName(
+            self.symbol_owner_opaque1, self.symbol_owner_opaque2, name, return_raw=True
+        )
+        return ProcessSymbol.create(
+            self._client.symbols.CSSymbolGetRange(symbol.x0, symbol.x1), self._client, self._process
+        )
+
+
+class Symbolicator:
+    def __init__(
+        self, client, process, symbolicator_opaque1: ProcessSymbol, symbolicator_opaque2: ProcessSymbol
+    ) -> None:
+        self._client = client
+        self._process = process
+        self.symbolicator_opaque1 = symbolicator_opaque1
+        self.symbolicator_opaque2 = symbolicator_opaque2
+
+    def get_symbol_owner(self, library_basename: str) -> SymbolOwner:
+        symbol_owner = self._client.symbols.CSSymbolicatorGetSymbolOwnerWithNameAtTime(
+            self.symbolicator_opaque1, self.symbolicator_opaque2, library_basename, kCSNow, return_raw=True
+        )
+        return SymbolOwner(self._client, self._process, symbol_owner.x0, symbol_owner.x1)
+
+
 class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
@@ -697,6 +732,11 @@ class Process:
             .objc_call("alloc")
             .objc_call("initWithTask:", self.task)
         )
+
+    @cached_property
+    def symbolicator(self) -> Symbolicator:
+        symbolicator = self._client.symbols.CSSymbolicatorCreateWithTask(self.task, return_raw=True)
+        return Symbolicator(self._client, self, symbolicator.x0, symbolicator.x1)
 
     @cached_property
     def task(self) -> int:
