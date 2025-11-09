@@ -12,7 +12,6 @@ from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.clients.darwin.objective_c.objc import Method
 from rpcclient.clients.darwin.objective_c.objective_c_class import Class
 from rpcclient.clients.darwin.symbol import DarwinSymbol
-from rpcclient.core.symbol import Symbol
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
 
@@ -70,7 +69,7 @@ class ObjectiveCSymbol(DarwinSymbol):
             for prop in object_data["properties"]
         ]
 
-        class_object = Symbol.create(object_data["class_address"], self._client)
+        class_object = DarwinSymbol.create(object_data["class_address"], self._client)
         class_wrapper = Class(self._client, class_object)
 
         self.ivars = ivars_list
