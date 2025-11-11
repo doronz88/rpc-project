@@ -14,6 +14,7 @@ from rpcclient.clients.darwin.consts import CFPropertyListFormat, CFPropertyList
 from rpcclient.clients.darwin.objective_c import autorelease_pool, objective_c_class
 from rpcclient.clients.darwin.objective_c.objective_c_symbol import ObjectiveCSymbol
 from rpcclient.clients.darwin.structs import utsname
+from rpcclient.clients.darwin.subsystems.biome import Biome
 from rpcclient.clients.darwin.subsystems.bluetooth import Bluetooth
 from rpcclient.clients.darwin.subsystems.core_graphics import CoreGraphics
 from rpcclient.clients.darwin.subsystems.darwin_lief import DarwinLief
@@ -88,6 +89,10 @@ class DarwinClient(CoreClient):
         self.loaded_objc_classes = []
         self._NSPropertyListSerialization = self.symbols.objc_getClass("NSPropertyListSerialization")
         self._CFNullTypeID = self.symbols.CFNullGetTypeID()
+
+    @subsystem
+    def biome(self) -> Biome:
+        return Biome(self)
 
     @subsystem
     def duet(self) -> Duet:
