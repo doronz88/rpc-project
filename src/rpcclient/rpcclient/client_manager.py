@@ -52,6 +52,9 @@ class ClientManager:
 
         rpc_bridge = transport_factory(**kwargs)
         server_type = rpc_bridge.platform
+        cached = self.get(rpc_bridge.client_id)
+        if cached is not None:
+            return cached
 
         client_factory = self.client_factory.get(server_type)
         if client_factory is None:
