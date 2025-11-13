@@ -1,4 +1,4 @@
-from cached_property import cached_property
+from functools import cached_property
 
 from rpcclient.clients.linux.structs import utsname
 from rpcclient.core.client import CoreClient

@@ -3,9 +3,8 @@ import logging
 import plistlib
 from collections import namedtuple
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, cached_property
 
-from cached_property import cached_property
 from IPython import get_ipython
 from tqdm import tqdm
 

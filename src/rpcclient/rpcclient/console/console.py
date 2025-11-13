@@ -199,12 +199,15 @@ class Console:
     # Client manager — event handlers
     # ---------------------------------------------------------------------------
 
-    def _on_registered(self, cid, client: ClientType) -> None:
+    def _on_registered(self, cid, client: ClientType, internal: bool) -> None:
         """Event: auto-switch to a newly created client if enabled."""
         if not (self._auto_switch_on_create and self._ipython):
             return
         ctx = ConsoleContext(client)
         self._contexts.register(cid, ctx)
+        if internal:
+            # Prevent auto-switch on internal events as they are not client-facing
+            return
         self._switch(ctx)
         echo_info(f"Auto-switched to new client client ID: {client.id}")
 

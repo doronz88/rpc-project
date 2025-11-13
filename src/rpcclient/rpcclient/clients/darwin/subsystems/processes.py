@@ -9,10 +9,10 @@ import time
 from collections import namedtuple
 from collections.abc import Generator
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from typing import Optional, Union
 
-from cached_property import cached_property
 from construct import Array, Container, Int32ul
 from parameter_decorators import path_to_str
 

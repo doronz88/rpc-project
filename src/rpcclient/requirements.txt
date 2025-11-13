@@ -3,7 +3,6 @@ click
 coloredlogs
 IPython
 traitlets
-cached-property
 dataclasses; python_version<"3.7"
 pygments
 objc_types_decoder

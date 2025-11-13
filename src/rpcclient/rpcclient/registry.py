@@ -27,13 +27,13 @@ class Registry(Generic[K, V]):
         if initial_data is not None:
             self.update(initial_data)
 
-    def register(self, key: K, value: V, overwrite=False) -> None:
+    def register(self, key: K, value: V, overwrite: bool = False, internal: bool = False) -> None:
         """Add or replace a value for a key."""
         if key in self._data and not overwrite:
             raise KeyError(f"key already exists: {key}, use overwrite=True to overwrite")
         with self._lock:
             self._data[key] = value
-        self.notifier.notify(RegistryEvent.REGISTERED, *(key, value))
+        self.notifier.notify(RegistryEvent.REGISTERED, *(key, value), internal=internal)
 
     def unregister(self, key: K) -> None:
         """Remove the key"""
