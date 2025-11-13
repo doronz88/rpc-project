@@ -1,9 +1,8 @@
 import datetime
 import logging
 import re
+from functools import cached_property
 from typing import Optional
-
-from cached_property import cached_property
 
 from rpcclient.clients.darwin.consts import OsLogLevel
 from rpcclient.clients.darwin.subsystems.cfpreferences import GLOBAL_DOMAIN, kCFPreferencesAnyHost

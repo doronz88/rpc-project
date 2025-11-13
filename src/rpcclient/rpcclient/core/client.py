@@ -8,12 +8,11 @@ import threading
 import typing
 from collections import namedtuple
 from enum import Enum, auto
-from functools import wraps
+from functools import cached_property, wraps
 from pathlib import Path
 from select import select
 from typing import Any, Optional
 
-from cached_property import cached_property
 from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
