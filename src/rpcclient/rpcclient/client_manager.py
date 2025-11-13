@@ -39,8 +39,13 @@ class ClientManager:
         self._lock = threading.RLock()
         self._clients: Registry[int, ClientType] = Registry(notifier=self.notifier)
 
-    def create(self, mode: str = "tcp", **kwargs) -> ClientType:
-        """Create a client via transport `mode`, resolve platform, store, and emit CREATED."""
+    def create(self, mode: str = "tcp", internal: bool = False, **kwargs) -> ClientType:
+        """
+        Create a client via transport `mode`, resolve platform, store, and emit CREATED.
+
+        :param mode: Transport mode, e.g. "tcp" or "protocol" (default: "tcp")
+        :param internal: If True, supply the CREATED event with the internal flag (default: False)
+        """
         transport_factory = self.transport_factory.get(mode)
         if transport_factory is None:
             raise ValueError(f"Unknown client mode: {mode}")
@@ -60,7 +65,7 @@ class ClientManager:
         client: ClientType = client_factory(bridge=rpc_bridge)
         client.notifier.register(ClientEvent.TERMINATED, self._on_client_terminated)
         client.notifier.register(ClientEvent.CREATED, self._on_client_created)
-        self.add(client)
+        self.add(client, internal=internal)
 
         return client
 
@@ -73,8 +78,13 @@ class ClientManager:
         else:
             return prompt_selection(capable, "Select a client client ID")
 
-    def add(self, client: ClientType) -> None:
-        self._clients.register(client.id, client)
+    def add(self, client: ClientType, internal: bool = False) -> None:
+        """
+        Add a client to the registry; emit REGISTERED if successful.
+
+        :param internal: If True, supply the REGISTERED event with the internal flag (default: False)
+        """
+        self._clients.register(client.id, client, internal=internal)
 
     def remove(self, cid: int) -> None:
         """Remove a client by ID; emit REMOVED if found."""
