@@ -37,21 +37,21 @@ class Biome:
         self.BMStoreConfig_cls = client.symbols.objc_getClass("BMStoreConfig")
 
     @property
-    def streams(self) -> list[str]:
+    def streams(self) -> set[str]:
         """
         Scan all configured Biome paths for accessible streams.
 
         Any entries prefixed with `_DKEvent` are ignored.
 
         :return: Stream identifiers discovered under the configured paths.
-        :rtype: list[str]
+        :rtype: set[str]
         """
-        streams = []
+        streams = set()
         for biome_path in self.biome_paths:
             if self.fs.accessible(biome_path):
                 for stream in self.fs.listdir(biome_path):
                     if not stream.startswith("_DKEvent"):
-                        streams.append(stream)
+                        streams.add(stream)
         return streams
 
     def resolve_stream_path(self, stream: str) -> Optional[RemotePath]:
@@ -149,6 +149,18 @@ class BiomeLibrary(Allocated):
         except SymbolAbsentError:
             self._BMEventClassForStreamIdentifier = None
         self._event_classes = {}
+
+    @property
+    def streams(self) -> set[str]:
+        """
+        Scan all configured Biome paths for accessible streams.
+
+        Any entries prefixed with `_DKEvent` are ignored.
+
+        :return: Stream identifiers discovered under the configured paths.
+        :rtype: set[str]
+        """
+        return self.biome.streams
 
     def read_stream(self, stream: str, refresh: bool = True) -> list[BiomeEvent]:
         """
