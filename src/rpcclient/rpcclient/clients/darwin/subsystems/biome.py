@@ -6,6 +6,7 @@ from typing import Any, Optional
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.core.subsystems.fs import Fs, RemotePath
+from rpcclient.exceptions import SymbolAbsentError
 
 BIOME_PATHS = [
     "/private/var/mobile/Library/Biome/streams/restricted",
@@ -24,7 +25,7 @@ class Biome:
 
     :param rpcclient.darwin.client.DarwinClient client: Connected Darwin client.
     :param Optional[list[str]] biome_paths: Paths to Biome storage directories on the remote host.
-    :param Optional[Fs] fs: Filesystem helper. Defaults to ``client.fs``.
+    :param Optional[Fs] fs: Filesystem helper. Defaults to `client.fs`.
     """
 
     def __init__(self, client, biome_paths: Optional[list[str]] = None, fs: Optional[Fs] = None) -> None:
@@ -36,21 +37,21 @@ class Biome:
         self.BMStoreConfig_cls = client.symbols.objc_getClass("BMStoreConfig")
 
     @property
-    def streams(self) -> list[str]:
+    def streams(self) -> set[str]:
         """
         Scan all configured Biome paths for accessible streams.
 
-        Any entries prefixed with ``_DKEvent`` are ignored.
+        Any entries prefixed with `_DKEvent` are ignored.
 
         :return: Stream identifiers discovered under the configured paths.
-        :rtype: list[str]
+        :rtype: set[str]
         """
-        streams = []
+        streams = set()
         for biome_path in self.biome_paths:
             if self.fs.accessible(biome_path):
                 for stream in self.fs.listdir(biome_path):
                     if not stream.startswith("_DKEvent"):
-                        streams.append(stream)
+                        streams.add(stream)
         return streams
 
     def resolve_stream_path(self, stream: str) -> Optional[RemotePath]:
@@ -58,7 +59,7 @@ class Biome:
         Resolve a stream name to its first accessible `RemotePath`.
 
         :param str stream: Stream identifier.
-        :return: Remote path of the stream, or ``None`` if not found.
+        :return: Remote path of the stream, or `None` if not found.
         :rtype: Optional[RemotePath]
         """
         for biome_path in self.biome_paths:
@@ -71,8 +72,8 @@ class Biome:
         """
         Create a `BiomeLibrary` bound to this client.
 
-        This library should either be deallocated (using ``*.deallocate()``),
-        or used as a context manager with a ``with`` statement.
+        This library should either be deallocated (using `*.deallocate()`),
+        or used as a context manager with a `with` statement.
 
         :return: Initialized Biome library.
         :rtype: BiomeLibrary
@@ -128,8 +129,8 @@ class BiomeLibrary(Allocated):
     Resolve requested streams via the parent `Biome`, copies stream
     data to a temporary directory, and reads events using Biome store publishers.
 
-    This object should either be deallocated (using ``*.deallocate()``),
-    or used as a context manager with a ``with`` statement.
+    This object should either be deallocated (using `*.deallocate()`),
+    or used as a context manager with a `with` statement.
 
     :param rpcclient.darwin.client.DarwinClient client: Connected Darwin client.
     :param Biome biome: Parent `Biome` instance.
@@ -143,12 +144,29 @@ class BiomeLibrary(Allocated):
         self.store_config = biome.BMStoreConfig_cls.objc_call("alloc").objc_call(
             "initWithStoreBasePath:segmentSize:", client.cf(str(self.tmp_dir)), 0x80000
         )
+        try:
+            self._BMEventClassForStreamIdentifier = client.symbols.BMEventClassForStreamIdentifier
+        except SymbolAbsentError:
+            self._BMEventClassForStreamIdentifier = None
+        self._event_classes = {}
+
+    @property
+    def streams(self) -> set[str]:
+        """
+        Scan all configured Biome paths for accessible streams.
+
+        Any entries prefixed with `_DKEvent` are ignored.
+
+        :return: Stream identifiers discovered under the configured paths.
+        :rtype: set[str]
+        """
+        return self.biome.streams
 
     def read_stream(self, stream: str, refresh: bool = True) -> list[BiomeEvent]:
         """
         Read events from a specified Biome stream.
 
-        If *refresh* is ``True``, copy the stream directory into `tmp_dir`
+        If *refresh* is `True`, copy the stream directory into `tmp_dir`
         before reading regurdless to the existance of a previously cached stream.
         Returns an empty list if the stream does not exist.
 
@@ -164,6 +182,25 @@ class BiomeLibrary(Allocated):
             self.biome.fs.cp([remote_path], self.tmp_dir, recursive=True, force=True)
         return self._get_events_for_local_stream(stream)
 
+    def _get_event_class(self, stream: str) -> DarwinSymbol:
+        if stream in self._event_classes:
+            return self._event_classes[stream]
+        cf_stream_name = self._client.cf(stream)
+        if self._BMEventClassForStreamIdentifier is not None:
+            event_class = self._BMEventClassForStreamIdentifier(cf_stream_name)
+        else:
+            if stream.endswith(":tombstones"):
+                return self._client.symbols.objc_getClass("BMTombstoneEvent")
+            internal_library = self._client.symbols.BiomeLibraryAndInternalLibraryNode()
+            stream_obj = internal_library.objc_call("streamWithIdentifier:error:", cf_stream_name, 0)
+            event_class = (
+                self._client.symbol(0)
+                if stream_obj == 0
+                else stream_obj.objc_call("configuration").objc_call("eventClass")
+            )
+        self._event_classes[stream] = event_class
+        return event_class
+
     def _create_publisher(self, stream: str) -> DarwinSymbol:
         """
         Create and initialize a Biome store publisher for a given stream.
@@ -173,7 +210,8 @@ class BiomeLibrary(Allocated):
         :rtype: DarwinSymbol
         """
         cf_stream_name = self._client.cf(stream)
-        event_class = self._client.symbols.BMEventClassForStreamIdentifier(cf_stream_name)
+        event_class = self._get_event_class(stream)
+
         return self.biome.BPSBiomeStorePublisher_cls.objc_call("alloc").objc_call(
             "initWithStreamId:storeConfig:streamsAccessClient:eventDataClass:",
             cf_stream_name,
