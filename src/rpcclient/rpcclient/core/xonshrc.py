@@ -229,6 +229,7 @@ class XonshRc:
 
         # clear all host commands except for some useful ones
         XSH.env["PATH"].clear()
+        XSH.env.pop("XONSH_COLOR_STYLE")
         for cmd in ["wc", "grep", "egrep", "sed", "awk", "print", "yes", "cat", "file"]:
             executable = shutil.which(cmd)
             if executable is not None:

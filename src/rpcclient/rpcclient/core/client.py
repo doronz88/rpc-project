@@ -470,9 +470,6 @@ class CoreClient:
         self._logger.disabled = True
 
         args = ["--rc"]
-        home_rc = Path("~/.xonshrc").expanduser()
-        if home_rc.exists():
-            args.append(str(home_rc.expanduser().absolute()))
         args.append(str((Path(__file__).parent / "xonshrc.py").absolute()))
 
         XSH.ctx["_client_to_reuse"] = self
