@@ -15,9 +15,11 @@ class DarwinNetwork(Network):
 
     @property
     def proxy_settings(self) -> dict:
+        """Get proxy settings"""
         return self._client.symbols.CFNetworkCopySystemProxySettings().py()
 
     def set_http_proxy(self, ip: str, port: int) -> None:
+        """Set http proxy"""
         with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
             config.set(
                 "Proxies",
@@ -35,11 +37,13 @@ class DarwinNetwork(Network):
         self._client.processes.get_by_basename("configd").kill(SIGKILL)
 
     def remove_http_proxy(self) -> None:
+        """Remove http proxy settings"""
         with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
             config.remove("Proxies")
         self._client.processes.get_by_basename("configd").kill(SIGKILL)
 
     def remove_certificate_pinning(self) -> None:
+        """Remove pinning rules from trustd"""
         with self._client.fs.remote_file(PINNING_RULED_DB) as local_db_file:
             # truncate pinning rules
             conn = sqlite3.connect(local_db_file)
@@ -49,10 +53,25 @@ class DarwinNetwork(Network):
             conn.close()
 
             # push new db
-            self._client.fs.push(local_db_file, PINNING_RULED_DB)
+            self._client.fs.push(local_db_file, PINNING_RULED_DB, force=True)
 
-            # restart trustd for changes to take affect
-            self._client.processes.get_by_basename("trustd").kill(SIGKILL)
+        # restart trustd for changes to take affect
+        self.kill_trustd()
+
+    def restore_certificate_pinning(self) -> None:
+        """Restore pinning rules from trustd"""
+        if self._client.fs.accessible(PINNING_RULED_DB):
+            self._client.fs.remove(PINNING_RULED_DB)
+
+        # Upon startup trustd to reloads pinning rules from the last MobileAsset
+        self.kill_trustd()
+
+    def kill_trustd(self) -> None:
+        """Kill trustd processes"""
+        for process in self._client.processes.list():
+            if process.basename == "trustd":
+                process.kill(SIGKILL)
 
     def flush_dns(self) -> None:
+        """Flush DNS cache"""
         self._client.processes.get_by_basename("mDNSResponder").kill(SIGKILL)
