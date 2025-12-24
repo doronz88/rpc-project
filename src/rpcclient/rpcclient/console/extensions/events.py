@@ -33,12 +33,17 @@ class RpcEvents:
             if not isinstance(node, ast.Name):
                 continue
 
+            existing = self.ipython.user_ns.get(node.id)
+            objc_class_place_holder = (
+                isinstance(existing, objective_c_class.Class) and getattr(existing, "name", "") == ""
+            )
+
             # Skip names already known to local/global/builtins.
             if (
                 node.id in locals()
                 or node.id in globals()
                 or node.id in dir(builtins)
-                or node.id in self.ipython.user_ns
+                or (existing is not None and not objc_class_place_holder)
             ):
                 continue
 
@@ -54,8 +59,7 @@ class RpcEvents:
 
             # 2) Darwin-specific: Objective-C class autoload / lazy reload
             if hasattr(client, "objc_get_class"):
-                existing = self.ipython.user_ns.get(node.id)
-                if isinstance(existing, objective_c_class.Class) and existing.name == "":
+                if objc_class_place_holder:
                     existing.reload()
                     continue
 
