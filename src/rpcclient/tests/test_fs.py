@@ -5,6 +5,7 @@ from stat import S_IMODE
 import pytest
 
 from rpcclient.clients.darwin.consts import UF_IMMUTABLE
+from rpcclient.core.structs.consts import LOCK_EX, LOCK_NB, LOCK_UN
 from rpcclient.exceptions import RpcFileNotFoundError, RpcPermissionError
 
 
@@ -40,6 +41,13 @@ def test_open(client, tmp_path):
     umask = client.symbols.umask(0o22)
     client.symbols.umask(umask)
     assert S_IMODE(client.fs.stat(file).st_mode) == 0o666 & ~umask
+
+
+def test_flock(client, tmp_path):
+    file = tmp_path / "lock.txt"
+    with client.fs.open(file, "w+") as f:
+        f.flock(LOCK_EX | LOCK_NB)
+        f.flock(LOCK_UN)
 
 
 def test_remove(client, tmp_path):

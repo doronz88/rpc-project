@@ -215,6 +215,12 @@ class File(Allocated):
         if err < 0:
             self._client.raise_errno_exception(f"fsync() failed for fd: {self.fd}")
 
+    def flock(self, operation: int) -> None:
+        """flock(fd, operation) at remote. read man for more details."""
+        err = self._client.symbols.flock(self.fd, operation).c_int32
+        if err < 0:
+            self._client.raise_errno_exception(f"flock() failed for fd: {self.fd}")
+
     def dup(self) -> int:
         err = self._client.symbols.dup(self.fd).c_int64
         if err < 0:
