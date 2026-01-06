@@ -28,6 +28,7 @@ from rpcclient.clients.darwin.consts import (
     MACH_PORT_TYPE_SEND_ONCE,
     TASK_DYLD_INFO,
     TASK_FLAVOR_READ,
+    TASK_VM_INFO,
     THREAD_IDENTIFIER_INFO,
     VM_FLAGS_ANYWHERE,
     ARMThreadFlavors,
@@ -50,6 +51,7 @@ from rpcclient.clients.darwin.structs import (
     PROX_FDTYPE_SOCKET,
     PROX_FDTYPE_VNODE,
     TASK_DYLD_INFO_COUNT,
+    TASK_VM_INFO_COUNT,
     THREAD_IDENTIFIER_INFO_COUNT,
     all_image_infos_t,
     arm_thread_state64_t,
@@ -67,6 +69,7 @@ from rpcclient.clients.darwin.structs import (
     so_kind_t,
     socket_fdinfo,
     task_dyld_info_data_t,
+    task_vm_info_data_t,
     thread_identifier_info,
     vnode_fdinfowithpath,
     x86_thread_state64_t,
@@ -701,6 +704,15 @@ class Process:
             if not self._client.symbols.proc_pidinfo(self.pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
                 raise BadReturnValueError("proc_pidinfo(PROC_PIDTASKALLINFO) failed")
             return proc_taskallinfo.parse_stream(pti)
+
+    @property
+    def task_vm_info(self) -> Container:
+        """get TASK_VM_INFO via task_info."""
+        with self._client.safe_malloc(task_vm_info_data_t.sizeof()) as vm_info, self._client.safe_calloc(8) as count:
+            count[0] = TASK_VM_INFO_COUNT
+            if self._client.symbols.task_info(self.task, TASK_VM_INFO, vm_info, count):
+                raise BadReturnValueError("task_info(TASK_VM_INFO) failed")
+            return task_vm_info_data_t.parse_stream(vm_info)
 
     @property
     def backtraces(self) -> list[Backtrace]:
