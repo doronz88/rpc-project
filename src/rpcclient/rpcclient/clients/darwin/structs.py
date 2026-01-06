@@ -675,6 +675,57 @@ task_dyld_info = Struct(
     "all_image_info_format" / integer_t,
 )
 
+task_vm_info = Struct(
+    "virtual_size" / mach_vm_size_t,
+    "region_count" / integer_t,
+    "page_size" / integer_t,
+    "resident_size" / mach_vm_size_t,
+    "resident_size_peak" / mach_vm_size_t,
+    "device" / mach_vm_size_t,
+    "device_peak" / mach_vm_size_t,
+    "internal" / mach_vm_size_t,
+    "internal_peak" / mach_vm_size_t,
+    "external" / mach_vm_size_t,
+    "external_peak" / mach_vm_size_t,
+    "reusable" / mach_vm_size_t,
+    "reusable_peak" / mach_vm_size_t,
+    "purgeable_volatile_pmap" / mach_vm_size_t,
+    "purgeable_volatile_resident" / mach_vm_size_t,
+    "purgeable_volatile_virtual" / mach_vm_size_t,
+    "compressed" / mach_vm_size_t,
+    "compressed_peak" / mach_vm_size_t,
+    "compressed_lifetime" / mach_vm_size_t,
+    "phys_footprint" / mach_vm_size_t,
+    "min_address" / mach_vm_address_t,
+    "max_address" / mach_vm_address_t,
+    "ledger_phys_footprint_peak" / Int64sl,
+    "ledger_purgeable_nonvolatile" / Int64sl,
+    "ledger_purgeable_novolatile_compressed" / Int64sl,
+    "ledger_purgeable_volatile" / Int64sl,
+    "ledger_purgeable_volatile_compressed" / Int64sl,
+    "ledger_tag_network_nonvolatile" / Int64sl,
+    "ledger_tag_network_nonvolatile_compressed" / Int64sl,
+    "ledger_tag_network_volatile" / Int64sl,
+    "ledger_tag_network_volatile_compressed" / Int64sl,
+    "ledger_tag_media_footprint" / Int64sl,
+    "ledger_tag_media_footprint_compressed" / Int64sl,
+    "ledger_tag_media_nofootprint" / Int64sl,
+    "ledger_tag_media_nofootprint_compressed" / Int64sl,
+    "ledger_tag_graphics_footprint" / Int64sl,
+    "ledger_tag_graphics_footprint_compressed" / Int64sl,
+    "ledger_tag_graphics_nofootprint" / Int64sl,
+    "ledger_tag_graphics_nofootprint_compressed" / Int64sl,
+    "ledger_tag_neural_footprint" / Int64sl,
+    "ledger_tag_neural_footprint_compressed" / Int64sl,
+    "ledger_tag_neural_nofootprint" / Int64sl,
+    "ledger_tag_neural_nofootprint_compressed" / Int64sl,
+    "limit_bytes_remaining" / uint64_t,
+    "decompressions" / integer_t,
+    "ledger_swapins" / Int64sl,
+    "ledger_tag_neural_nofootprint_total" / Int64sl,
+    "ledger_tag_neural_nofootprint_peak" / Int64sl,
+)
+
 uuid_t = Struct(
     "time_low" / Int64ul,
     "time_mid" / Int32ul,
@@ -694,6 +745,9 @@ all_image_infos_t = Struct(
 
 task_dyld_info_data_t = task_dyld_info
 TASK_DYLD_INFO_COUNT = task_dyld_info_data_t.sizeof() / natural_t.sizeof()
+
+task_vm_info_data_t = task_vm_info
+TASK_VM_INFO_COUNT = task_vm_info_data_t.sizeof() / natural_t.sizeof()
 
 STRUCT_ARM_THREAD_STATE64 = Struct(
     "x" / Array(29, uint64_t),
