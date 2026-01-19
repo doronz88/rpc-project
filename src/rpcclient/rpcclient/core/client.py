@@ -16,6 +16,7 @@ from typing import Any, Optional
 from xonsh.built_ins import XSH
 from xonsh.main import main as xonsh_main
 
+from rpcclient.clients.darwin.consts import BLOCK_IS_GLOBAL
 from rpcclient.core.capture_fd import CaptureFD
 from rpcclient.core.structs.consts import (
     EAGAIN,
@@ -29,6 +30,7 @@ from rpcclient.core.structs.consts import (
     EPIPE,
     RTLD_NEXT,
 )
+from rpcclient.core.structs.generic import block_descriptor, block_literal
 from rpcclient.core.subsystems.decorator import subsystem
 from rpcclient.core.subsystems.fs import Fs
 from rpcclient.core.subsystems.lief import Lief
@@ -231,15 +233,15 @@ class CoreClient:
             raise
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
-        """call dlopen() at remote and return its handle. see the man page for more details."""
+        """Load a shared library on the remote host and return its handle."""
         return self.symbol(self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode).handle)
 
     def dlclose(self, lib: int) -> int:
-        """call dlclose() at remote and return its handle. see the man page for more details."""
+        """Close a previously opened remote library handle."""
         return self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value).res
 
     def dlsym(self, lib: int, symbol_name: str) -> int:
-        """call dlsym() at remote and return its handle. see the man page for more details."""
+        """Resolve a symbol name in a remote library handle and return its address."""
         return self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name).ptr
 
     @null_pointer_guard
@@ -297,8 +299,24 @@ class CoreClient:
             raise ArgumentError() from e
 
     def get_dummy_block(self) -> Symbol:
-        """get an address for a stub block containing nothing"""
-        return self.symbol(self.rpc_call(MsgId.REQ_DUMMY_BLOCK).address)
+        """Get an address for a stub block containing nothing"""
+        block_size = block_literal.sizeof()
+        desc_size = block_descriptor.sizeof()
+
+        descriptor = self.symbols.malloc(desc_size)
+        descriptor.poke(block_descriptor.build({"reserved": 0, "size": block_size}))
+
+        block = self.symbols.malloc(block_size)
+        block.poke(
+            block_literal.build({
+                "isa": self.symbols._NSConcreteGlobalBlock,
+                "flags": BLOCK_IS_GLOBAL,
+                "reserved": 0,
+                "invoke": self.symbols.getpid,
+                "descriptor": descriptor,
+            })
+        )
+        return block
 
     def listdir(self, path: str):
         """get an address for a stub block containing nothing"""

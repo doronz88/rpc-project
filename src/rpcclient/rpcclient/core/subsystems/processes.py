@@ -11,12 +11,12 @@ class Processes:
         self._client = client
 
     def kill(self, pid: int, sig: int = SIGTERM):
-        """kill(pid, sig) at remote. read man for more details."""
+        """Send a signal to a remote process."""
         if self._client.symbols.kill(pid, sig) != 0:
             raise BadReturnValueError(f"kill({pid}, {sig}) failed ({self._client.last_error})")
 
     def waitpid(self, pid: int, flags: int = 0):
-        """waitpid(pid, sig) at remote. read man for more details."""
+        """Wait for a remote process to change state and return status."""
         with self._client.safe_malloc(8) as stat_loc:
             err = self._client.symbols.waitpid(pid, stat_loc, flags).c_int64
             if err == -1:

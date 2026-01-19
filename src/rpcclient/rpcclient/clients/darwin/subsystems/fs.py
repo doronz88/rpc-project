@@ -5,7 +5,7 @@ from rpcclient.core.subsystems.fs import Fs, RemotePath
 
 
 def do_stat(client, stat_name, filename: str):
-    """stat(filename) at remote. read man for more details."""
+    """Return a stat64 struct for a remote path."""
     with client.safe_malloc(stat64.sizeof()) as buf:
         err = client.symbols[stat_name](filename, buf)
         if err != 0:
@@ -27,12 +27,12 @@ class DarwinRemotePath(RemotePath):
 class DarwinFs(Fs):
     @path_to_str("path")
     def stat(self, path: str):
-        """stat(filename) at remote. read man for more details."""
+        """Return stat64 info for a remote path."""
         return do_stat(self._client, "stat64", path)
 
     @path_to_str("path")
     def lstat(self, path: str):
-        """lstat(filename) at remote. read man for more details."""
+        """Return lstat64 info for a remote path (does not follow symlinks)."""
         return do_stat(self._client, "lstat64", path)
 
     @path_to_str("path")
@@ -86,7 +86,7 @@ class DarwinFs(Fs):
 
     @path_to_str("path")
     def chflags(self, path: str, flags: int) -> None:
-        """call chflags(path, flags) at remote. see manpage for more info"""
+        """Set BSD file flags on a remote path."""
         if self._client.symbols.chflags(path, flags) != 0:
             self._client.raise_errno_exception(f"chflags failed for: {path}")
 

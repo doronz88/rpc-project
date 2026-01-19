@@ -98,7 +98,7 @@ MAX_SIZE = 0x40000
 
 
 class Sysctl:
-    """sysctl utils. read man page for sysctl(3) for more details"""
+    """Helpers for reading and writing sysctl MIB values on the remote host."""
 
     def __init__(self, client):
         self._client = client

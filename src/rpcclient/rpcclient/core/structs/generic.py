@@ -76,6 +76,15 @@ st_flags = FlagsEnum(
     SF_APPEND=0x00040000,
 )
 
+block_descriptor = Struct("reserved" / Int64ul, "size" / Int64ul)
+block_literal = Struct(
+    "isa" / Int64ul,
+    "flags" / Int32ul,
+    "reserved" / Int32ul,
+    "invoke" / Int64ul,
+    "descriptor" / Int64ul,
+)
+
 
 class SymbolFormatField(FormatField):
     """

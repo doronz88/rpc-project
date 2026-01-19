@@ -132,13 +132,13 @@ class File(Allocated):
         self.fd = fd
 
     def _deallocate(self):
-        """close(fd) at remote. read man for more details."""
+        """Close the remote file descriptor."""
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
             self._client.raise_errno_exception(f"failed to close fd: {fd}")
 
     def seek(self, offset: int, whence: int) -> int:
-        """lseek(fd, offset, whence) at remote. read man for more details."""
+        """Seek the remote file descriptor and return the resulting offset."""
         err = self._client.symbols.lseek(self.fd, offset, whence).c_int32
         if err < 0:
             self._client.raise_errno_exception(f"failed to lseek fd: {self.fd}")
@@ -148,14 +148,14 @@ class File(Allocated):
         return self.seek(0, SEEK_CUR)
 
     def _write(self, buf: bytes) -> int:
-        """write(fd, buf, size) at remote. read man for more details."""
+        """Write bytes to the remote file descriptor."""
         n = self._client.symbols.write(self.fd, buf, len(buf)).c_int64
         if n < 0:
             self._client.raise_errno_exception(f"failed to write on fd: {self.fd}")
         return n
 
     def write(self, buf: bytes) -> int:
-        """continue call write() until"""
+        """Write the full buffer, retrying until all bytes are written."""
         while buf:
             err = self._write(buf)
             buf = buf[err:]
@@ -216,7 +216,7 @@ class File(Allocated):
             self._client.raise_errno_exception(f"fsync() failed for fd: {self.fd}")
 
     def flock(self, operation: int) -> None:
-        """flock(fd, operation) at remote. read man for more details."""
+        """Apply or clear an advisory lock on the remote file descriptor."""
         err = self._client.symbols.flock(self.fd, operation).c_int32
         if err < 0:
             self._client.raise_errno_exception(f"flock() failed for fd: {self.fd}")
@@ -401,13 +401,13 @@ class Fs:
 
     @path_to_str("path")
     def _chown(self, path: str, uid: int, gid: int):
-        """chmod(path, mode) at remote. read man for more details."""
+        """Change owner and group for a remote path."""
         if self._client.symbols.chown(path, uid, gid).c_int32 < 0:
             self._client.raise_errno_exception(f"failed to chown: {path}")
 
     @path_to_str("path")
     def chown(self, path: str, uid: int, gid: int, recursive=False):
-        """chmod(path, mode) at remote. read man for more details."""
+        """Change owner and group for a path, optionally recursively."""
         if not recursive:
             self._chown(path, uid, gid)
             return
@@ -417,13 +417,13 @@ class Fs:
 
     @path_to_str("path")
     def _chmod(self, path: str, mode: int):
-        """chmod(path, mode) at remote. read man for more details."""
+        """Change mode bits for a remote path."""
         if self._client.symbols.chmod(path, mode).c_int32 < 0:
             self._client.raise_errno_exception(f"failed to chmod: {path}")
 
     @path_to_str("path")
     def chmod(self, path: str, mode: int, recursive=False):
-        """chmod(path, mode) at remote. read man for more details."""
+        """Change mode bits for a path, optionally recursively."""
         if not recursive:
             self._chmod(path, mode)
             return
@@ -433,13 +433,13 @@ class Fs:
 
     @path_to_str("path")
     def _remove(self, path: str, force=False):
-        """remove(path) at remote. read man for more details."""
+        """Remove a file on the remote filesystem."""
         if self._client.symbols.remove(path).c_int32 < 0 and not force:
             self._client.raise_errno_exception(f"failed to remove: {path}")
 
     @path_to_str("path")
     def remove(self, path: str, recursive=False, force=False):
-        """remove(path) at remote. read man for more details."""
+        """Remove a file or directory tree on the remote filesystem."""
         if not recursive or self.is_file(path):
             self._remove(path, force=force)
             return
@@ -450,13 +450,13 @@ class Fs:
     @path_to_str("old")
     @path_to_str("new")
     def rename(self, old: str, new: str):
-        """rename(old, new) at remote. read man for more details."""
+        """Rename or move a path on the remote filesystem."""
         if self._client.symbols.rename(old, new).c_int32 < 0:
             self._client.raise_errno_exception(f"failed to rename: {old} -> {new}")
 
     @path_to_str("path")
     def _mkdir(self, path: str, mode: int = 0o777):
-        """mkdir(path, mode) at remote. read man for more details."""
+        """Create a directory on the remote filesystem."""
         if self._client.symbols.mkdir(path, mode).c_int64 < 0:
             self._client.raise_errno_exception(f"failed to mkdir: {path}")
 
@@ -465,7 +465,7 @@ class Fs:
 
     @path_to_str("path")
     def mkdir(self, path: str, mode: int = 0o777, parents=False, exist_ok=False):
-        """mkdir(path, mode) at remote. read man for more details."""
+        """Create a directory, optionally creating parent directories."""
         if not parents:
             try:
                 self._mkdir(path, mode=mode)
@@ -482,13 +482,13 @@ class Fs:
 
     @path_to_str("path")
     def chdir(self, path: str):
-        """chdir(path) at remote. read man for more details."""
+        """Change the remote process working directory."""
         if self._client.symbols.chdir(path).c_int64 < 0:
             self._client.raise_errno_exception(f"failed to chdir: {path}")
 
     @path_to_str("path")
     def readlink(self, path: str, absolute=True) -> str:
-        """readlink() at remote. read man for more details."""
+        """Read the symlink target on the remote filesystem."""
         with self._client.safe_calloc(MAXPATHLEN) as buf:
             if self._client.symbols.readlink(path, buf, MAXPATHLEN).c_int64 < 0:
                 self._client.raise_errno_exception(f"readlink failed for: {path}")
@@ -498,7 +498,7 @@ class Fs:
 
     @path_to_str("path")
     def realpath(self, path: str) -> str:
-        """realpath() at remote. read man for more details."""
+        """Resolve a path on the remote filesystem to an absolute path."""
         with self._client.safe_malloc(MAXPATHLEN) as buf:
             if self._client.symbols.realpath(path, buf) == 0:
                 self._client.raise_errno_exception(f"realpath failed for: {path}")
@@ -599,7 +599,7 @@ class Fs:
 
     @path_to_str("src", "dst")
     def symlink(self, src: str, dst: str) -> int:
-        """symlink(src, dst) at remote. read man for more details."""
+        """Create a symbolic link on the remote filesystem."""
         err = self._client.symbols.symlink(src, dst).c_int64
         if err < 0:
             self._client.raise_errno_exception(f"symlink failed to create link: {dst}->{src}")
@@ -607,7 +607,7 @@ class Fs:
 
     @path_to_str("src", "dst")
     def link(self, src: str, dst: str) -> int:
-        """link(src, dst) - hardlink at remote. read man for more details."""
+        """Create a hard link on the remote filesystem."""
         err = self._client.symbols.link(src, dst).c_int64
         if err < 0:
             self._client.raise_errno_exception(f"link failed to create link: {dst}->{src}")
@@ -638,12 +638,12 @@ class Fs:
 
     @path_to_str("path")
     def stat(self, path: str):
-        """stat(filename) at remote. read man for more details."""
+        """Return stat info for a remote path (platform-specific implementation)."""
         raise NotImplementedError()
 
     @path_to_str("path")
     def lstat(self, path: str):
-        """lstat(filename) at remote. read man for more details."""
+        """Return lstat info for a remote path (platform-specific implementation)."""
         raise NotImplementedError()
 
     @path_to_str("path")
