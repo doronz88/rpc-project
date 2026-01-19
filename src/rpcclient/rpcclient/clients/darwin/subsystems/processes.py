@@ -470,11 +470,11 @@ class Process:
             self._thread_class = IntelThread64
 
     def kill(self, sig: int = SIGTERM):
-        """kill(pid, sig) at remote. read man for more details."""
+        """Send a signal to the remote process."""
         return self._client.processes.kill(self._pid, sig)
 
     def waitpid(self, flags: int = 0):
-        """waitpid(pid, stat_loc, 0) at remote. read man for more details."""
+        """Wait for the remote process to change state and return status."""
         return self._client.processes.waitpid(self._pid, flags)
 
     def peek(self, address: int, size: int) -> bytes:
@@ -732,8 +732,7 @@ class Process:
     @cached_property
     def vmu_region_identifier(self) -> DarwinSymbol:
         return (
-            self._client.symbols
-            .objc_getClass("VMUVMRegionIdentifier")
+            self._client.symbols.objc_getClass("VMUVMRegionIdentifier")
             .objc_call("alloc")
             .objc_call("initWithTask:", self.task)
         )
@@ -741,8 +740,7 @@ class Process:
     @cached_property
     def vmu_object_identifier(self) -> DarwinSymbol:
         return (
-            self._client.symbols
-            .objc_getClass("VMUObjectIdentifier")
+            self._client.symbols.objc_getClass("VMUObjectIdentifier")
             .objc_call("alloc")
             .objc_call("initWithTask:", self.task)
         )
@@ -1001,8 +999,7 @@ class Process:
         except UnrecognizedSelectorError:
             # if failed, attempt with old API
             scanner = (
-                self._client.symbols
-                .objc_getClass("VMUTaskMemoryScanner")
+                self._client.symbols.objc_getClass("VMUTaskMemoryScanner")
                 .objc_call("alloc")
                 .objc_call("initWithTask:", self.task)
             )

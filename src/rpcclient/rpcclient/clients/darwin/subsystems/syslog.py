@@ -74,8 +74,7 @@ class OsLogPreferencesBase:
 class OsLogPreferencesCategory(OsLogPreferencesBase):
     def __init__(self, client, category: str, subsystem: DarwinSymbol):
         obj = (
-            client.symbols
-            .objc_getClass("OSLogPreferencesCategory")
+            client.symbols.objc_getClass("OSLogPreferencesCategory")
             .objc_call("alloc")
             .objc_call("initWithName:subsystem:", client.cf(category), subsystem)
         )
@@ -92,8 +91,7 @@ class OsLogPreferencesCategory(OsLogPreferencesBase):
 class OsLogPreferencesSubsystem(OsLogPreferencesBase):
     def __init__(self, client, subsystem: str):
         obj = (
-            client.symbols
-            .objc_getClass("OSLogPreferencesSubsystem")
+            client.symbols.objc_getClass("OSLogPreferencesSubsystem")
             .objc_call("alloc")
             .objc_call("initWithName:", client.cf(subsystem))
         )

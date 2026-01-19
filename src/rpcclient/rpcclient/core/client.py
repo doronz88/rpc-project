@@ -233,15 +233,15 @@ class CoreClient:
             raise
 
     def dlopen(self, filename: str, mode: int) -> Symbol:
-        """call dlopen() at remote and return its handle. see the man page for more details."""
+        """Load a shared library on the remote host and return its handle."""
         return self.symbol(self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode).handle)
 
     def dlclose(self, lib: int) -> int:
-        """call dlclose() at remote and return its handle. see the man page for more details."""
+        """Close a previously opened remote library handle."""
         return self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value).res
 
     def dlsym(self, lib: int, symbol_name: str) -> int:
-        """call dlsym() at remote and return its handle. see the man page for more details."""
+        """Resolve a symbol name in a remote library handle and return its address."""
         return self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name).ptr
 
     @null_pointer_guard

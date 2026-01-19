@@ -44,14 +44,14 @@ class Socket(Allocated):
         self._timeout = None
 
     def _deallocate(self):
-        """close(fd) at remote. read man for more details."""
+        """Close the remote socket file descriptor."""
         fd = self._client.symbols.close(self.fd).c_int32
         if fd < 0:
             raise BadReturnValueError(f"failed to close fd: {fd}")
 
     def send(self, buf: typing.Union[bytes, Symbol], size: Optional[int] = None, flags: int = 0) -> int:
         """
-        send(fd, buf, size, 0) at remote. read man for more details.
+        Send bytes from buf on the remote socket fd.
 
         :param buf: buffer to send
         :param size: If None, use len(buf)
@@ -70,7 +70,7 @@ class Socket(Allocated):
         return n
 
     def sendall(self, buf: bytes, flags: int = 0) -> None:
-        """continue call send() until"""
+        """Send the entire buffer, retrying until all bytes are written."""
         size = len(buf)
         offset = 0
         with self._client.safe_malloc(size) as block:
@@ -89,7 +89,7 @@ class Socket(Allocated):
 
     def recv(self, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
         """
-        recv() at remote. read man for more details.
+        Receive up to size bytes from the remote socket fd.
 
         :param size: chunk size
         :param flags: flags for recv() syscall. MSG_NOSIGNAL will always be added
@@ -150,7 +150,7 @@ class Network:
         self._client = client
 
     def socket(self, family=AF_INET, socktype=SOCK_STREAM, proto=0) -> int:
-        """socket(family, type, proto) at remote. read man for more details."""
+        """Create a remote socket and return its file descriptor."""
         result = self._client.symbols.socket(family, socktype, proto).c_int64
         if result == 0:
             self._client.raise_errno_exception(f"failed to create socket: {result}")

@@ -17,8 +17,7 @@ class AppleScript:
         with self._client.safe_malloc(8) as error:
             error[0] = 0
             apple_script = (
-                self._client.symbols
-                .objc_getClass("NSAppleScript")
+                self._client.symbols.objc_getClass("NSAppleScript")
                 .objc_call("alloc")
                 .objc_call("initWithSource:", self._client.cf(script))
             )
