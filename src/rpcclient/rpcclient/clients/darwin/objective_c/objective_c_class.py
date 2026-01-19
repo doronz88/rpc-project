@@ -142,7 +142,8 @@ class Class:
     @property
     def bundle_path(self) -> Path:
         return Path(
-            self._client.symbols.objc_getClass("NSBundle")
+            self._client.symbols
+            .objc_getClass("NSBundle")
             .objc_call("bundleForClass:", self._class_object)
             .objc_call("bundlePath")
             .py()

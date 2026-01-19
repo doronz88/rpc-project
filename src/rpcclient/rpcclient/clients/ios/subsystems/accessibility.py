@@ -394,7 +394,8 @@ class Accessibility:
         self._client.load_framework("AXRuntime")
         self._client.load_framework("AccessibilityUI")
         self._ui_client = (
-            client.symbols.objc_getClass("AXUIClient")
+            client.symbols
+            .objc_getClass("AXUIClient")
             .objc_call("alloc")
             .objc_call(
                 "initWithIdentifier:serviceBundleName:",

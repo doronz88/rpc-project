@@ -732,7 +732,8 @@ class Process:
     @cached_property
     def vmu_region_identifier(self) -> DarwinSymbol:
         return (
-            self._client.symbols.objc_getClass("VMUVMRegionIdentifier")
+            self._client.symbols
+            .objc_getClass("VMUVMRegionIdentifier")
             .objc_call("alloc")
             .objc_call("initWithTask:", self.task)
         )
@@ -740,7 +741,8 @@ class Process:
     @cached_property
     def vmu_object_identifier(self) -> DarwinSymbol:
         return (
-            self._client.symbols.objc_getClass("VMUObjectIdentifier")
+            self._client.symbols
+            .objc_getClass("VMUObjectIdentifier")
             .objc_call("alloc")
             .objc_call("initWithTask:", self.task)
         )
@@ -999,7 +1001,8 @@ class Process:
         except UnrecognizedSelectorError:
             # if failed, attempt with old API
             scanner = (
-                self._client.symbols.objc_getClass("VMUTaskMemoryScanner")
+                self._client.symbols
+                .objc_getClass("VMUTaskMemoryScanner")
                 .objc_call("alloc")
                 .objc_call("initWithTask:", self.task)
             )
