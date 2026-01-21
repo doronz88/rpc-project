@@ -1,6 +1,10 @@
 from collections import namedtuple
+from typing import TYPE_CHECKING
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
 
 CGRect = namedtuple("CGRect", "x0 y0 x1 y1")
 
@@ -8,7 +12,7 @@ CGRect = namedtuple("CGRect", "x0 y0 x1 y1")
 class ScreenCapture:
     """monitor screen events"""
 
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
 
     @property

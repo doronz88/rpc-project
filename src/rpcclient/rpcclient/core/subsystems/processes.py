@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
 from rpcclient.core.structs.consts import SIGTERM
 from rpcclient.exceptions import BadReturnValueError
 
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
+
 
 class Processes:
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         """
         process manager
         :param rpcclient.darwin_client.Client client: client

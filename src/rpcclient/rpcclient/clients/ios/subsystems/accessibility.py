@@ -1,7 +1,7 @@
 import dataclasses
 import time
 from enum import IntEnum, IntFlag
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import (
@@ -11,6 +11,9 @@ from rpcclient.exceptions import (
     RpcAccessibilityTurnedOffError,
     RpcFailedToGetPrimaryAppError,
 )
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
 
 
 class AXDirection(IntEnum):
@@ -386,7 +389,7 @@ class AXElement(DarwinSymbol):
 class Accessibility:
     """Accessibility utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

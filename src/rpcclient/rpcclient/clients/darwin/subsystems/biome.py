@@ -1,12 +1,15 @@
 import json
 from datetime import datetime
 from functools import cached_property
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.core.subsystems.fs import Fs, RemotePath
 from rpcclient.exceptions import SymbolAbsentError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 BIOME_PATHS = [
     "/private/var/mobile/Library/Biome/streams/restricted",
@@ -28,7 +31,9 @@ class Biome:
     :param Optional[Fs] fs: Filesystem helper. Defaults to `client.fs`.
     """
 
-    def __init__(self, client, biome_paths: Optional[list[str]] = None, fs: Optional[Fs] = None) -> None:
+    def __init__(
+        self, client: "DarwinClient", biome_paths: Optional[list[str]] = None, fs: Optional[Fs] = None
+    ) -> None:
         self._client = client
         self._client.load_framework("BiomeStreams")
         self.fs = fs if fs is not None else client.fs
@@ -136,7 +141,7 @@ class BiomeLibrary(Allocated):
     :param Biome biome: Parent `Biome` instance.
     """
 
-    def __init__(self, client, biome: Biome) -> None:
+    def __init__(self, client: "DarwinClient", biome: Biome) -> None:
         Allocated.__init__(self)
         self._client = client
         self.biome = biome

@@ -1,15 +1,19 @@
 from collections import namedtuple
+from typing import TYPE_CHECKING
 
 import lief
 from parameter_decorators import path_to_str
 
 Symbol = namedtuple("Symbol", "origin value")
 
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
+
 
 class Lief:
     """ " parse and patch executable files"""
 
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         self._client = client
 
     @path_to_str("path")

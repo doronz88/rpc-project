@@ -1,8 +1,11 @@
 import struct
 from enum import IntEnum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
+
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
 
 
 class CTL(IntEnum):
@@ -100,7 +103,7 @@ MAX_SIZE = 0x40000
 class Sysctl:
     """Helpers for reading and writing sysctl MIB values on the remote host."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         self._client = client
 
     def get(self, ctl: CTL, kern: KERN, arg: Optional[int] = None, size=MAX_SIZE) -> bytes:

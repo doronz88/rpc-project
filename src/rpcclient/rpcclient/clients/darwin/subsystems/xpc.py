@@ -1,11 +1,15 @@
 from datetime import datetime
 from functools import cache
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.consts import XPC_ARRAY_APPEND
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import RpcXpcSerializationError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class XPCObject(DarwinSymbol):
@@ -86,7 +90,7 @@ class XPCDictionary(XPCObject):
 
 
 class Xpc:
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

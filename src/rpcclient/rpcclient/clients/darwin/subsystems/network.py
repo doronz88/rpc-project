@@ -1,7 +1,11 @@
 import sqlite3
+from typing import TYPE_CHECKING
 
 from rpcclient.core.structs.consts import SIGKILL
 from rpcclient.core.subsystems.network import Network
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 PINNING_RULED_DB = "/private/var/protected/trustd/pinningrules.sqlite3"
 SYSTEM_CONFIGURATION_PLIST = "/private/var/Managed Preferences/mobile/com.apple.SystemConfiguration.plist"
@@ -10,7 +14,7 @@ SYSTEM_CONFIGURATION_PLIST = "/private/var/Managed Preferences/mobile/com.apple.
 class DarwinNetwork(Network):
     """ " Network utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         super().__init__(client)
 
     @property

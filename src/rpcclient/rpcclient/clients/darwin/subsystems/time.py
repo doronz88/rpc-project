@@ -1,10 +1,14 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from rpcclient.clients.darwin.structs import timeval
 
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
+
 
 class Time:
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

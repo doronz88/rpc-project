@@ -1,16 +1,19 @@
 import ctypes
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
 
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
+
 logger = logging.getLogger(__name__)
 
 
 class WifiSavedNetwork:
-    def __init__(self, client, wifi_manager: DarwinSymbol, network: DarwinSymbol):
+    def __init__(self, client: "IosClient", wifi_manager: DarwinSymbol, network: DarwinSymbol):
         self._client = client
         self._wifi_manager = wifi_manager
         self._network = network
@@ -39,7 +42,7 @@ class WifiSavedNetwork:
 
 
 class WifiScannedNetwork:
-    def __init__(self, client, interface: DarwinSymbol, network: dict):
+    def __init__(self, client: "IosClient", interface: DarwinSymbol, network: dict):
         self._client = client
         self._interface = interface
         self.network = network
@@ -84,7 +87,7 @@ class WifiScannedNetwork:
 
 
 class WifiInterface(Allocated):
-    def __init__(self, client, interface, device):
+    def __init__(self, client: "IosClient", interface, device):
         super().__init__()
         self._client = client
         self._interface = interface
@@ -124,7 +127,7 @@ class WifiInterface(Allocated):
 class IosWifi:
     """network utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
         self._client.load_framework("WiFiKit")
 

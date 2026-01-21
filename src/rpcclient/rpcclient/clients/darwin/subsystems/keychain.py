@@ -1,7 +1,11 @@
 import logging
+from typing import TYPE_CHECKING
 
 from rpcclient.core.subsystems.lief import Symbol
 from rpcclient.exceptions import BadReturnValueError, RpcPermissionError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +13,7 @@ logger = logging.getLogger(__name__)
 class Keychain:
     """keychain utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
 
     def add_internet_password(self, account: str, server: str, password: str):

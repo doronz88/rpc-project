@@ -1,12 +1,16 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rpcclient.clients.darwin.subsystems.crash_reports import CrashReports
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class Reports:
     """equivalent to the data that can be found using the Console app inside the Reports section"""
 
-    def __init__(self, client, crash_reports_dir):
+    def __init__(self, client: "DarwinClient", crash_reports_dir):
         self._client = client
         self.crash_reports = CrashReports(client, crash_reports_dir)
 

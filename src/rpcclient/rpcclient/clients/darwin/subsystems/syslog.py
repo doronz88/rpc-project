@@ -2,7 +2,7 @@ import datetime
 import logging
 import re
 from functools import cached_property
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.consts import OsLogLevel
 from rpcclient.clients.darwin.subsystems.cfpreferences import GLOBAL_DOMAIN, kCFPreferencesAnyHost
@@ -10,6 +10,9 @@ from rpcclient.clients.darwin.subsystems.processes import Process
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.structs.consts import SIGKILL
 from rpcclient.exceptions import BadReturnValueError, HarGlobalNotFoundError, MissingLibraryError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 MOV_RDI_RBX = b"\x48\x89\xdf"
 XOR_ESI_ESI = b"\x31\xf6"
@@ -25,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class OsLogPreferencesBase:
-    def __init__(self, client, obj: DarwinSymbol):
+    def __init__(self, client: "DarwinClient", obj: DarwinSymbol):
         self._client = client
         self._object = obj
 
@@ -72,7 +75,7 @@ class OsLogPreferencesBase:
 
 
 class OsLogPreferencesCategory(OsLogPreferencesBase):
-    def __init__(self, client, category: str, subsystem: DarwinSymbol):
+    def __init__(self, client: "DarwinClient", category: str, subsystem: DarwinSymbol):
         obj = (
             client.symbols.objc_getClass("OSLogPreferencesCategory")
             .objc_call("alloc")
@@ -89,7 +92,7 @@ class OsLogPreferencesCategory(OsLogPreferencesBase):
 
 
 class OsLogPreferencesSubsystem(OsLogPreferencesBase):
-    def __init__(self, client, subsystem: str):
+    def __init__(self, client: "DarwinClient", subsystem: str):
         obj = (
             client.symbols.objc_getClass("OSLogPreferencesSubsystem")
             .objc_call("alloc")
@@ -113,7 +116,7 @@ class OsLogPreferencesSubsystem(OsLogPreferencesBase):
 
 
 class OsLogPreferencesManager(OsLogPreferencesBase):
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         obj = client.symbols.objc_getClass("OSLogPreferencesManager").objc_call("sharedManager")
         super().__init__(client, obj)
 
@@ -135,7 +138,7 @@ class OsLogPreferencesManager(OsLogPreferencesBase):
 class Syslog:
     """ " manage syslog"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         @type client: rpcclient.darwin.client.DarwinClient
         """

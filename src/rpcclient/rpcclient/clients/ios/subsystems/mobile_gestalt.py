@@ -1,5 +1,11 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
+
+
 class MobileGestalt:
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
 
     # Identifying Information
