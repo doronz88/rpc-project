@@ -481,7 +481,7 @@ class Process:
         """peek at memory address"""
         with self._client.safe_malloc(size) as buf, self._client.safe_malloc(8) as p_size:
             p_size[0] = size
-            if self._client.symbols.vm_read_overwrite(self.task, address, size, buf, p_size):
+            if self._client.symbols.vm_read_overwrite(self.task_read, address, size, buf, p_size):
                 raise BadReturnValueError("vm_read() failed")
             return buf.peek(size)
 
@@ -554,7 +554,7 @@ class Process:
             self._client.safe_calloc(8) as count,
         ):
             count[0] = TASK_DYLD_INFO_COUNT
-            if self._client.symbols.task_info(self.task, TASK_DYLD_INFO, dyld_info, count):
+            if self._client.symbols.task_info(self.task_read, TASK_DYLD_INFO, dyld_info, count):
                 raise BadReturnValueError("task_info(TASK_DYLD_INFO) failed")
             dyld_info_data = task_dyld_info_data_t.parse_stream(dyld_info)
         all_image_infos = all_image_infos_t.parse(
@@ -576,7 +576,7 @@ class Process:
         result = []
         with self._client.safe_malloc(8) as threads, self._client.safe_malloc(4) as count:
             count.item_size = 4
-            if self._client.symbols.task_threads(self.task, threads, count):
+            if self._client.symbols.task_threads(self.task_read, threads, count):
                 raise BadReturnValueError("task_threads() failed")
 
             for tid in Array(count[0].c_uint32, Int32ul).parse(threads[0].peek(count[0] * 4)):
@@ -710,14 +710,14 @@ class Process:
         """get TASK_VM_INFO via task_info."""
         with self._client.safe_malloc(task_vm_info_data_t.sizeof()) as vm_info, self._client.safe_calloc(8) as count:
             count[0] = TASK_VM_INFO_COUNT
-            if self._client.symbols.task_info(self.task, TASK_VM_INFO, vm_info, count):
+            if self._client.symbols.task_info(self.task_read, TASK_VM_INFO, vm_info, count):
                 raise BadReturnValueError("task_info(TASK_VM_INFO) failed")
             return task_vm_info_data_t.parse_stream(vm_info)
 
     @property
     def backtraces(self) -> list[Backtrace]:
         result = []
-        backtraces = self._client.symbols.objc_getClass("VMUSampler").objc_call("sampleAllThreadsOfTask:", self.task)
+        backtraces = self._client.symbols.objc_getClass("VMUSampler").objc_call("sampleAllThreadsOfTask:", self.task_read)
         for i in range(backtraces.objc_call("count")):
             bt = backtraces.objc_call("objectAtIndex:", i)
             result.append(Backtrace(bt))
@@ -726,7 +726,7 @@ class Process:
     @cached_property
     def vmu_proc_info(self) -> DarwinSymbol:
         return (
-            self._client.symbols.objc_getClass("VMUProcInfo").objc_call("alloc").objc_call("initWithTask:", self.task)
+            self._client.symbols.objc_getClass("VMUProcInfo").objc_call("alloc").objc_call("initWithTask:", self.task_read)
         )
 
     @cached_property
@@ -734,7 +734,7 @@ class Process:
         return (
             self._client.symbols.objc_getClass("VMUVMRegionIdentifier")
             .objc_call("alloc")
-            .objc_call("initWithTask:", self.task)
+            .objc_call("initWithTask:", self.task_read)
         )
 
     @cached_property
@@ -742,13 +742,26 @@ class Process:
         return (
             self._client.symbols.objc_getClass("VMUObjectIdentifier")
             .objc_call("alloc")
-            .objc_call("initWithTask:", self.task)
+            .objc_call("initWithTask:", self.task_read)
         )
 
     @cached_property
     def symbolicator(self) -> Symbolicator:
-        symbolicator = self._client.symbols.CSSymbolicatorCreateWithTask(self.task, return_raw=True)
+        symbolicator = self._client.symbols.CSSymbolicatorCreateWithTask(self.task_read, return_raw=True)
         return Symbolicator(self._client, self, symbolicator.x0, symbolicator.x1)
+
+    @cached_property
+    def task_read(self) -> int:
+        self_task_port = self._client.symbols.mach_task_self()
+
+        if self.pid == self._client.pid:
+            return self_task_port
+
+        with self._client.safe_malloc(8) as p_task:
+            ret = self._client.symbols.task_read_for_pid(self_task_port, self.pid, p_task)
+            if ret:
+                raise BadReturnValueError("task_read_for_pid() failed")
+            return p_task[0].c_int64
 
     @cached_property
     def task(self) -> int:
@@ -993,7 +1006,7 @@ class Process:
         try:
             # first attempt via new API
             scanner = self._client.symbols.objc_getClass("VMUProcessObjectGraph").objc_call(
-                "createWithTask:", self.task
+                "createWithTask:", self.task_read
             )
             snapshot_graph = scanner.objc_call("plistRepresentationWithOptions:", 0).py()
         except UnrecognizedSelectorError:
@@ -1001,7 +1014,7 @@ class Process:
             scanner = (
                 self._client.symbols.objc_getClass("VMUTaskMemoryScanner")
                 .objc_call("alloc")
-                .objc_call("initWithTask:", self.task)
+                .objc_call("initWithTask:", self.task_read)
             )
             scanner.objc_call("addRootNodesFromTask")
             scanner.objc_call("addMallocNodesFromTask")
