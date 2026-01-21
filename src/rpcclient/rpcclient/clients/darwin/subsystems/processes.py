@@ -184,31 +184,39 @@ SOCKET_TYPE_DATACLASS = {
 
 class Thread:
     def __init__(self, client, thread_id: int):
+        """Initialize a thread wrapper for the given client and thread id."""
         self._client = client
         self._thread_id = thread_id
 
     @property
     def thread_id(self) -> int:
+        """Return the Mach thread id."""
         return self._thread_id
 
     def get_state(self):
+        """Return the architecture-specific thread state."""
         raise NotImplementedError()
 
     def set_state(self, state: dict):
+        """Set the architecture-specific thread state."""
         raise NotImplementedError()
 
     def resume(self):
+        """Resume execution of the thread."""
         raise NotImplementedError()
 
     def suspend(self):
+        """Suspend execution of the thread."""
         raise NotImplementedError()
 
     def __repr__(self):
+        """Return a debug representation of the thread."""
         return f"<{self.__class__.__name__} TID:{self._thread_id}>"
 
 
 class IntelThread64(Thread):
     def get_state(self):
+        """Fetch the x86_64 thread state."""
         with (
             self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_state,
             self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_thread_state_count,
@@ -221,6 +229,7 @@ class IntelThread64(Thread):
             return x86_thread_state64_t.parse_stream(p_state)
 
     def set_state(self, state: dict) -> None:
+        """Set the x86_64 thread state."""
         if self._client.symbols.thread_set_state(
             self._thread_id,
             x86_THREAD_STATE64,
@@ -232,6 +241,7 @@ class IntelThread64(Thread):
 
 class ArmThread64(Thread):
     def get_state(self):
+        """Fetch the ARM64 thread state."""
         with (
             self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_state,
             self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_thread_state_count,
@@ -244,6 +254,7 @@ class ArmThread64(Thread):
             return arm_thread_state64_t.parse_stream(p_state)
 
     def set_state(self, state: dict) -> None:
+        """Set the ARM64 thread state."""
         if self._client.symbols.thread_set_state(
             self._thread_id,
             ARMThreadFlavors.ARM_THREAD_STATE64,
@@ -253,10 +264,12 @@ class ArmThread64(Thread):
             raise BadReturnValueError("thread_set_state() failed")
 
     def suspend(self):
+        """Suspend execution of the ARM64 thread."""
         if self._client.symbols.thread_suspend(self._thread_id):
             raise BadReturnValueError("thread_suspend() failed")
 
     def resume(self):
+        """Resume execution of the ARM64 thread."""
         if self._client.symbols.thread_resume(self._thread_id):
             raise BadReturnValueError("thread_resume() failed")
 
@@ -273,6 +286,7 @@ class Region:
 
     @property
     def size(self) -> int:
+        """Return the region size in bytes."""
         return self.end - self.start
 
 
@@ -292,6 +306,7 @@ class Frame:
     symbol_name: str
 
     def __repr__(self):
+        """Return a formatted frame representation."""
         return (
             f"<{self.__class__.__name__} [{self.depth:3}] 0x{self.address:x} ({self.section} + 0x{self.offset:x}) "
             f"{self.symbol_name}>"
@@ -309,6 +324,7 @@ class Backtrace:
     frames: list[Frame]
 
     def __init__(self, vmu_backtrace: DarwinSymbol):
+        """Parse a VMU backtrace description into structured fields."""
         backtrace = vmu_backtrace.objc_call("description").py()
         match = re.match(
             r"VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time>.+?) "
@@ -334,6 +350,7 @@ class Backtrace:
             )
 
     def __repr__(self):
+        """Return a formatted backtrace representation."""
         buf = f"<{self.__class__.__name__} PID: {self.pid} TID: {self.thread_id}\n"
         for frame in self.frames:
             buf += f"    {frame}\n"
@@ -344,6 +361,7 @@ class Backtrace:
 class ProcessSymbol(Symbol):
     @classmethod
     def create(cls, value: int, client, process):
+        """Create a ProcessSymbol bound to a process."""
         symbol = super().create(value, client)
         symbol = ProcessSymbol(symbol)
         symbol._prepare(client)
@@ -351,12 +369,15 @@ class ProcessSymbol(Symbol):
         return symbol
 
     def _clone_from_value(self, value: int):
+        """Clone this symbol for the given value."""
         return self.create(value, self._client, self.process)
 
     def peek(self, count: int) -> bytes:
+        """Read bytes from process memory at this address."""
         return self.process.peek(self, count)
 
     def poke(self, buf: bytes) -> None:
+        """Write bytes to process memory at this address."""
         return self.process.poke(self, buf)
 
     def peek_str(self, encoding="utf-8") -> str:
@@ -365,28 +386,34 @@ class ProcessSymbol(Symbol):
 
     @property
     def dl_info(self) -> Container:
+        """Raise because dl_info is not available for remote process symbols."""
         raise NotImplementedError("dl_info isn't implemented for remote process symbols")
 
     @property
     def name(self) -> str:
+        """Return the symbol name for this address."""
         return self.process.get_symbol_name(self)
 
     @property
     def filename(self) -> str:
+        """Return the image path containing this symbol."""
         return self.process.get_symbol_image(self.name).path
 
     def __getitem__(self, item) -> "ProcessSymbol":
+        """Dereference and return the pointer at the given index."""
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         addr = self + item * self.item_size
         deref = struct.unpack(self._client._endianness + fmt, self.process.peek(addr, self.item_size))[0]
         return self.create(deref, self._client, self.process)
 
     def __setitem__(self, item, value):
+        """Write a pointer-sized value at the given index."""
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         value = struct.pack(self._client._endianness + fmt, int(value))
         self.process.poke(self + item * self.item_size, value)
 
     def __call__(self, *args, **kwargs):
+        """Disallow calling a process symbol as a function."""
         raise RpcClientException("ProcessSymbol is not callable")
 
 
@@ -408,10 +435,12 @@ class MachPortInfo:
 
     @property
     def has_recv_right(self) -> bool:
+        """Return True if the port has a receive right."""
         return "recv" in self.rights
 
     @property
     def has_send_right(self) -> bool:
+        """Return True if the port has a send right."""
         return "send" in self.rights
 
 
@@ -427,12 +456,14 @@ class SymbolOwner:
     def __init__(
         self, client, process, symbol_owner_opaque1: ProcessSymbol, symbol_owner_opaque2: ProcessSymbol
     ) -> None:
+        """Initialize a symbol owner wrapper."""
         self._client = client
         self._process = process
         self.symbol_owner_opaque1 = symbol_owner_opaque1
         self.symbol_owner_opaque2 = symbol_owner_opaque2
 
     def get_symbol_address(self, name: str) -> ProcessSymbol:
+        """Resolve a symbol address by name."""
         symbol = self._client.symbols.CSSymbolOwnerGetSymbolWithName(
             self.symbol_owner_opaque1, self.symbol_owner_opaque2, name, return_raw=True
         )
@@ -445,12 +476,14 @@ class Symbolicator:
     def __init__(
         self, client, process, symbolicator_opaque1: ProcessSymbol, symbolicator_opaque2: ProcessSymbol
     ) -> None:
+        """Initialize a symbolicator wrapper."""
         self._client = client
         self._process = process
         self.symbolicator_opaque1 = symbolicator_opaque1
         self.symbolicator_opaque2 = symbolicator_opaque2
 
     def get_symbol_owner(self, library_basename: str) -> SymbolOwner:
+        """Resolve a symbol owner by library basename."""
         symbol_owner = self._client.symbols.CSSymbolicatorGetSymbolOwnerWithNameAtTime(
             self.symbolicator_opaque1, self.symbolicator_opaque2, library_basename, kCSNow, return_raw=True
         )
@@ -461,6 +494,7 @@ class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
     def __init__(self, client, pid: int):
+        """Initialize a process wrapper for a pid."""
         self._client = client
         self._pid = pid
 
@@ -505,6 +539,7 @@ class Process:
             raise BadReturnValueError("vm_write() failed")
 
     def get_symbol_name(self, address: int) -> str:
+        """Resolve a symbol name for the given address."""
         if self._client.arch != ARCH_ARM64:
             raise NotImplementedError("implemented only on ARCH_ARM64")
         result = self.vmu_object_identifier.objc_call("symbolForAddress:", address, return_raw=True)
@@ -513,6 +548,7 @@ class Process:
         return self._client.symbols.CSSymbolGetName(result.x0, result.x1).peek_str()
 
     def get_symbol_image(self, name: str) -> Image:
+        """Find the image containing the named symbol."""
         for image in self.images:
             result = self.get_symbol_address(name, posixpath.basename(image.path))
             if result:
@@ -521,9 +557,11 @@ class Process:
         raise ProcessSymbolAbsentError()
 
     def get_symbol_class_info(self, address: int) -> DarwinSymbol:
+        """Return Objective-C class info for the given address."""
         return self.vmu_object_identifier.objc_call("classInfoForMemory:length:", address, 8)
 
     def get_symbol_address(self, name: str, lib: Optional[str] = None) -> Union[DarwinSymbol, ProcessSymbol]:
+        """Resolve a symbol address, optionally within a library."""
         if lib is not None:
             address = self.vmu_object_identifier.objc_call("addressOfSymbol:inLibrary:", name, lib).c_uint64
             if self.pid == self._client.pid:
@@ -535,6 +573,7 @@ class Process:
 
     @property
     def loaded_classes(self):
+        """Yield realized Objective-C classes for the process."""
         realized_classes = self.vmu_object_identifier.objc_call("realizedClasses")
 
         for i in range(1, realized_classes.objc_call("count") + 1):
@@ -569,10 +608,12 @@ class Process:
 
     @property
     def app_images(self) -> list[Image]:
+        """Return images that belong to the app bundle."""
         return [image for image in self.images if APP_SUFFIX in image.path]
 
     @property
     def threads(self) -> list[Thread]:
+        """Return the list of threads in the process."""
         result = []
         with self._client.safe_malloc(8) as threads, self._client.safe_malloc(4) as count:
             count.item_size = 4
@@ -716,8 +757,11 @@ class Process:
 
     @property
     def backtraces(self) -> list[Backtrace]:
+        """Collect backtraces for all threads in the process."""
         result = []
-        backtraces = self._client.symbols.objc_getClass("VMUSampler").objc_call("sampleAllThreadsOfTask:", self.task_read)
+        backtraces = self._client.symbols.objc_getClass("VMUSampler").objc_call(
+            "sampleAllThreadsOfTask:", self.task_read
+        )
         for i in range(backtraces.objc_call("count")):
             bt = backtraces.objc_call("objectAtIndex:", i)
             result.append(Backtrace(bt))
@@ -725,12 +769,16 @@ class Process:
 
     @cached_property
     def vmu_proc_info(self) -> DarwinSymbol:
+        """Return the VMUProcInfo object for this task."""
         return (
-            self._client.symbols.objc_getClass("VMUProcInfo").objc_call("alloc").objc_call("initWithTask:", self.task_read)
+            self._client.symbols.objc_getClass("VMUProcInfo")
+            .objc_call("alloc")
+            .objc_call("initWithTask:", self.task_read)
         )
 
     @cached_property
     def vmu_region_identifier(self) -> DarwinSymbol:
+        """Return the VMUVMRegionIdentifier object for this task."""
         return (
             self._client.symbols.objc_getClass("VMUVMRegionIdentifier")
             .objc_call("alloc")
@@ -739,6 +787,7 @@ class Process:
 
     @cached_property
     def vmu_object_identifier(self) -> DarwinSymbol:
+        """Return the VMUObjectIdentifier object for this task."""
         return (
             self._client.symbols.objc_getClass("VMUObjectIdentifier")
             .objc_call("alloc")
@@ -747,11 +796,13 @@ class Process:
 
     @cached_property
     def symbolicator(self) -> Symbolicator:
+        """Return a symbolicator for this task."""
         symbolicator = self._client.symbols.CSSymbolicatorCreateWithTask(self.task_read, return_raw=True)
         return Symbolicator(self._client, self, symbolicator.x0, symbolicator.x1)
 
     @cached_property
     def task_read(self) -> int:
+        """Return the task read port for this process."""
         self_task_port = self._client.symbols.mach_task_self()
 
         if self.pid == self._client.pid:
@@ -765,6 +816,7 @@ class Process:
 
     @cached_property
     def task(self) -> int:
+        """Return the full task port for this process."""
         self_task_port = self._client.symbols.mach_task_self()
 
         if self.pid == self._client.pid:
@@ -786,6 +838,7 @@ class Process:
 
     @cached_property
     def basename(self) -> Optional[str]:
+        """Return the basename of the process path."""
         path = self.path
         if not path:
             return None
@@ -793,30 +846,37 @@ class Process:
 
     @cached_property
     def name(self) -> str:
+        """Return the process name from task info."""
         return self.task_all_info.pbsd.pbi_name
 
     @cached_property
     def ppid(self) -> int:
+        """Return the parent process id."""
         return self.task_all_info.pbsd.pbi_ppid
 
     @cached_property
     def uid(self) -> int:
+        """Return the process user id."""
         return self.task_all_info.pbsd.pbi_uid
 
     @cached_property
     def gid(self) -> int:
+        """Return the process group id."""
         return self.task_all_info.pbsd.pbi_gid
 
     @cached_property
     def ruid(self) -> int:
+        """Return the real user id."""
         return self.task_all_info.pbsd.pbi_ruid
 
     @cached_property
     def rgid(self) -> int:
+        """Return the real group id."""
         return self.task_all_info.pbsd.pbi_rgid
 
     @cached_property
     def start_time(self) -> datetime:
+        """Return the process start time."""
         if self._client.arch != ARCH_ARM64:
             raise NotImplementedError("implemented only on ARCH_ARM64")
         val = self.vmu_proc_info.objc_call("startTime", return_raw=True)
@@ -826,26 +886,32 @@ class Process:
 
     @property
     def parent(self) -> "Process":
+        """Return a Process wrapper for the parent pid."""
         return Process(self._client, self.ppid)
 
     @property
     def environ(self) -> list[str]:
+        """Return the process environment variables."""
         return self.vmu_proc_info.objc_call("envVars").py()
 
     @property
     def arguments(self) -> list[str]:
+        """Return the process argument list."""
         return self.vmu_proc_info.objc_call("arguments").py()
 
     @property
     def raw_procargs2(self) -> bytes:
+        """Return the raw PROCARGS2 sysctl buffer."""
         return self._client.sysctl.get(CTL.KERN, KERN.PROCARGS2, self.pid)
 
     @property
     def procargs2(self) -> Container:
+        """Parse and return the PROCARGS2 buffer."""
         return procargs2_t.parse(self.raw_procargs2)
 
     @property
     def regions(self) -> list[Region]:
+        """Return the list of VM regions for the process."""
         result = []
 
         # remove the '()' wrapping the list:
@@ -902,6 +968,7 @@ class Process:
 
     @property
     def cdhash(self) -> bytes:
+        """Return the code directory hash for the process."""
         with self._client.safe_malloc(CDHASH_SIZE) as cdhash:
             # by reversing online-auth-agent
             if self._client.symbols.csops(self.pid, 5, cdhash, CDHASH_SIZE) != 0:
@@ -909,9 +976,11 @@ class Process:
             return cdhash.peek(CDHASH_SIZE)
 
     def get_process_symbol(self, address: int) -> ProcessSymbol:
+        """Create a process symbol for the given address."""
         return ProcessSymbol.create(address, self._client, self)
 
     def vm_allocate(self, size: int) -> ProcessSymbol:
+        """Allocate memory in the target task and return its address."""
         with self._client.safe_malloc(8) as out_address:
             if self._client.symbols.vm_allocate(self.task, out_address, size, VM_FLAGS_ANYWHERE):
                 raise BadReturnValueError("vm_allocate() failed")
@@ -1002,6 +1071,7 @@ class Process:
         return result
 
     def get_memgraph_snapshot(self) -> bytes:
+        """Return a memory graph snapshot as plist bytes."""
         scanner = None
         try:
             # first attempt via new API
@@ -1028,6 +1098,7 @@ class Process:
         return snapshot_graph
 
     def __repr__(self):
+        """Return a debug representation of the process."""
         return f"<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>"
 
 
@@ -1035,6 +1106,7 @@ class DarwinProcesses(Processes):
     """manage processes"""
 
     def __init__(self, client):
+        """Initialize the Darwin process subsystem."""
         super().__init__(client)
         client.load_framework("Symbolication")
         self._self_process = Process(self._client, self._client.pid)
@@ -1140,6 +1212,7 @@ class DarwinProcesses(Processes):
             return result
 
     def disable_watchdog(self) -> None:
+        """Continuously kill watchdogd to keep it disabled."""
         while True:
             with contextlib.suppress(ArgumentError):
                 self.get_by_basename("watchdogd").kill(SIGKILL)
