@@ -1,5 +1,6 @@
 import struct
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from parameter_decorators import path_to_str
 
@@ -7,6 +8,9 @@ from rpcclient.clients.darwin.consts import AVAudioSessionCategoryOptions, AVAud
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import BadReturnValueError, RpcFailedToPlayError, RpcFailedToRecordError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class AVAudioSessionCategory(Enum):
@@ -47,7 +51,7 @@ class Recorder(Allocated):
     https://developer.apple.com/documentation/avfaudio/avaudiorecorder?language=objc
     """
 
-    def __init__(self, client, session: "AudioSession", recorder: DarwinSymbol):
+    def __init__(self, client: "DarwinClient", session: "AudioSession", recorder: DarwinSymbol):
         super().__init__()
         self._client = client
         self._session = session
@@ -86,7 +90,7 @@ class Player(Allocated):
     https://developer.apple.com/documentation/avfaudio/avaudioplayer?language=objc
     """
 
-    def __init__(self, client, session: "AudioSession", player: DarwinSymbol):
+    def __init__(self, client: "DarwinClient", session: "AudioSession", player: DarwinSymbol):
         super().__init__()
         self._client = client
         self._session = session
@@ -131,7 +135,7 @@ class AudioSession:
     https://developer.apple.com/documentation/avfaudio/avaudiosession?language=objc
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
         self._session = self._client.symbols.objc_getClass("AVAudioSession").objc_call("sharedInstance")
 
@@ -185,7 +189,7 @@ class AudioSession:
 class DarwinMedia:
     """Media utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

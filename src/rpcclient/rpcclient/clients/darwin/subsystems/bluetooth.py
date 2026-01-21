@@ -1,4 +1,7 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class Bluetooth:
@@ -8,7 +11,7 @@ class Bluetooth:
     # so we use this global to tell if it was already called
     _ENV_QUEUE_SET = "_rpc_server_bluetooth_manager_dispatch_queue_set"
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
         self._client.load_framework("BluetoothManager")
         bluetooth_manager_class = client.symbols.objc_getClass("BluetoothManager")

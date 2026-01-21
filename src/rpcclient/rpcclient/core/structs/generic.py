@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from construct import (
     Bytes,
     CString,
@@ -22,6 +24,9 @@ from construct import (
 )
 
 from rpcclient.core.structs.consts import AF_INET, AF_INET6, AF_UNIX
+
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
 
 UNIX_PATH_MAX = 104
 
@@ -91,7 +96,7 @@ class SymbolFormatField(FormatField):
     A Symbol wrapper for construct
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         super().__init__("<", "Q")
         self._client = client
 

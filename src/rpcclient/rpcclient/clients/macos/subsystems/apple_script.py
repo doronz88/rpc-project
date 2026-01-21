@@ -1,13 +1,16 @@
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.exceptions import RpcAppleScriptError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.macos.client import MacosClient
 
 logger = logging.getLogger(__name__)
 
 
 class AppleScript:
-    def __init__(self, client):
+    def __init__(self, client: "MacosClient"):
         """
         :param client: rpcclient.macos.MacosClient
         """

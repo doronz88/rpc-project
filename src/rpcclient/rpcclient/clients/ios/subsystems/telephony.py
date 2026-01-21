@@ -1,10 +1,14 @@
 import logging
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
+
 
 class Call:
-    def __init__(self, client, controller, call):
+    def __init__(self, client: "IosClient", controller, call):
         self._client = client
         self._controller = controller
         self._call = call
@@ -38,7 +42,7 @@ class Telephony:
     "com.apple.coretelephony".
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
         self._client.load_framework("CallKit")
         self.cx_call_controller = self._client.symbols.objc_getClass("CXCallController").objc_call("new")

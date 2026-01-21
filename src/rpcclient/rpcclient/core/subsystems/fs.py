@@ -7,7 +7,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path, PosixPath
 from random import Random
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from parameter_decorators import path_to_str
 
@@ -39,11 +39,14 @@ from rpcclient.exceptions import (
     RpcIsADirectoryError,
 )
 
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
+
 logger = logging.getLogger(__name__)
 
 
 class DirEntry:
-    def __init__(self, path, entry, client):
+    def __init__(self, path, entry, client: "CoreClient"):
         self._path = path
         self._entry = entry
         self._client = client
@@ -122,7 +125,7 @@ class DirEntry:
 class File(Allocated):
     CHUNK_SIZE = 1024 * 64
 
-    def __init__(self, client, fd: int):
+    def __init__(self, client: "CoreClient", fd: int):
         """
         :param rpcclient.client.client.Client client:
         :param fd:
@@ -232,7 +235,7 @@ class File(Allocated):
 
 
 class RemotePath(PosixPath):
-    def __init__(self, path: str, client) -> None:
+    def __init__(self, path: str, client: "CoreClient") -> None:
         try:
             super().__init__(path)  # solution from python3.12 since signature has changed
         except TypeError:
@@ -309,7 +312,7 @@ class RemotePath(PosixPath):
 class RemoteTemporaryDir(Allocated, RemotePath):
     """Temporary directory on the remote device"""
 
-    def __init__(self, client, directory: str = "/tmp", mode: int = 0o700):
+    def __init__(self, client: "CoreClient", directory: str = "/tmp", mode: int = 0o700):
         """Generate a random temp directory name and create it in the given directory (default '/tmp').
 
         :param rpcclient.darwin.client.DarwinClient client:
@@ -337,7 +340,7 @@ class RemoteTemporaryDir(Allocated, RemotePath):
 class Fs:
     """filesystem utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         self._client = client
 
     def _cp_dir(self, source: Path, dest: Path, force: bool):

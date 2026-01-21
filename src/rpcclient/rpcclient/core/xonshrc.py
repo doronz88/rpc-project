@@ -108,7 +108,7 @@ def dir_completer(xsh, action, completer, alias, command):
 
 
 class RpcLsStub(LsStub):
-    def __init__(self, client, stdout):
+    def __init__(self, client: CoreClient, stdout):
         self._client = client
         self._stdout = stdout
         self._paths_entries = {}

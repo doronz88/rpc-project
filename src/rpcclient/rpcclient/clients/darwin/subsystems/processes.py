@@ -11,7 +11,7 @@ from collections.abc import Generator
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from construct import Array, Container, Int32ul
 from parameter_decorators import path_to_str
@@ -88,6 +88,9 @@ from rpcclient.exceptions import (
     UnrecognizedSelectorError,
 )
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
@@ -183,7 +186,7 @@ SOCKET_TYPE_DATACLASS = {
 
 
 class Thread:
-    def __init__(self, client, thread_id: int):
+    def __init__(self, client: "DarwinClient", thread_id: int):
         """Initialize a thread wrapper for the given client and thread id."""
         self._client = client
         self._thread_id = thread_id
@@ -454,7 +457,7 @@ class MachPortCrossRefInfo:
 
 class SymbolOwner:
     def __init__(
-        self, client, process, symbol_owner_opaque1: ProcessSymbol, symbol_owner_opaque2: ProcessSymbol
+        self, client: "DarwinClient", process, symbol_owner_opaque1: ProcessSymbol, symbol_owner_opaque2: ProcessSymbol
     ) -> None:
         """Initialize a symbol owner wrapper."""
         self._client = client
@@ -474,7 +477,7 @@ class SymbolOwner:
 
 class Symbolicator:
     def __init__(
-        self, client, process, symbolicator_opaque1: ProcessSymbol, symbolicator_opaque2: ProcessSymbol
+        self, client: "DarwinClient", process, symbolicator_opaque1: ProcessSymbol, symbolicator_opaque2: ProcessSymbol
     ) -> None:
         """Initialize a symbolicator wrapper."""
         self._client = client
@@ -493,7 +496,7 @@ class Symbolicator:
 class Process:
     PEEK_STR_CHUNK_SIZE = 0x100
 
-    def __init__(self, client, pid: int):
+    def __init__(self, client: "DarwinClient", pid: int):
         """Initialize a process wrapper for a pid."""
         self._client = client
         self._pid = pid
@@ -1105,7 +1108,7 @@ class Process:
 class DarwinProcesses(Processes):
     """manage processes"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """Initialize the Darwin process subsystem."""
         super().__init__(client)
         client.load_framework("Symbolication")

@@ -3,9 +3,12 @@ import plistlib
 import posixpath
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.subsystems.scpreferences import SCPreference
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
 
 PAIR_RECORD_PATH = "/var/root/Library/Lockdown/pair_records"
 DATA_ARK_PATH = "/var/root/Library/Lockdown/data_ark.plist"
@@ -13,7 +16,7 @@ FAR_FUTURE_DATE = datetime(9999, 1, 1)
 
 
 class PairRecord:
-    def __init__(self, client, host_id: str):
+    def __init__(self, client: "IosClient", host_id: str):
         self._client = client
         self._host_id = host_id
 
@@ -45,7 +48,7 @@ class PairRecord:
 
 
 class Lockdown:
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
 
     @staticmethod

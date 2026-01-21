@@ -1,10 +1,14 @@
 import logging
+from typing import TYPE_CHECKING
 
 from rpcclient.exceptions import BadReturnValueError
 
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
+
 
 class Backlight:
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
 
         BrightnessSystemClient = self._client.symbols.objc_getClass("BrightnessSystemClient")

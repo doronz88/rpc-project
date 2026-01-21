@@ -1,10 +1,13 @@
 from collections import UserList
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from construct import Hex, Int32ul, PaddedString, Struct
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.structs.generic import SymbolFormatField
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 magic_t = Struct("m0" / Hex(Int32ul), "m1" / PaddedString(12, "ascii"))
 
@@ -12,7 +15,7 @@ magic_t = Struct("m0" / Hex(Int32ul), "m1" / PaddedString(12, "ascii"))
 SIZEOF_PAGE_DATA = 0x38
 
 
-def AutoreleasePoolPageData(client) -> Struct:
+def AutoreleasePoolPageData(client: "DarwinClient") -> Struct:
     return Struct(
         "magic" / magic_t,
         "next" / SymbolFormatField(client),
@@ -29,7 +32,7 @@ class AutoreleasePool(UserList[DarwinSymbol]):
     A list-like container for `DarwinSymbol` objects representing one Objective-C autorelease pool.
     """
 
-    def __init__(self, client, address: DarwinSymbol) -> None:
+    def __init__(self, client: "DarwinClient", address: DarwinSymbol) -> None:
         """
         Initialize `AutoreleasePool`.
 
@@ -93,7 +96,7 @@ class AutorelesePoolCtx:
     On exit: drains (releases) the pool.
     """
 
-    def __init__(self, client) -> None:
+    def __init__(self, client: "DarwinClient") -> None:
         """
         Initialize `AutorelesePoolCtx`.
 

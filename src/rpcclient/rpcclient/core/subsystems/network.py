@@ -1,7 +1,7 @@
 import socket as pysock
 import typing
 from collections import namedtuple
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.structs import timeval
 from rpcclient.core.allocated import Allocated
@@ -25,6 +25,9 @@ from rpcclient.core.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_
 from rpcclient.core.symbol import Symbol
 from rpcclient.exceptions import BadReturnValueError
 
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
+
 Interface = namedtuple("Interface", "name address netmask broadcast")
 Hostentry = namedtuple("Hostentry", "name aliases addresses")
 
@@ -32,7 +35,7 @@ Hostentry = namedtuple("Hostentry", "name aliases addresses")
 class Socket(Allocated):
     CHUNK_SIZE = 1024
 
-    def __init__(self, client, fd: int):
+    def __init__(self, client: "CoreClient", fd: int):
         """
         :param rpcclient.client.client.Client client:
         :param fd:
@@ -143,7 +146,7 @@ class Socket(Allocated):
 
 
 class Network:
-    def __init__(self, client):
+    def __init__(self, client: "CoreClient"):
         """
         :param rpcclient.client.client.Client client:
         """

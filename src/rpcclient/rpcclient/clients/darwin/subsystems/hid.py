@@ -1,7 +1,7 @@
 import contextlib
 import time
 from enum import Enum
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from rpcclient.clients.darwin.consts import (
     IOHIDDigitizerEventMask,
@@ -25,6 +25,9 @@ from rpcclient.clients.darwin.consts import (
     kHIDUsage_Csmr_VolumeIncrement,
 )
 from rpcclient.exceptions import BadReturnValueError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class TouchEventType(Enum):
@@ -69,7 +72,7 @@ EVENT_TYPE_PARAMS = {
 class Hid:
     """Control HID devices and simulate events"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
 
     def send_double_home_button_press(self):

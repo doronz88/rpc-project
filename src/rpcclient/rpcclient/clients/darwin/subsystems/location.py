@@ -1,7 +1,10 @@
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.exceptions import RpcPermissionError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class CLAuthorizationStatus(Enum):
@@ -25,7 +28,7 @@ class Location:
     https://developer.apple.com/documentation/corelocation/cllocationmanager?language=objc
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
         self._client.load_framework("CoreLocation")
 

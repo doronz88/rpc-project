@@ -1,13 +1,18 @@
+from typing import TYPE_CHECKING
+
 from rpcclient.clients.darwin.consts import MACH_PORT_NULL, kCFAllocatorDefault, kIOServicePlane
 from rpcclient.clients.darwin.structs import io_name_t, io_object_t, mach_port_t
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
 
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
+
 
 class IOService(Allocated):
     """representation of a remote IOService"""
 
-    def __init__(self, client, service):
+    def __init__(self, client: "DarwinClient", service):
         super().__init__()
         self._client = client
         self._service = service
@@ -127,7 +132,7 @@ class IORegistry:
     https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/IOKitFundamentals/TheRegistry/TheRegistry.html
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

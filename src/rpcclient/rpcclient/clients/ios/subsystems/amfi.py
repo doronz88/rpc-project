@@ -1,6 +1,10 @@
 import logging
+from typing import TYPE_CHECKING
 
 from rpcclient.exceptions import RpcSetDeveloperModeError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +12,7 @@ logger = logging.getLogger(__name__)
 class Amfi:
     """AMFI utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
         self._client.load_framework("AppleMobileFileIntegrity")
 

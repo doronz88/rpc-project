@@ -1,15 +1,18 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import cached_property
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import RpcClientException
 
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
+
 
 class Duet:
-    def __init__(self, client) -> None:
+    def __init__(self, client: "DarwinClient") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
@@ -98,7 +101,7 @@ class DKEvent:
 class KnowledgeStoreContext(ABC, Allocated):
     """Abstract context manager that exposes helper queries for `_DKKnowledgeStore`."""
 
-    def __init__(self, client, duet: Duet) -> None:
+    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
         """Collect available system event streams and store the *rpcclient* handle.
 
         :param rpcclient.darwin.client.DarwinClient client:
@@ -186,7 +189,7 @@ class KnowledgeStoreContext(ABC, Allocated):
 class KnowledgeStoreDup(KnowledgeStoreContext):
     """Copy the on device knowledge store to a temp directory and open it read only."""
 
-    def __init__(self, client, duet: Duet) -> None:
+    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
         """Create the temp directory, copy knowledge store files inside and init knowledge store objects.
 
         :param rpcclient.darwin.client.DarwinClient client:
@@ -226,7 +229,7 @@ class KnowledgeStoreDup(KnowledgeStoreContext):
 class KnowledgeStoreXPC(KnowledgeStoreContext):
     """Connect directly to the live knowledge store via XPC."""
 
-    def __init__(self, client, duet: Duet) -> None:
+    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
         """connect to the XPC knowledge store interface on the device.
 
         :param rpcclient.darwin.client.DarwinClient client:

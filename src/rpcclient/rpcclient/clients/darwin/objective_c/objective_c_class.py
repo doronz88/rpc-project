@@ -1,7 +1,7 @@
 from collections import namedtuple
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
@@ -11,6 +11,9 @@ from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import GettingObjectiveCClassError
 
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
+
 Ivar = namedtuple("Ivar", "name type_ offset")
 
 
@@ -19,7 +22,7 @@ class Class:
     Wrapper for ObjectiveC Class object.
     """
 
-    def __init__(self, client, class_object=0, class_data: Optional[dict] = None, lazy=False):
+    def __init__(self, client: "DarwinClient", class_object=0, class_data: Optional[dict] = None, lazy=False):
         """
         :param rpcclient.darwin.client.DarwinClient client: Darwin client.
         :param rpcclient.darwin.objective_c_symbol.Symbol class_object:
@@ -39,7 +42,7 @@ class Class:
                 self._load_class_data(class_data)
 
     @staticmethod
-    def from_class_name(client, class_name: str):
+    def from_class_name(client: "DarwinClient", class_name: str):
         """
         Create ObjectiveC Class from given class name.
         :param rpcclient.darwin.client.DarwinClient client: Darwin client.

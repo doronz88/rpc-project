@@ -1,14 +1,17 @@
 import time
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from rpcclient.clients.darwin.consts import kCGHIDEventTap, kCGNullWindowID, kCGWindowListOptionAll
 from rpcclient.exceptions import BadReturnValueError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class CoreGraphics:
     """Manage Core Graphics events."""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
 
     @property

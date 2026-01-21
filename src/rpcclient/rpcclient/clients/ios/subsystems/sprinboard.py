@@ -1,12 +1,16 @@
 from collections import namedtuple
+from typing import TYPE_CHECKING
 
 from rpcclient.exceptions import RpcFailedLaunchingAppError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.ios.client import IosClient
 
 ScreenLockStatus = namedtuple("ScreenLockStatus", ["lock", "passcode"])
 
 
 class SpringBoard:
-    def __init__(self, client):
+    def __init__(self, client: "IosClient"):
         self._client = client
 
     def get_spring_board_server_port(self) -> int:

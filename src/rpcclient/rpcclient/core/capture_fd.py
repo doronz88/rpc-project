@@ -1,8 +1,11 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.structs import POLLIN, pollfd
 from rpcclient.core.structs.consts import AF_UNIX, SOCK_STREAM
 from rpcclient.core.subsystems.network import Socket
+
+if TYPE_CHECKING:
+    from rpcclient.core.client import CoreClient
 
 FD_SIZE = 4
 READ_SIZE = 0x10000
@@ -13,7 +16,7 @@ class CaptureFD:
     Context manager, capturing output to a given `fd`. Read from it using the `read()` method.
     """
 
-    def __init__(self, client, fd: int, sock_buf_size: Optional[int] = None) -> None:
+    def __init__(self, client: "CoreClient", fd: int, sock_buf_size: Optional[int] = None) -> None:
         """
         sock_buf_size is required for captures above 6KB, as any write above this value would block until a read is performed.
 

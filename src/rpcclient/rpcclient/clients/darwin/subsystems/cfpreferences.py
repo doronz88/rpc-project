@@ -1,7 +1,11 @@
 import typing
 from contextlib import suppress
+from typing import TYPE_CHECKING
 
 from rpcclient.exceptions import BadReturnValueError, NoSuchPreferenceError, RpcClientException
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 kCFPreferencesCurrentUser = "kCFPreferencesCurrentUser"
 kCFPreferencesAnyUser = "kCFPreferencesAnyUser"
@@ -16,7 +20,7 @@ class CFPreferences:
     https://developer.apple.com/documentation/corefoundation/preferences_utilities?language=objc
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

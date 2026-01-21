@@ -1,10 +1,14 @@
 from collections import UserDict
+from typing import TYPE_CHECKING
 
 import IPython
 from pygments import formatters, highlight, lexers
 
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import RpcClientException
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 SHELL_USAGE = """
 # Welcome to SCPreference plist interactive editor!
@@ -27,7 +31,7 @@ d.commit()
 
 
 class SCPreference(Allocated):
-    def __init__(self, client, preferences_id: str, ref):
+    def __init__(self, client: "DarwinClient", preferences_id: str, ref):
         super().__init__()
         self._client = client
         self._ref = ref
@@ -134,7 +138,7 @@ class SCPreferences:
     https://developer.apple.com/documentation/systemconfiguration/scpreferences?language=objc
     """
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

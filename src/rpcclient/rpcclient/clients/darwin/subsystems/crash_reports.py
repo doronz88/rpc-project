@@ -1,12 +1,16 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pycrashreport.crash_report import CrashReportBase, get_crash_report_from_buf
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class CrashReports:
     """ " manage crash reports"""
 
-    def __init__(self, client, crash_reports_dir):
+    def __init__(self, client: "DarwinClient", crash_reports_dir):
         self._client = client
         self._crash_reports_dir = crash_reports_dir
 

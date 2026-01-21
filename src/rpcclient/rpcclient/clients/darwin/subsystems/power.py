@@ -1,14 +1,17 @@
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rpcclient.clients.darwin.consts import IOPMUserActiveType
 from rpcclient.exceptions import BadReturnValueError
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import DarwinClient
 
 logger = logging.getLogger(__name__)
 
 
 class PowerAssertion:
-    def __init__(self, client, identifier: int):
+    def __init__(self, client: "DarwinClient", identifier: int):
         self._client = client
         self.id = identifier
 
@@ -22,7 +25,7 @@ class PowerAssertion:
 class Power:
     """Power utils"""
 
-    def __init__(self, client):
+    def __init__(self, client: "DarwinClient"):
         self._client = client
 
     def declare_user_activity(self, name: str, type_: IOPMUserActiveType) -> PowerAssertion:
