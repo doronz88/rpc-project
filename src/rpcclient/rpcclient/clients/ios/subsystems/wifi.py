@@ -2,6 +2,7 @@ import ctypes
 import logging
 from typing import TYPE_CHECKING, Optional
 
+from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
@@ -13,27 +14,30 @@ logger = logging.getLogger(__name__)
 
 
 class WifiSavedNetwork:
-    def __init__(self, client: "IosClient", wifi_manager: DarwinSymbol, network: DarwinSymbol):
+    def __init__(self, client: "IosClient", wifi_manager: DarwinSymbol, network: DarwinSymbol) -> None:
         self._client = client
         self._wifi_manager = wifi_manager
         self._network = network
 
     @property
     def ssid(self) -> bytes:
+        """Return the network SSID as raw bytes."""
         return self.get_property("SSID")
 
     @property
     def bssid(self) -> str:
+        """Return the network BSSID as a string."""
         return self.get_property("BSSID")
 
-    def get_property(self, name: str):
+    def get_property(self, name: str) -> CfSerializable:
+        """Return a WiFiNetwork property by name from the underlying CF object."""
         return self._client.symbols.WiFiNetworkGetProperty(self._network, self._client.cf(name)).py()
 
-    def forget(self):
-        """forget Wi-Fi network"""
+    def forget(self) -> None:
+        """Remove this network from the saved networks list."""
         self._client.symbols.WiFiManagerClientRemoveNetwork(self._wifi_manager, self._network)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         result = f"<{self.__class__.__name__} "
         result += f"SSID:{self.ssid} "
         result += f"BSSID:{self.bssid}"
@@ -42,29 +46,33 @@ class WifiSavedNetwork:
 
 
 class WifiScannedNetwork:
-    def __init__(self, client: "IosClient", interface: DarwinSymbol, network: dict):
+    def __init__(self, client: "IosClient", interface: DarwinSymbol, network: dict) -> None:
         self._client = client
         self._interface = interface
         self.network = network
 
     @property
     def ssid(self) -> bytes:
+        """Return the scanned network SSID as raw bytes."""
         return self.network.get("SSID")
 
     @property
     def bssid(self) -> str:
+        """Return the scanned network BSSID as a string."""
         return self.network.get("BSSID")
 
     @property
     def rssi(self) -> int:
+        """Return the received signal strength indicator (RSSI)."""
         return ctypes.c_int64(self.network["RSSI"]).value
 
     @property
     def channel(self) -> int:
+        """Return the Wi-Fi channel number."""
         return self.network["CHANNEL"]
 
-    def connect(self, password: Optional[str] = None):
-        """connect to Wi-Fi network"""
+    def connect(self, password: Optional[str] = None) -> None:
+        """Associate to this network, optionally providing a password."""
         result = self._client.symbols.Apple80211Associate(
             self._interface, self._client.cf(self.network), self._client.cf(password) if password else 0
         )
@@ -72,11 +80,12 @@ class WifiScannedNetwork:
         if result:
             raise BadReturnValueError(f"Apple80211Associate() failed with: {result}")
 
-    def disconnect(self):
+    def disconnect(self) -> None:
+        """Disassociate from the current network."""
         if self._client.symbols.Apple80211Disassociate(self._interface):
             raise BadReturnValueError("Apple80211Disassociate() failed")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         result = f"<{self.__class__.__name__} "
         result += f"SSID:{self.ssid} "
         result += f"BSSID:{self.bssid} "
@@ -87,14 +96,13 @@ class WifiScannedNetwork:
 
 
 class WifiInterface(Allocated):
-    def __init__(self, client: "IosClient", interface, device):
+    def __init__(self, client: "IosClient", interface: DarwinSymbol) -> None:
         super().__init__()
         self._client = client
         self._interface = interface
-        self._device = device
 
     def scan(self, options: Optional[dict] = None) -> list[WifiScannedNetwork]:
-        """perform Wi-Fi scan"""
+        """Scan for nearby networks and return a list of WifiScannedNetwork."""
 
         if options is None:
             options = {}
@@ -116,18 +124,18 @@ class WifiInterface(Allocated):
 
         return result
 
-    def disconnect(self):
-        """disconnect from current Wi-Fi network"""
+    def disconnect(self) -> None:
+        """Disconnect from the currently associated Wi-Fi network."""
         self._client.symbols.Apple80211Disassociate(self._interface)
 
-    def _deallocate(self):
+    def _deallocate(self) -> None:
         self._client.symbols.Apple80211Close(self._interface)
 
 
 class IosWifi:
-    """network utils"""
+    """iOS Wi-Fi utilities backed by WiFiKit and Apple80211."""
 
-    def __init__(self, client: "IosClient"):
+    def __init__(self, client: "IosClient") -> None:
         self._client = client
         self._client.load_framework("WiFiKit")
 
@@ -137,6 +145,7 @@ class IosWifi:
 
     @property
     def saved_networks(self) -> list[WifiSavedNetwork]:
+        """Return saved Wi-Fi networks known to the device."""
         result = []
 
         network_list = self._client.symbols.WiFiManagerClientCopyNetworks(self._wifi_manager).py()
@@ -150,7 +159,7 @@ class IosWifi:
 
     @property
     def interfaces(self) -> list[str]:
-        """get a list of all available wifi interfaces"""
+        """Return a list of available Wi-Fi interface names."""
         with self._client.safe_malloc(8) as p_interface:
             if self._client.symbols.Apple80211Open(p_interface):
                 self._client.raise_errno_exception("Apple80211Open() failed")
@@ -161,19 +170,22 @@ class IosWifi:
 
                 return p_interface_names[0].py()
 
-    def turn_on(self):
+    def turn_on(self) -> None:
+        """Enable Wi-Fi on the device."""
         self._set(True)
 
-    def turn_off(self):
+    def turn_off(self) -> None:
+        """Disable Wi-Fi on the device."""
         self._set(False)
 
     def is_on(self) -> bool:
+        """Return True if Wi-Fi is enabled."""
         return bool(
             self._client.symbols.WiFiManagerClientCopyProperty(self._wifi_manager, self._client.cf("AllowEnable")).py()
         )
 
     def get_interface(self, interface_name: Optional[str] = None) -> WifiInterface:
-        """get a specific wifi interface object for remote controlling"""
+        """Return a bound interface handle for scanning and associating."""
         with self._client.safe_malloc(8) as p_handle:
             if self._client.symbols.Apple80211Open(p_handle):
                 self._client.raise_errno_exception("Apple80211Open() failed")
@@ -190,13 +202,9 @@ class IosWifi:
         if self._client.symbols.Apple80211BindToInterface(handle, self._client.cf(interface_name)):
             self._client.raise_errno_exception("Apple80211BindToInterface failed")
 
-        device = self._client.symbols.WiFiManagerClientGetDevice(self._wifi_manager, self._client.cf(interface_name))
-        if not device:
-            self._client.raise_errno_exception("WiFiManagerClientGetDevice failed")
+        return WifiInterface(self._client, handle)
 
-        return WifiInterface(self._client, handle, device)
-
-    def _set(self, is_on: bool):
+    def _set(self, is_on: bool) -> None:
         if not self._client.symbols.WiFiManagerClientSetProperty(
             self._wifi_manager, self._client.cf("AllowEnable"), self._client.cf(is_on)
         ):

@@ -1,7 +1,8 @@
 import dataclasses
 import time
+from collections.abc import Iterator
 from enum import IntEnum, IntFlag
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.exceptions import (
@@ -118,13 +119,14 @@ class CGRect:
 
 class AXElement(DarwinSymbol):
     """
-    Wrapper to device's AXElement objective-c object.
-    This object was written after reversing XADInspectorManager different methods.
+    Wrapper around the device AXElement Objective-C object.
+
+    Built from reversed XADInspectorManager methods.
     """
 
     @property
-    def first_element(self):
-        """get first element in hierarchy"""
+    def first_element(self) -> "AXElement":
+        """Return the first element in the accessibility hierarchy."""
         result = self._element_for_attribute(3000)
         if not result:
             raise FirstElementNotFoundError("failed to get first element in hierarchy")
@@ -134,8 +136,8 @@ class AXElement(DarwinSymbol):
         return result
 
     @property
-    def last_element(self):
-        """get last element in hierarchy"""
+    def last_element(self) -> "AXElement":
+        """Return the last element in the accessibility hierarchy."""
         result = self._element_for_attribute(3016)
         if not result:
             raise LastElementNotFoundError("failed to get last element in hierarchy")
@@ -146,61 +148,63 @@ class AXElement(DarwinSymbol):
 
     @property
     def identifier(self) -> str:
-        """get element's identifier"""
+        """Return the element identifier."""
         return self.objc_call("identifier").py(encoding="utf8")
 
     @property
     def url(self) -> str:
-        """get element's url"""
+        """Return the element URL."""
         return self.objc_call("url").py(encoding="utf8")
 
     @property
     def path(self) -> DarwinSymbol:
-        """get element's path"""
+        """Return the element path object."""
         return self.objc_call("path")
 
     @property
     def frame(self) -> CGRect:
-        """get element's frame"""
+        """Return the element frame as a CGRect."""
         result = self.objc_call("frame", return_raw=True)
         return CGRect(origin=CGPoint(x=result.d0, y=result.d1), size=CGSize(width=result.d2, height=result.d3))
 
     @property
     def label(self) -> Optional[str]:
-        """get element's label (actual displayed text)"""
+        """Return the visible label text."""
         return self.objc_call("label").py(encoding="utf8")
 
     @property
     def value(self) -> str:
-        """get element's value (actual set value)"""
+        """Return the element value."""
         return self.objc_call("value").py(encoding="utf8")
 
     @property
     def bundle_identifier(self) -> str:
-        """get element's bundle identifier"""
+        """Return the owning app bundle identifier."""
         return self.objc_call("bundleId").py(encoding="utf8")
 
     @property
     def pid(self) -> int:
-        """get element's pid"""
+        """Return the owning process ID."""
         return self.objc_call("pid").c_uint16
 
     @property
     def process_name(self) -> str:
-        """get element's process name"""
+        """Return the owning process name."""
         return self.objc_call("processName").py()
 
     @property
     def screen_locked(self) -> bool:
-        """get screen lock state"""
+        """Return True if the screen is locked."""
         return self.objc_call("isScreenLocked") == 1
 
     @property
     def is_accessibility_opaque_element_provider(self) -> bool:
+        """Return True if the element provides its own accessibility hierarchy."""
         return self.objc_call("isAccessibilityOpaqueElementProvider") != 0
 
     @property
-    def parent(self):
+    def parent(self) -> Optional["AXElement"]:
+        """Return the parent element if available."""
         tmp = self._element_for_attribute(2066)
         if tmp:
             return tmp
@@ -213,17 +217,17 @@ class AXElement(DarwinSymbol):
 
     @property
     def ui_element(self) -> DarwinSymbol:
-        """get encapsulated AXUIElement"""
+        """Return the underlying AXUIElement."""
         return self.objc_call("uiElement")
 
     @property
     def traits(self) -> AXTraits:
-        """get current element traits"""
+        """Return the element traits as AXTraits."""
         return AXTraits(self.objc_call("traits").c_uint64)
 
     @property
     def elements(self) -> list["AXElement"]:
-        """get all current displayed elements"""
+        """Return the list of currently displayed elements."""
         result = []
         elements = self.objc_call("explorerElements")
         for i in range(elements.objc_call("count")):
@@ -231,51 +235,51 @@ class AXElement(DarwinSymbol):
         return result
 
     def insert_text(self, text: str) -> None:
-        """insert text into currently editable element"""
+        """Insert text into the focused editable element."""
         self.objc_call("insertText:", self._client.cf(text))
 
     def delete_text(self) -> None:
-        """delete a character from currently editable element"""
+        """Delete a character from the focused editable element."""
         self.objc_call("deleteText")
 
     def highlight(self) -> None:
-        """draw a frame around the element (replace the old one if existing)"""
+        """Draw a frame around the element, replacing any existing frame."""
         frame = self.frame
         self._client.accessibility.draw_frame(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)
 
     def scroll_to_visible(self) -> None:
-        """scroll until element becomes fully visible"""
+        """Scroll until the element becomes fully visible."""
         self.objc_call("scrollToVisible")
 
     def press(self) -> None:
-        """press element"""
+        """Activate/press the element."""
         self.objc_call("press")
 
     def long_press(self) -> None:
-        """long press element"""
+        """Long-press the element."""
         self.objc_call("longPress")
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["AXElement"]:
         current = self.first_element
         while current:
             yield current
             current = current.next()
 
-    def _element_for_attribute(self, axattribute: int, parameter=None):
+    def _element_for_attribute(self, axattribute: int, parameter: Optional[Any] = None) -> Optional["AXElement"]:
         if parameter is None:
             result = self.objc_call("elementForAttribute:", axattribute)
         else:
             result = self.objc_call("elementForAttribute:parameter:", axattribute, parameter)
         return AXElement.create(result, self._client)
 
-    def _next_opaque(self, direction=AXDirection.Next):
+    def _next_opaque(self, direction: AXDirection = AXDirection.Next) -> Optional["AXElement"]:
         element = self
 
         if not element.is_accessibility_opaque_element_provider:
             element = self.parent
 
         if not element:
-            return
+            return None
 
         element = element._element_for_attribute(
             95225,
@@ -308,7 +312,7 @@ class AXElement(DarwinSymbol):
             result.append(AXElement.create(elements.objc_call("objectAtIndex:", i), self._client))
         return result
 
-    def _set_assistive_focus(self, focused: bool):
+    def _set_assistive_focus(self, focused: bool) -> None:
         self.ui_element.objc_call(
             "setAXAttribute:withObject:synchronous:",
             2018,
@@ -319,9 +323,9 @@ class AXElement(DarwinSymbol):
         if parent:
             parent._set_assistive_focus(focused)
 
-    def next(self, direction=AXDirection.Next, cyclic=False):
+    def next(self, direction: AXDirection = AXDirection.Next, cyclic: bool = False) -> Optional["AXElement"]:
         """
-        Will get and scroll to the next element in the current view.
+        Return and scroll to the next element in the current view.
 
         This method was created by reversing [XADInspectorManager _nextElementNavigationInDirection:forElement:]
         so we don't really know much about the used consts.
@@ -364,11 +368,11 @@ class AXElement(DarwinSymbol):
 
         return None
 
-    def compare_label(self, label: str, auto_scroll=True, draw_frame=True) -> bool:
+    def compare_label(self, label: str, auto_scroll: bool = True, draw_frame: bool = True) -> bool:
         """
-        compares given label with the self's
+        Compare a label against this element's label.
 
-        will auto_scroll into current label if required
+        Optionally, scroll to the element and draw a highlight frame.
         """
         if auto_scroll:
             self.scroll_to_visible()
@@ -387,12 +391,10 @@ class AXElement(DarwinSymbol):
 
 
 class Accessibility:
-    """Accessibility utils"""
+    """Accessibility utilities and UI element discovery."""
 
-    def __init__(self, client: "IosClient"):
-        """
-        :param rpcclient.darwin.client.DarwinClient client:
-        """
+    def __init__(self, client: "IosClient") -> None:
+        """Initialize accessibility frameworks and UI client."""
         self._client = client
         self._client.load_framework("AXRuntime")
         self._client.load_framework("AccessibilityUI")
@@ -408,6 +410,7 @@ class Accessibility:
 
     @property
     def primary_app(self) -> AXElement:
+        """Return the primary app AXElement."""
         if not self.enabled:
             raise RpcAccessibilityTurnedOffError()
         primary_app = self._client.symbols.objc_getClass("AXElement").objc_call("primaryApp")
@@ -417,30 +420,41 @@ class Accessibility:
 
     @property
     def enabled(self) -> bool:
+        """Return True if accessibility automation is enabled."""
         return bool(
             self._client.symbols._AXSApplicationAccessibilityEnabled() or self._client.symbols._AXSAutomationEnabled()
         )
 
     @enabled.setter
-    def enabled(self, value: bool):
+    def enabled(self, value: bool) -> None:
+        """Enable or disable accessibility automation."""
         self._client.symbols._AXSSetAutomationEnabled(int(value))
 
-    def hide_frame(self):
+    def hide_frame(self) -> None:
+        """Hide the accessibility highlight frame."""
         self.draw_frame(0, 0, 0, 0)
 
-    def set_frame_style(self, value: int):
+    def set_frame_style(self, value: int) -> None:
+        """Set the highlight frame style."""
         self._ui_client.objc_call(
             "sendSynchronousMessage:withIdentifier:error:", self._client.cf({"frameStyle": value}), 2, 0
         )
 
-    def draw_frame(self, x: float, y: float, width: float, height: float):
+    def draw_frame(self, x: float, y: float, width: float, height: float) -> None:
+        """Draw a highlight frame at the given coordinates."""
         rect = {"frame": f" {{{{{x},{y}}}, {{{width},{height}}}}}"}
         self._ui_client.objc_call("sendSynchronousMessage:withIdentifier:error:", self._client.cf(rect), 1, 0)
 
     def wait_for_element_by_label(
-        self, label: str, auto_scroll=True, draw_frame=True, timeout=5, direction=AXDirection.Next, displayed_only=False
+        self,
+        label: str,
+        auto_scroll: bool = True,
+        draw_frame: bool = True,
+        timeout: float = 5,
+        direction: AXDirection = AXDirection.Next,
+        displayed_only: bool = False,
     ) -> AXElement:
-        """busy-wait for an element to become available"""
+        """Wait for an element with the given label to appear."""
         start = time.time()
         while time.time() - start < timeout:
             try:
@@ -460,9 +474,14 @@ class Accessibility:
         )
 
     def _get_element_by_label(
-        self, label: str, auto_scroll=True, draw_frame=True, direction=AXDirection.Next, displayed_only=False
+        self,
+        label: str,
+        auto_scroll: bool = True,
+        draw_frame: bool = True,
+        direction: AXDirection = AXDirection.Next,
+        displayed_only: bool = False,
     ) -> AXElement:
-        """get an AXElement by given label"""
+        """Return an AXElement with the given label."""
         if direction == AXDirection.Next:
             element = self.primary_app.first_element
             elements_list = self.primary_app.elements
@@ -496,20 +515,21 @@ class Accessibility:
     def press_elements_by_labels(
         self,
         labels: list[str],
-        auto_scroll=True,
-        draw_frame=True,
-        timeout=5,
+        auto_scroll: bool = True,
+        draw_frame: bool = True,
+        timeout: float = 5,
         direction: AXDirection = AXDirection.Next,
-        displayed_only=False,
-    ):
+        displayed_only: bool = False,
+    ) -> None:
         """
-        press a sequence of labels
-        :param labels: label list to press
-        :param auto_scroll: scroll over the chosen element
-        :param draw_frame: draw a frame over the current element
-        :param timeout: timeout to wait for each element to appear
-        :param direction: the direction of search
-        :param displayed_only: search just in the displayed elements
+        Press a sequence of labels in order.
+
+        :param labels: Label list to press.
+        :param auto_scroll: Scroll to each chosen element.
+        :param draw_frame: Draw a frame over the current element.
+        :param timeout: Timeout to wait for each element to appear.
+        :param direction: Direction to search.
+        :param displayed_only: Search only displayed elements.
         """
         for label in labels:
             self.wait_for_element_by_label(
@@ -525,4 +545,5 @@ class Accessibility:
                 self.hide_frame()
 
     def axelement(self, symbol: DarwinSymbol) -> AXElement:
+        """Wrap a DarwinSymbol as an AXElement."""
         return AXElement.create(symbol, self._client)

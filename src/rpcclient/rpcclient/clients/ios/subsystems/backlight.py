@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 
 class Backlight:
-    def __init__(self, client: "IosClient"):
+    """Display brightness controls."""
+
+    def __init__(self, client: "IosClient") -> None:
         self._client = client
 
         BrightnessSystemClient = self._client.symbols.objc_getClass("BrightnessSystemClient")
@@ -18,14 +20,14 @@ class Backlight:
 
     @property
     def brightness(self) -> float:
-        """get brightness value in range: 0.0 - 1.0"""
+        """Return the display brightness in the range 0.0-1.0."""
         return self._brightness.objc_call("copyPropertyForKey:", self._client.cf("DisplayBrightness")).py()[
             "Brightness"
         ]
 
     @brightness.setter
-    def brightness(self, value: float):
-        """set brightness in range: 0.0 - 1.0"""
+    def brightness(self, value: float) -> None:
+        """Set the display brightness in the range 0.0-1.0."""
         if not self._brightness.objc_call(
             "setProperty:forKey:", self._client.cf(value), self._client.cf("DisplayBrightness")
         ):

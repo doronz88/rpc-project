@@ -2,6 +2,7 @@ from typing import Optional
 
 from osstatus.cache import ErrorCode, get_possible_error_codes
 
+from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.core.symbol import Symbol
 from rpcclient.exceptions import UnrecognizedSelectorError
 
@@ -15,7 +16,7 @@ class DarwinSymbol(Symbol):
 
         return self._client.symbols.objc_msgSend(self, sel, *params, **kwargs)
 
-    def py(self, *args, **kwargs):
+    def py(self, *args, **kwargs) -> Optional[CfSerializable]:
         """get a python object from a core foundation one"""
         if self == 0:
             return None
