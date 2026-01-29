@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
+from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import RpcClientException
@@ -78,7 +79,7 @@ class DKEvent:
         return self.native.objc_call("stream").objc_call("name").py()
 
     @cached_property
-    def value(self) -> Any:
+    def value(self) -> CfSerializable:
         """Return the primary value associated with the event.
 
         :returns: Stream specific value type.

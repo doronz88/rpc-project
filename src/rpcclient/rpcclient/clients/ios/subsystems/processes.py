@@ -22,7 +22,9 @@ class IosProcesses(DarwinProcesses):
         stderr: Optional[str] = None,
     ) -> Process:
         """
-        launch process using BackBoardService
+        Launch an app via BackBoardServices with optional debug options.
+
+        BackBoardServices reference:
         https://github.com/swigger/debugserver-ios/blob/master/inc/BackBoardServices.framework/Headers/BackBoardServices.h
         """
         debug_options = {}

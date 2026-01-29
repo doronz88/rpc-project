@@ -10,13 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class Amfi:
-    """AMFI utils"""
+    """AMFI utilities (AppleMobileFileIntegrity)."""
 
-    def __init__(self, client: "IosClient"):
+    def __init__(self, client: "IosClient") -> None:
         self._client = client
         self._client.load_framework("AppleMobileFileIntegrity")
 
     def set_developer_mode_status(self, enabled: bool) -> None:
+        """Enable or disable Developer Mode via the AMFI XPC service."""
         cfreply = self._client.xpc.send_message_using_cf_serialization(
             "com.apple.amfi.xpc", {"action": int(not (enabled))}, False
         )["cfreply"]
@@ -26,5 +27,5 @@ class Amfi:
 
     @property
     def developer_mode_status(self) -> bool:
-        """get Developer Mode status"""
+        """Return True if Developer Mode is enabled."""
         return self._client.symbols.amfi_developer_mode_status()

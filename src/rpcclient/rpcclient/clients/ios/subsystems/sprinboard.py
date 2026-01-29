@@ -10,14 +10,17 @@ ScreenLockStatus = namedtuple("ScreenLockStatus", ["lock", "passcode"])
 
 
 class SpringBoard:
-    def __init__(self, client: "IosClient"):
+    """SpringBoardServices helpers."""
+
+    def __init__(self, client: "IosClient") -> None:
         self._client = client
 
     def get_spring_board_server_port(self) -> int:
+        """Return the SpringBoard server port."""
         return self._client.symbols.SBSSpringBoardServerPort()
 
     def launch_application(self, bundle_identifier: str) -> None:
-        """launch application using SpringBoardServices"""
+        """Launch an app via SpringBoardServices."""
         err = self._client.symbols.SBSLaunchApplicationWithIdentifier(self._client.cf(bundle_identifier), 0)
         if err != 0:
             raise RpcFailedLaunchingAppError(
@@ -26,7 +29,7 @@ class SpringBoard:
             )
 
     def get_screen_lock_status(self) -> ScreenLockStatus:
-        """get lockscreen and passcode status using SpringBoardServices"""
+        """Return lockscreen and passcode status via SpringBoardServices."""
         server_port = self.get_spring_board_server_port()
         with self._client.safe_malloc(8) as p_is_lock, self._client.safe_malloc(8) as p_is_passcode:
             p_is_lock[0] = 0
@@ -35,7 +38,7 @@ class SpringBoard:
             return ScreenLockStatus(p_is_lock[0] == 1, p_is_passcode[0] == 1)
 
     def open_sensitive_url_and_unlock(self, url: str, unlock: bool = True) -> None:
-        """open default application according to url scheme"""
+        """Open a URL with the system handler, optionally unlocking."""
         screen_lock_status = self.get_screen_lock_status()
         if not unlock and screen_lock_status.lock:
             if screen_lock_status.passcode:
