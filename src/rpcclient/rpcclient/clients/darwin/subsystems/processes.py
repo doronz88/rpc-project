@@ -938,7 +938,10 @@ class Process:
 
             address_range = line[i]
             i += 1
+            if not address_range.startswith("0x"):
+                continue
             start, end = address_range.split("-")
+
             start = int(start, 16)
             end = int(end, 16)
             vsize = None
