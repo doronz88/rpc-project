@@ -1,16 +1,23 @@
 from collections import namedtuple
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
 from objc_types_decoder.decode import decode as decode_type
 from objc_types_decoder.decode import decode_with_tail
 
-from rpcclient.core.client import CoreClient
+from rpcclient.clients.darwin._types import DarwinSymbolT, DarwinSymbolT_co
+
+
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import BaseDarwinClient
+
 
 Property = namedtuple("Property", "name attributes")
 PropertyAttributes = namedtuple("PropertyAttributes", "synthesize type_ list")
 
 
-def convert_encoded_property_attributes(encoded):
+def convert_encoded_property_attributes(encoded) -> PropertyAttributes:
     conversions = {
         "R": lambda x: "readonly",
         "C": lambda x: "copy",
@@ -37,9 +44,9 @@ def convert_encoded_property_attributes(encoded):
 
 
 @dataclass
-class Method:
+class Method(Generic[DarwinSymbolT_co]):
     name: str
-    client: CoreClient = field(compare=False)
+    client: "BaseDarwinClient[DarwinSymbolT_co]" = field(compare=False)
     address: int = field(compare=False)
     imp: int = field(compare=False)
     type_: str = field(compare=False)
@@ -48,7 +55,7 @@ class Method:
     args_types: list = field(compare=False)
 
     @staticmethod
-    def from_data(data: dict, client):
+    def from_data(data: dict, client: "BaseDarwinClient[DarwinSymbolT]") -> "Method[DarwinSymbolT]":
         """
         Create Method object from raw data.
         :param data: Data as loaded from get_objectivec_symbol_data.m.
@@ -65,22 +72,28 @@ class Method:
             args_types=list(map(decode_type, data["args_types"])),
         )
 
-    def set_implementation(self, new_imp: int):
-        self.client.symbols.method_setImplementation(self.address, new_imp)
+    def __zync_proxy__(self) -> DarwinSymbolT_co:
+        return self.client.null
+
+    @zyncio.zmethod
+    async def set_implementation(self, new_imp: int) -> None:
+        await self.client.symbols.method_setImplementation.z(self.address, new_imp)
         self.imp = self.client.symbol(new_imp)
 
-    def always_return(self, value: bool) -> None:
+    @zyncio.zmethod
+    async def always_return(self, value: bool) -> None:
         """
         Patch the method to always return the given value.
         """
         # Exported from rpcserver binary
-        ret_val = self.client.symbols.get_true if value else self.client.symbols.get_false
-        self.set_implementation(ret_val)
+        ret_val = await self.client.symbols["get_true" if value else "get_false"].resolve()
+        await self.set_implementation.z(ret_val)
 
-    def __str__(self):
+    def __str__(self) -> str:
         if ":" in self.name:
             args_names = self.name.split(":")
-            name = " ".join(["{}:({})".format(*arg) for arg in zip(args_names, self.args_types[2:])])
+            print(args_names, self.args_types[2:])
+            name = " ".join(["{}:({})".format(*arg) for arg in zip(args_names, self.args_types[2:], strict=False)])
         else:
             name = self.name
         prefix = "+" if self.is_class else "-"

@@ -1,31 +1,36 @@
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.core.structs.consts import SIGKILL
 from rpcclient.core.subsystems.network import Network
 
+
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 PINNING_RULED_DB = "/private/var/protected/trustd/pinningrules.sqlite3"
 SYSTEM_CONFIGURATION_PLIST = "/private/var/Managed Preferences/mobile/com.apple.SystemConfiguration.plist"
 
 
-class DarwinNetwork(Network):
-    """ " Network utils"""
+class DarwinNetwork(Network["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    """Network utils"""
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         super().__init__(client)
 
-    @property
-    def proxy_settings(self) -> dict:
+    @zyncio.zproperty
+    async def proxy_settings(self) -> dict:
         """Get proxy settings"""
-        return self._client.symbols.CFNetworkCopySystemProxySettings().py()
+        return await (await self._client.symbols.CFNetworkCopySystemProxySettings.z()).py.z(dict)
 
-    def set_http_proxy(self, ip: str, port: int) -> None:
+    @zyncio.zmethod
+    async def set_http_proxy(self, ip: str, port: int) -> None:
         """Set http proxy"""
-        with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
-            config.set(
+        async with await self._client.preferences.sc.open.z(SYSTEM_CONFIGURATION_PLIST) as config:
+            await config.set.z(
                 "Proxies",
                 {
                     "HTTPProxyType": 1,
@@ -38,17 +43,19 @@ class DarwinNetwork(Network):
                     "BypassAllowed": 0,
                 },
             )
-        self._client.processes.get_by_basename("configd").kill(SIGKILL)
+        await (await self._client.processes.get_by_basename.z("configd)")).kill.z(SIGKILL)
 
-    def remove_http_proxy(self) -> None:
+    @zyncio.zmethod
+    async def remove_http_proxy(self) -> None:
         """Remove http proxy settings"""
-        with self._client.preferences.sc.open(SYSTEM_CONFIGURATION_PLIST) as config:
-            config.remove("Proxies")
-        self._client.processes.get_by_basename("configd").kill(SIGKILL)
+        async with await self._client.preferences.sc.open.z(SYSTEM_CONFIGURATION_PLIST) as config:
+            await config.remove.z("Proxies")
+        await (await self._client.processes.get_by_basename.z("configd")).kill.z(SIGKILL)
 
-    def remove_certificate_pinning(self) -> None:
+    @zyncio.zmethod
+    async def remove_certificate_pinning(self) -> None:
         """Remove pinning rules from trustd"""
-        with self._client.fs.remote_file(PINNING_RULED_DB) as local_db_file:
+        async with self._client.fs.remote_file.z(PINNING_RULED_DB) as local_db_file:
             # truncate pinning rules
             conn = sqlite3.connect(local_db_file)
             cursor = conn.cursor()
@@ -57,25 +64,28 @@ class DarwinNetwork(Network):
             conn.close()
 
             # push new db
-            self._client.fs.push(local_db_file, PINNING_RULED_DB, force=True)
+            await self._client.fs.push.z(local_db_file, PINNING_RULED_DB, force=True)
 
         # restart trustd for changes to take affect
-        self.kill_trustd()
+        await self.kill_trustd.z()
 
-    def restore_certificate_pinning(self) -> None:
+    @zyncio.zmethod
+    async def restore_certificate_pinning(self) -> None:
         """Restore pinning rules from trustd"""
-        if self._client.fs.accessible(PINNING_RULED_DB):
-            self._client.fs.remove(PINNING_RULED_DB)
+        if await self._client.fs.accessible.z(PINNING_RULED_DB):
+            await self._client.fs.remove.z(PINNING_RULED_DB)
 
         # Upon startup trustd to reloads pinning rules from the last MobileAsset
-        self.kill_trustd()
+        await self.kill_trustd.z()
 
-    def kill_trustd(self) -> None:
+    @zyncio.zmethod
+    async def kill_trustd(self) -> None:
         """Kill trustd processes"""
-        for process in self._client.processes.list():
-            if process.basename == "trustd":
-                process.kill(SIGKILL)
+        for process in await self._client.processes.list.z():
+            if await type(process).basename(process) == "trustd":
+                await process.kill.z(SIGKILL)
 
-    def flush_dns(self) -> None:
+    @zyncio.zmethod
+    async def flush_dns(self) -> None:
         """Flush DNS cache"""
-        self._client.processes.get_by_basename("mDNSResponder").kill(SIGKILL)
+        await (await self._client.processes.get_by_basename.z("mDNSResponder")).kill.z(SIGKILL)

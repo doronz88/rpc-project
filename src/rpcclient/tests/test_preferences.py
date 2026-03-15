@@ -1,9 +1,12 @@
 import plistlib
+from collections.abc import Generator
 from contextlib import suppress
 
 import pytest
 
+from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.exceptions import NoSuchPreferenceError
+
 
 pytestmark = pytest.mark.darwin
 DOMAIN = "rpcserver"
@@ -12,10 +15,7 @@ PLIST_PATH = f"/Library/Preferences/{DOMAIN}.plist"
 
 
 @pytest.fixture()
-def tmp_preference(client):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def tmp_preference(client: DarwinClient) -> Generator[None]:
     client.preferences.cf.set_dict({"key1": "value1"}, DOMAIN, USERNAME)
     client.preferences.cf.sync(DOMAIN, USERNAME)
     client.fs.write_file(PLIST_PATH, plistlib.dumps({"key1": "value1"}))
@@ -27,64 +27,40 @@ def tmp_preference(client):
         client.preferences.cf.sync(DOMAIN, USERNAME)
 
 
-def test_cf_get_keys(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_get_keys(client: DarwinClient, tmp_preference: None) -> None:
     assert "key1" in client.preferences.cf.get_keys(DOMAIN, USERNAME)
 
 
-def test_cf_get_keys_invalid_preference(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_get_keys_invalid_preference(client: DarwinClient, tmp_preference: None) -> None:
     with pytest.raises(NoSuchPreferenceError):
         client.preferences.cf.get_keys("com.apple.invalid_preference_for_sure", USERNAME)
 
 
-def test_cf_get_value(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_get_value(client: DarwinClient, tmp_preference: None) -> None:
     assert client.preferences.cf.get_value("key1", DOMAIN, USERNAME) == "value1"
 
 
-def test_cf_get_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_get_dict(client: DarwinClient, tmp_preference: None) -> None:
     assert client.preferences.cf.get_dict(DOMAIN, USERNAME)["key1"] == "value1"
 
 
-def test_cf_set(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_set(client: DarwinClient, tmp_preference: None) -> None:
     client.preferences.cf.set("key2", {"hey": "you"}, DOMAIN, USERNAME)
     assert client.preferences.cf.get_value("key2", DOMAIN, USERNAME) == {"hey": "you"}
 
 
-def test_cf_remove(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_remove(client: DarwinClient, tmp_preference: None) -> None:
     client.preferences.cf.remove("key1", DOMAIN, USERNAME)
     assert client.preferences.cf.get_value("key1", DOMAIN, USERNAME) is None
 
 
-def test_cf_set_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_set_dict(client: DarwinClient, tmp_preference: None) -> None:
     client.preferences.cf.get_value("key1", DOMAIN, USERNAME)
     client.preferences.cf.set_dict({"b": 5}, DOMAIN, USERNAME)
     assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == {"b": 5}
 
 
-def test_cf_update_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_update_dict(client: DarwinClient, tmp_preference: None) -> None:
     update_contents = {"a": 5}
     expected_dict = client.preferences.cf.get_dict(DOMAIN, USERNAME)
     expected_dict.update(update_contents)
@@ -92,62 +68,41 @@ def test_cf_update_dict(client, tmp_preference):
     assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == expected_dict
 
 
-def test_cf_clear(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_cf_clear(client: DarwinClient, tmp_preference: None) -> None:
     client.preferences.cf.clear(DOMAIN, USERNAME)
     with pytest.raises(NoSuchPreferenceError):
         assert not client.preferences.cf.get_dict(DOMAIN, USERNAME)
 
 
-def test_sc_get_keys(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_get_keys(client: DarwinClient, tmp_preference: None) -> None:
     keys = client.preferences.sc.get_keys(PLIST_PATH)
     assert "key1" in keys
 
 
-def test_sc_get_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_get_dict(client: DarwinClient, tmp_preference: None) -> None:
     dict_ = client.preferences.sc.get_dict(PLIST_PATH)
     assert "key1" in dict_
 
 
-def test_sc_object_keys(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_keys(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         keys = pref.keys
     assert "key1" in keys
 
 
-def test_sc_object_set(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_set(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         pref.set("key2", "value2")
     assert client.preferences.sc.get_dict(PLIST_PATH)["key2"] == "value2"
 
 
-def test_sc_object_set_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_set_dict(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         pref.set_dict({"hey": "you"})
     assert client.preferences.sc.get_dict(PLIST_PATH) == {"hey": "you"}
 
 
-def test_sc_object_update_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_update_dict(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         pref.update_dict({"hey": "you"})
     dict_ = client.preferences.sc.get_dict(PLIST_PATH)
@@ -155,37 +110,25 @@ def test_sc_object_update_dict(client, tmp_preference):
     assert dict_["hey"] == "you"
 
 
-def test_sc_object_remove(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_remove(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         pref.remove("key1")
     assert "key1" not in client.preferences.sc.get_dict(PLIST_PATH)
 
 
-def test_sc_object_get(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_get(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         val = pref.get("key1")
     assert val == "value1"
 
 
-def test_sc_object_get_dict(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_get_dict(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         dict_ = pref.get_dict()
     assert dict_ == {"key1": "value1"}
 
 
-def test_sc_object_clear(client, tmp_preference):
-    """
-    :param rpcclient.darwin.client.DarwinClient client:
-    """
+def test_sc_object_clear(client: DarwinClient, tmp_preference: None) -> None:
     with client.preferences.sc.open(PLIST_PATH) as pref:
         pref.clear()
     assert not client.preferences.sc.get_dict(PLIST_PATH)

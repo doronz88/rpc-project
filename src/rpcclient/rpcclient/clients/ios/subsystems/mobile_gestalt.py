@@ -1,515 +1,524 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic
 
-from rpcclient.clients.darwin.common import CfSerializable
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.clients.darwin.common import CfSerializable, CfSerializableAny, CfSerializableT
+from rpcclient.core._types import ClientBound
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.ios.client import IosClient
+    from rpcclient.clients.ios.client import BaseIosClient
 
 
-class MobileGestalt:
+class MobileGestalt(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Thin wrapper around MobileGestalt MGCopyAnswer/MGSetAnswer keys."""
 
-    def __init__(self, client: "IosClient") -> None:
+    def __init__(self, client: "BaseIosClient[DarwinSymbolT_co]") -> None:
         self._client = client
 
     # Identifying Information
 
-    @property
-    def DiskUsage(self) -> CfSerializable:
-        return self.get_answer("DiskUsage")
+    @zyncio.zproperty
+    async def DiskUsage(self) -> CfSerializable:
+        return await self.get_answer.z("DiskUsage")
 
-    @property
-    def ModelNumber(self) -> CfSerializable:
-        return self.get_answer("ModelNumber")
+    @zyncio.zproperty
+    async def ModelNumber(self) -> CfSerializable:
+        return await self.get_answer.z("ModelNumber")
 
-    @property
-    def SIMTrayStatus(self) -> CfSerializable:
-        return self.get_answer("SIMTrayStatus")
+    @zyncio.zproperty
+    async def SIMTrayStatus(self) -> CfSerializable:
+        return await self.get_answer.z("SIMTrayStatus")
 
-    @property
-    def SerialNumber(self) -> CfSerializable:
-        return self.get_answer("SerialNumber")
+    @zyncio.zproperty
+    async def SerialNumber(self) -> CfSerializable:
+        return await self.get_answer.z("SerialNumber")
 
-    @property
-    def MLBSerialNumber(self) -> CfSerializable:
-        return self.get_answer("MLBSerialNumber")
+    @zyncio.zproperty
+    async def MLBSerialNumber(self) -> CfSerializable:
+        return await self.get_answer.z("MLBSerialNumber")
 
-    @property
-    def UniqueDeviceID(self) -> CfSerializable:
-        return self.get_answer("UniqueDeviceID")
+    @zyncio.zproperty
+    async def UniqueDeviceID(self) -> CfSerializable:
+        return await self.get_answer.z("UniqueDeviceID")
 
-    @property
-    def UniqueDeviceIDData(self) -> CfSerializable:
-        return self.get_answer("UniqueDeviceIDData")
+    @zyncio.zproperty
+    async def UniqueDeviceIDData(self) -> CfSerializable:
+        return await self.get_answer.z("UniqueDeviceIDData")
 
-    @property
-    def UniqueChipID(self) -> CfSerializable:
-        return self.get_answer("UniqueChipID")
+    @zyncio.zproperty
+    async def UniqueChipID(self) -> CfSerializable:
+        return await self.get_answer.z("UniqueChipID")
 
-    @property
-    def InverseDeviceID(self) -> CfSerializable:
-        return self.get_answer("InverseDeviceID")
+    @zyncio.zproperty
+    async def InverseDeviceID(self) -> CfSerializable:
+        return await self.get_answer.z("InverseDeviceID")
 
-    @property
-    def DiagData(self) -> CfSerializable:
-        return self.get_answer("DiagData")
+    @zyncio.zproperty
+    async def DiagData(self) -> CfSerializable:
+        return await self.get_answer.z("DiagData")
 
-    @property
-    def DieId(self) -> CfSerializable:
-        return self.get_answer("DieId")
+    @zyncio.zproperty
+    async def DieId(self) -> CfSerializable:
+        return await self.get_answer.z("DieId")
 
-    @property
-    def CPUArchitecture(self) -> CfSerializable:
-        return self.get_answer("CPUArchitecture")
+    @zyncio.zproperty
+    async def CPUArchitecture(self) -> CfSerializable:
+        return await self.get_answer.z("CPUArchitecture")
 
-    @property
-    def PartitionType(self) -> CfSerializable:
-        return self.get_answer("PartitionType")
+    @zyncio.zproperty
+    async def PartitionType(self) -> CfSerializable:
+        return await self.get_answer.z("PartitionType")
 
-    @property
-    def UserAssignedDeviceName(self) -> CfSerializable:
-        return self.get_answer("UserAssignedDeviceName")
+    @zyncio.zproperty
+    async def UserAssignedDeviceName(self) -> CfSerializable:
+        return await self.get_answer.z("UserAssignedDeviceName")
 
     # Bluetooth Information
 
-    @property
-    def BluetoothAddress(self) -> CfSerializable:
-        return self.get_answer("BluetoothAddress")
+    @zyncio.zproperty
+    async def BluetoothAddress(self) -> CfSerializable:
+        return await self.get_answer.z("BluetoothAddress")
 
     # Battery Information
 
-    @property
-    def RequiredBatteryLevelForSoftwareUpdate(self) -> CfSerializable:
-        return self.get_answer("RequiredBatteryLevelForSoftwareUpdate")
+    @zyncio.zproperty
+    async def RequiredBatteryLevelForSoftwareUpdate(self) -> CfSerializable:
+        return await self.get_answer.z("RequiredBatteryLevelForSoftwareUpdate")
 
-    @property
-    def BatteryIsFullyCharged(self) -> CfSerializable:
-        return self.get_answer("BatteryIsFullyCharged")
+    @zyncio.zproperty
+    async def BatteryIsFullyCharged(self) -> CfSerializable:
+        return await self.get_answer.z("BatteryIsFullyCharged")
 
-    @property
-    def BatteryIsCharging(self) -> CfSerializable:
-        return self.get_answer("BatteryIsCharging")
+    @zyncio.zproperty
+    async def BatteryIsCharging(self) -> CfSerializable:
+        return await self.get_answer.z("BatteryIsCharging")
 
-    @property
-    def BatteryCurrentCapacity(self) -> CfSerializable:
-        return self.get_answer("BatteryCurrentCapacity")
+    @zyncio.zproperty
+    async def BatteryCurrentCapacity(self) -> CfSerializable:
+        return await self.get_answer.z("BatteryCurrentCapacity")
 
-    @property
-    def ExternalPowerSourceConnected(self) -> CfSerializable:
-        return self.get_answer("ExternalPowerSourceConnected")
+    @zyncio.zproperty
+    async def ExternalPowerSourceConnected(self) -> CfSerializable:
+        return await self.get_answer.z("ExternalPowerSourceConnected")
 
     # Baseband Information
 
-    @property
-    def BasebandSerialNumber(self) -> CfSerializable:
-        return self.get_answer("BasebandSerialNumber")
+    @zyncio.zproperty
+    async def BasebandSerialNumber(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandSerialNumber")
 
-    @property
-    def BasebandCertId(self) -> CfSerializable:
-        return self.get_answer("BasebandCertId")
+    @zyncio.zproperty
+    async def BasebandCertId(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandCertId")
 
-    @property
-    def BasebandChipId(self) -> CfSerializable:
-        return self.get_answer("BasebandChipId")
+    @zyncio.zproperty
+    async def BasebandChipId(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandChipId")
 
-    @property
-    def BasebandFirmwareManifestData(self) -> CfSerializable:
-        return self.get_answer("BasebandFirmwareManifestData")
+    @zyncio.zproperty
+    async def BasebandFirmwareManifestData(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandFirmwareManifestData")
 
-    @property
-    def BasebandFirmwareVersion(self) -> CfSerializable:
-        return self.get_answer("BasebandFirmwareVersion")
+    @zyncio.zproperty
+    async def BasebandFirmwareVersion(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandFirmwareVersion")
 
-    @property
-    def BasebandKeyHashInformation(self) -> CfSerializable:
-        return self.get_answer("BasebandKeyHashInformation")
+    @zyncio.zproperty
+    async def BasebandKeyHashInformation(self) -> CfSerializable:
+        return await self.get_answer.z("BasebandKeyHashInformation")
 
     # Telephony Information
 
-    @property
-    def CarrierBundleInfoArray(self) -> CfSerializable:
-        return self.get_answer("CarrierBundleInfoArray")
+    @zyncio.zproperty
+    async def CarrierBundleInfoArray(self) -> CfSerializable:
+        return await self.get_answer.z("CarrierBundleInfoArray")
 
-    @property
-    def CarrierInstallCapability(self) -> CfSerializable:
-        return self.get_answer("CarrierInstallCapability")
+    @zyncio.zproperty
+    async def CarrierInstallCapability(self) -> CfSerializable:
+        return await self.get_answer.z("CarrierInstallCapability")
 
-    @property
-    def InternationalMobileEquipmentIdentity(self) -> CfSerializable:
-        return self.get_answer("InternationalMobileEquipmentIdentity")
+    @zyncio.zproperty
+    async def InternationalMobileEquipmentIdentity(self) -> CfSerializable:
+        return await self.get_answer.z("InternationalMobileEquipmentIdentity")
 
-    @property
-    def MobileSubscriberCountryCode(self) -> CfSerializable:
-        return self.get_answer("MobileSubscriberCountryCode")
+    @zyncio.zproperty
+    async def MobileSubscriberCountryCode(self) -> CfSerializable:
+        return await self.get_answer.z("MobileSubscriberCountryCode")
 
-    @property
-    def MobileSubscriberNetworkCode(self) -> CfSerializable:
-        return self.get_answer("MobileSubscriberNetworkCode")
+    @zyncio.zproperty
+    async def MobileSubscriberNetworkCode(self) -> CfSerializable:
+        return await self.get_answer.z("MobileSubscriberNetworkCode")
 
     # Device Information
 
-    @property
-    def ChipID(self) -> CfSerializable:
-        return self.get_answer("ChipID")
+    @zyncio.zproperty
+    async def ChipID(self) -> CfSerializable:
+        return await self.get_answer.z("ChipID")
 
-    @property
-    def ComputerName(self) -> CfSerializable:
-        return self.get_answer("ComputerName")
+    @zyncio.zproperty
+    async def ComputerName(self) -> CfSerializable:
+        return await self.get_answer.z("ComputerName")
 
-    @property
-    def DeviceVariant(self) -> CfSerializable:
-        return self.get_answer("DeviceVariant")
+    @zyncio.zproperty
+    async def DeviceVariant(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceVariant")
 
-    @property
-    def HWModelStr(self) -> CfSerializable:
-        return self.get_answer("HWModelStr")
+    @zyncio.zproperty
+    async def HWModelStr(self) -> CfSerializable:
+        return await self.get_answer.z("HWModelStr")
 
-    @property
-    def BoardId(self) -> CfSerializable:
-        return self.get_answer("BoardId")
+    @zyncio.zproperty
+    async def BoardId(self) -> CfSerializable:
+        return await self.get_answer.z("BoardId")
 
-    @property
-    def HardwarePlatform(self) -> CfSerializable:
-        return self.get_answer("HardwarePlatform")
+    @zyncio.zproperty
+    async def HardwarePlatform(self) -> CfSerializable:
+        return await self.get_answer.z("HardwarePlatform")
 
-    @property
-    def DeviceName(self) -> CfSerializable:
-        return self.get_answer("DeviceName")
+    @zyncio.zproperty
+    async def DeviceName(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceName")
 
-    @property
-    def DeviceColor(self) -> CfSerializable:
-        return self.get_answer("DeviceColor")
+    @zyncio.zproperty
+    async def DeviceColor(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceColor")
 
-    @property
-    def DeviceClassNumber(self) -> CfSerializable:
-        return self.get_answer("DeviceClassNumber")
+    @zyncio.zproperty
+    async def DeviceClassNumber(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceClassNumber")
 
-    @property
-    def DeviceClass(self) -> CfSerializable:
-        return self.get_answer("DeviceClass")
+    @zyncio.zproperty
+    async def DeviceClass(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceClass")
 
-    @property
-    def BuildVersion(self) -> CfSerializable:
-        return self.get_answer("BuildVersion")
+    @zyncio.zproperty
+    async def BuildVersion(self) -> CfSerializable:
+        return await self.get_answer.z("BuildVersion")
 
-    @property
-    def ProductName(self) -> CfSerializable:
-        return self.get_answer("ProductName")
+    @zyncio.zproperty
+    async def ProductName(self) -> CfSerializable:
+        return await self.get_answer.z("ProductName")
 
-    @property
-    def ProductType(self) -> CfSerializable:
-        return self.get_answer("ProductType")
+    @zyncio.zproperty
+    async def ProductType(self) -> CfSerializable:
+        return await self.get_answer.z("ProductType")
 
-    @property
-    def ProductVersion(self) -> CfSerializable:
-        return self.get_answer("ProductVersion")
+    @zyncio.zproperty
+    async def ProductVersion(self) -> CfSerializable:
+        return await self.get_answer.z("ProductVersion")
 
-    @property
-    def FirmwareNonce(self) -> CfSerializable:
-        return self.get_answer("FirmwareNonce")
+    @zyncio.zproperty
+    async def FirmwareNonce(self) -> CfSerializable:
+        return await self.get_answer.z("FirmwareNonce")
 
-    @property
-    def FirmwareVersion(self) -> CfSerializable:
-        return self.get_answer("FirmwareVersion")
+    @zyncio.zproperty
+    async def FirmwareVersion(self) -> CfSerializable:
+        return await self.get_answer.z("FirmwareVersion")
 
-    @property
-    def FirmwarePreflightInfo(self) -> CfSerializable:
-        return self.get_answer("FirmwarePreflightInfo")
+    @zyncio.zproperty
+    async def FirmwarePreflightInfo(self) -> CfSerializable:
+        return await self.get_answer.z("FirmwarePreflightInfo")
 
-    @property
-    def IntegratedCircuitCardIdentifier(self) -> CfSerializable:
-        return self.get_answer("IntegratedCircuitCardIdentifier")
+    @zyncio.zproperty
+    async def IntegratedCircuitCardIdentifier(self) -> CfSerializable:
+        return await self.get_answer.z("IntegratedCircuitCardIdentifier")
 
-    @property
-    def AirplaneMode(self) -> bool:
-        return self.get_answer("AirplaneMode")
+    @zyncio.zproperty
+    async def AirplaneMode(self) -> bool:
+        return await self.get_answer.z("AirplaneMode", bool)
 
-    @property
-    def AllowYouTube(self) -> CfSerializable:
-        return self.get_answer("AllowYouTube")
+    @zyncio.zproperty
+    async def AllowYouTube(self) -> CfSerializable:
+        return await self.get_answer.z("AllowYouTube")
 
-    @property
-    def AllowYouTubePlugin(self) -> CfSerializable:
-        return self.get_answer("AllowYouTubePlugin")
+    @zyncio.zproperty
+    async def AllowYouTubePlugin(self) -> CfSerializable:
+        return await self.get_answer.z("AllowYouTubePlugin")
 
-    @property
-    def MinimumSupportediTunesVersion(self) -> CfSerializable:
-        return self.get_answer("MinimumSupportediTunesVersion")
+    @zyncio.zproperty
+    async def MinimumSupportediTunesVersion(self) -> CfSerializable:
+        return await self.get_answer.z("MinimumSupportediTunesVersion")
 
-    @property
-    def ProximitySensorCalibration(self) -> CfSerializable:
-        return self.get_answer("ProximitySensorCalibration")
+    @zyncio.zproperty
+    async def ProximitySensorCalibration(self) -> CfSerializable:
+        return await self.get_answer.z("ProximitySensorCalibration")
 
-    @property
-    def RegionCode(self) -> CfSerializable:
-        return self.get_answer("RegionCode")
+    @zyncio.zproperty
+    async def RegionCode(self) -> CfSerializable:
+        return await self.get_answer.z("RegionCode")
 
-    @property
-    def RegionInfo(self) -> CfSerializable:
-        return self.get_answer("RegionInfo")
+    @zyncio.zproperty
+    async def RegionInfo(self) -> CfSerializable:
+        return await self.get_answer.z("RegionInfo")
 
-    @property
-    def RegulatoryIdentifiers(self) -> CfSerializable:
-        return self.get_answer("RegulatoryIdentifiers")
+    @zyncio.zproperty
+    async def RegulatoryIdentifiers(self) -> CfSerializable:
+        return await self.get_answer.z("RegulatoryIdentifiers")
 
-    @property
-    def SBAllowSensitiveUI(self) -> CfSerializable:
-        return self.get_answer("SBAllowSensitiveUI")
+    @zyncio.zproperty
+    async def SBAllowSensitiveUI(self) -> CfSerializable:
+        return await self.get_answer.z("SBAllowSensitiveUI")
 
-    @property
-    def SBCanForceDebuggingInfo(self) -> CfSerializable:
-        return self.get_answer("SBCanForceDebuggingInfo")
+    @zyncio.zproperty
+    async def SBCanForceDebuggingInfo(self) -> CfSerializable:
+        return await self.get_answer.z("SBCanForceDebuggingInfo")
 
-    @property
-    def SDIOManufacturerTuple(self) -> CfSerializable:
-        return self.get_answer("SDIOManufacturerTuple")
+    @zyncio.zproperty
+    async def SDIOManufacturerTuple(self) -> CfSerializable:
+        return await self.get_answer.z("SDIOManufacturerTuple")
 
-    @property
-    def SDIOProductInfo(self) -> CfSerializable:
-        return self.get_answer("SDIOProductInfo")
+    @zyncio.zproperty
+    async def SDIOProductInfo(self) -> CfSerializable:
+        return await self.get_answer.z("SDIOProductInfo")
 
-    @property
-    def ShouldHactivate(self) -> CfSerializable:
-        return self.get_answer("ShouldHactivate")
+    @zyncio.zproperty
+    async def ShouldHactivate(self) -> CfSerializable:
+        return await self.get_answer.z("ShouldHactivate")
 
-    @property
-    def SigningFuse(self) -> CfSerializable:
-        return self.get_answer("SigningFuse")
+    @zyncio.zproperty
+    async def SigningFuse(self) -> CfSerializable:
+        return await self.get_answer.z("SigningFuse")
 
-    @property
-    def SoftwareBehavior(self) -> CfSerializable:
-        return self.get_answer("SoftwareBehavior")
+    @zyncio.zproperty
+    async def SoftwareBehavior(self) -> CfSerializable:
+        return await self.get_answer.z("SoftwareBehavior")
 
-    @property
-    def SoftwareBundleVersion(self) -> CfSerializable:
-        return self.get_answer("SoftwareBundleVersion")
+    @zyncio.zproperty
+    async def SoftwareBundleVersion(self) -> CfSerializable:
+        return await self.get_answer.z("SoftwareBundleVersion")
 
-    @property
-    def SupportedDeviceFamilies(self) -> CfSerializable:
-        return self.get_answer("SupportedDeviceFamilies")
+    @zyncio.zproperty
+    async def SupportedDeviceFamilies(self) -> CfSerializable:
+        return await self.get_answer.z("SupportedDeviceFamilies")
 
-    @property
-    def SupportedKeyboards(self) -> CfSerializable:
-        return self.get_answer("SupportedKeyboards")
+    @zyncio.zproperty
+    async def SupportedKeyboards(self) -> CfSerializable:
+        return await self.get_answer.z("SupportedKeyboards")
 
-    @property
-    def TotalSystemAvailable(self) -> CfSerializable:
-        return self.get_answer("TotalSystemAvailable")
+    @zyncio.zproperty
+    async def TotalSystemAvailable(self) -> CfSerializable:
+        return await self.get_answer.z("TotalSystemAvailable")
 
     # Capability Information
 
-    @property
-    def AllDeviceCapabilities(self) -> CfSerializable:
-        return self.get_answer("AllDeviceCapabilities")
+    @zyncio.zproperty
+    async def AllDeviceCapabilities(self) -> CfSerializable:
+        return await self.get_answer.z("AllDeviceCapabilities")
 
-    @property
-    def AppleInternalInstallCapability(self) -> CfSerializable:
-        return self.get_answer("AppleInternalInstallCapability")
+    @zyncio.zproperty
+    async def AppleInternalInstallCapability(self) -> CfSerializable:
+        return await self.get_answer.z("AppleInternalInstallCapability")
 
-    @property
-    def ExternalChargeCapability(self) -> CfSerializable:
-        return self.get_answer("ExternalChargeCapability")
+    @zyncio.zproperty
+    async def ExternalChargeCapability(self) -> CfSerializable:
+        return await self.get_answer.z("ExternalChargeCapability")
 
-    @property
-    def ForwardCameraCapability(self) -> CfSerializable:
-        return self.get_answer("ForwardCameraCapability")
+    @zyncio.zproperty
+    async def ForwardCameraCapability(self) -> CfSerializable:
+        return await self.get_answer.z("ForwardCameraCapability")
 
-    @property
-    def PanoramaCameraCapability(self) -> CfSerializable:
-        return self.get_answer("PanoramaCameraCapability")
+    @zyncio.zproperty
+    async def PanoramaCameraCapability(self) -> CfSerializable:
+        return await self.get_answer.z("PanoramaCameraCapability")
 
-    @property
-    def RearCameraCapability(self) -> CfSerializable:
-        return self.get_answer("RearCameraCapability")
+    @zyncio.zproperty
+    async def RearCameraCapability(self) -> CfSerializable:
+        return await self.get_answer.z("RearCameraCapability")
 
-    @property
-    def HasAllFeaturesCapability(self) -> CfSerializable:
-        return self.get_answer("HasAllFeaturesCapability")
+    @zyncio.zproperty
+    async def HasAllFeaturesCapability(self) -> CfSerializable:
+        return await self.get_answer.z("HasAllFeaturesCapability")
 
-    @property
-    def HasBaseband(self) -> CfSerializable:
-        return self.get_answer("HasBaseband")
+    @zyncio.zproperty
+    async def HasBaseband(self) -> CfSerializable:
+        return await self.get_answer.z("HasBaseband")
 
-    @property
-    def HasInternalSettingsBundle(self) -> CfSerializable:
-        return self.get_answer("HasInternalSettingsBundle")
+    @zyncio.zproperty
+    async def HasInternalSettingsBundle(self) -> CfSerializable:
+        return await self.get_answer.z("HasInternalSettingsBundle")
 
-    @property
-    def HasSpringBoard(self) -> CfSerializable:
-        return self.get_answer("HasSpringBoard")
+    @zyncio.zproperty
+    async def HasSpringBoard(self) -> CfSerializable:
+        return await self.get_answer.z("HasSpringBoard")
 
-    @property
-    def InternalBuild(self) -> CfSerializable:
-        return self.get_answer("InternalBuild")
+    @zyncio.zproperty
+    async def InternalBuild(self) -> CfSerializable:
+        return await self.get_answer.z("InternalBuild")
 
-    @property
-    def IsSimulator(self) -> CfSerializable:
-        return self.get_answer("IsSimulator")
+    @zyncio.zproperty
+    async def IsSimulator(self) -> CfSerializable:
+        return await self.get_answer.z("IsSimulator")
 
-    @property
-    def IsThereEnoughBatteryLevelForSoftwareUpdate(self) -> CfSerializable:
-        return self.get_answer("IsThereEnoughBatteryLevelForSoftwareUpdate")
+    @zyncio.zproperty
+    async def IsThereEnoughBatteryLevelForSoftwareUpdate(self) -> CfSerializable:
+        return await self.get_answer.z("IsThereEnoughBatteryLevelForSoftwareUpdate")
 
-    @property
-    def IsUIBuild(self) -> CfSerializable:
-        return self.get_answer("IsUIBuild")
+    @zyncio.zproperty
+    async def IsUIBuild(self) -> CfSerializable:
+        return await self.get_answer.z("IsUIBuild")
 
-    @property
-    def PasswordConfigured(self) -> CfSerializable:
-        return self.get_answer("PasswordConfigured")
+    @zyncio.zproperty
+    async def PasswordConfigured(self) -> CfSerializable:
+        return await self.get_answer.z("PasswordConfigured")
 
-    @property
-    def PasswordProtected(self) -> CfSerializable:
-        return self.get_answer("PasswordProtected")
+    @zyncio.zproperty
+    async def PasswordProtected(self) -> CfSerializable:
+        return await self.get_answer.z("PasswordProtected")
 
     # Regional Behaviour
 
-    @property
-    def RegionalBehaviorAll(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorAll")
+    @zyncio.zproperty
+    async def RegionalBehaviorAll(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorAll")
 
-    @property
-    def RegionalBehaviorChinaBrick(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorChinaBrick")
+    @zyncio.zproperty
+    async def RegionalBehaviorChinaBrick(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorChinaBrick")
 
-    @property
-    def RegionalBehaviorEUVolumeLimit(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorEUVolumeLimit")
+    @zyncio.zproperty
+    async def RegionalBehaviorEUVolumeLimit(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorEUVolumeLimit")
 
-    @property
-    def RegionalBehaviorGB18030(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorGB18030")
+    @zyncio.zproperty
+    async def RegionalBehaviorGB18030(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorGB18030")
 
-    @property
-    def RegionalBehaviorGoogleMail(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorGoogleMail")
+    @zyncio.zproperty
+    async def RegionalBehaviorGoogleMail(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorGoogleMail")
 
-    @property
-    def RegionalBehaviorNTSC(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorNTSC")
+    @zyncio.zproperty
+    async def RegionalBehaviorNTSC(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorNTSC")
 
-    @property
-    def RegionalBehaviorNoPasscodeLocationTiles(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorNoPasscodeLocationTiles")
+    @zyncio.zproperty
+    async def RegionalBehaviorNoPasscodeLocationTiles(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorNoPasscodeLocationTiles")
 
-    @property
-    def RegionalBehaviorNoVOIP(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorNoVOIP")
+    @zyncio.zproperty
+    async def RegionalBehaviorNoVOIP(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorNoVOIP")
 
-    @property
-    def RegionalBehaviorNoWiFi(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorNoWiFi")
+    @zyncio.zproperty
+    async def RegionalBehaviorNoWiFi(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorNoWiFi")
 
-    @property
-    def RegionalBehaviorShutterClick(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorShutterClick")
+    @zyncio.zproperty
+    async def RegionalBehaviorShutterClick(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorShutterClick")
 
-    @property
-    def RegionalBehaviorVolumeLimit(self) -> CfSerializable:
-        return self.get_answer("RegionalBehaviorVolumeLimit")
+    @zyncio.zproperty
+    async def RegionalBehaviorVolumeLimit(self) -> CfSerializable:
+        return await self.get_answer.z("RegionalBehaviorVolumeLimit")
 
     # Wireless Information
 
-    @property
-    def ActiveWirelessTechnology(self) -> CfSerializable:
-        return self.get_answer("ActiveWirelessTechnology")
+    @zyncio.zproperty
+    async def ActiveWirelessTechnology(self) -> CfSerializable:
+        return await self.get_answer.z("ActiveWirelessTechnology")
 
-    @property
-    def WifiAddress(self) -> CfSerializable:
-        return self.get_answer("WifiAddress")
+    @zyncio.zproperty
+    async def WifiAddress(self) -> CfSerializable:
+        return await self.get_answer.z("WifiAddress")
 
-    @property
-    def WifiAddressData(self) -> CfSerializable:
-        return self.get_answer("WifiAddressData")
+    @zyncio.zproperty
+    async def WifiAddressData(self) -> CfSerializable:
+        return await self.get_answer.z("WifiAddressData")
 
-    @property
-    def WifiVendor(self) -> CfSerializable:
-        return self.get_answer("WifiVendor")
+    @zyncio.zproperty
+    async def WifiVendor(self) -> CfSerializable:
+        return await self.get_answer.z("WifiVendor")
 
     # FaceTime Information
 
-    @property
-    def FaceTimeBitRate2G(self) -> CfSerializable:
-        return self.get_answer("FaceTimeBitRate2G")
+    @zyncio.zproperty
+    async def FaceTimeBitRate2G(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeBitRate2G")
 
-    @property
-    def FaceTimeBitRate3G(self) -> CfSerializable:
-        return self.get_answer("FaceTimeBitRate3G")
+    @zyncio.zproperty
+    async def FaceTimeBitRate3G(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeBitRate3G")
 
-    @property
-    def FaceTimeBitRateLTE(self) -> CfSerializable:
-        return self.get_answer("FaceTimeBitRateLTE")
+    @zyncio.zproperty
+    async def FaceTimeBitRateLTE(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeBitRateLTE")
 
-    @property
-    def FaceTimeBitRateWiFi(self) -> CfSerializable:
-        return self.get_answer("FaceTimeBitRateWiFi")
+    @zyncio.zproperty
+    async def FaceTimeBitRateWiFi(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeBitRateWiFi")
 
-    @property
-    def FaceTimeDecodings(self) -> CfSerializable:
-        return self.get_answer("FaceTimeDecodings")
+    @zyncio.zproperty
+    async def FaceTimeDecodings(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeDecodings")
 
-    @property
-    def FaceTimeEncodings(self) -> CfSerializable:
-        return self.get_answer("FaceTimeEncodings")
+    @zyncio.zproperty
+    async def FaceTimeEncodings(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimeEncodings")
 
-    @property
-    def FaceTimePreferredDecoding(self) -> CfSerializable:
-        return self.get_answer("FaceTimePreferredDecoding")
+    @zyncio.zproperty
+    async def FaceTimePreferredDecoding(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimePreferredDecoding")
 
-    @property
-    def FaceTimePreferredEncoding(self) -> CfSerializable:
-        return self.get_answer("FaceTimePreferredEncoding")
+    @zyncio.zproperty
+    async def FaceTimePreferredEncoding(self) -> CfSerializable:
+        return await self.get_answer.z("FaceTimePreferredEncoding")
 
     # More Device Capabilities
 
-    @property
-    def DeviceSupportsFaceTime(self) -> CfSerializable:
-        return self.get_answer("DeviceSupportsFaceTime")
+    @zyncio.zproperty
+    async def DeviceSupportsFaceTime(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupportsFaceTime")
 
-    @property
-    def DeviceSupportsTethering(self) -> CfSerializable:
-        return self.get_answer("DeviceSupportsTethering")
+    @zyncio.zproperty
+    async def DeviceSupportsTethering(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupportsTethering")
 
-    @property
-    def DeviceSupportsSimplisticRoadMesh(self) -> CfSerializable:
-        return self.get_answer("DeviceSupportsSimplisticRoadMesh")
+    @zyncio.zproperty
+    async def DeviceSupportsSimplisticRoadMesh(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupportsSimplisticRoadMesh")
 
-    @property
-    def DeviceSupportsNavigation(self) -> CfSerializable:
-        return self.get_answer("DeviceSupportsNavigation")
+    @zyncio.zproperty
+    async def DeviceSupportsNavigation(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupportsNavigation")
 
-    @property
-    def DeviceSupportsLineIn(self) -> CfSerializable:
-        return self.get_answer("DeviceSupportsLineIn")
+    @zyncio.zproperty
+    async def DeviceSupportsLineIn(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupportsLineIn")
 
-    @property
-    def DeviceSupports9Pin(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports9Pin")
+    @zyncio.zproperty
+    async def DeviceSupports9Pin(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports9Pin")
 
-    @property
-    def DeviceSupports720p(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports720p")
+    @zyncio.zproperty
+    async def DeviceSupports720p(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports720p")
 
-    @property
-    def DeviceSupports4G(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports4G")
+    @zyncio.zproperty
+    async def DeviceSupports4G(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports4G")
 
-    @property
-    def DeviceSupports3DMaps(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports3DMaps")
+    @zyncio.zproperty
+    async def DeviceSupports3DMaps(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports3DMaps")
 
-    @property
-    def DeviceSupports3DImagery(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports3DImagery")
+    @zyncio.zproperty
+    async def DeviceSupports3DImagery(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports3DImagery")
 
-    @property
-    def DeviceSupports1080p(self) -> CfSerializable:
-        return self.get_answer("DeviceSupports1080p")
+    @zyncio.zproperty
+    async def DeviceSupports1080p(self) -> CfSerializable:
+        return await self.get_answer.z("DeviceSupports1080p")
 
-    def get_answer(self, key: str) -> CfSerializable:
+    @zyncio.zmethod
+    async def get_answer(
+        self, key: str, typ: type[CfSerializableT] | tuple[type[CfSerializableT], ...] = CfSerializableAny
+    ) -> CfSerializableT:
         """Return the MGCopyAnswer value for a given key."""
-        return self._client.symbols.MGCopyAnswer(self._client.cf(key)).py()
+        return await (await self._client.symbols.MGCopyAnswer.z(await self._client.cf.z(key))).py.z(typ)
 
-    def set_answer(self, key: str, value: CfSerializable) -> CfSerializable:
+    @zyncio.zmethod
+    async def set_answer(self, key: str, value: CfSerializable) -> CfSerializable:
         """Set the MGSetAnswer value for a given key."""
-        return self._client.symbols.MGSetAnswer(self._client.cf(key), self._client.cf(value))
+        return await self._client.symbols.MGSetAnswer.z(await self._client.cf.z(key), await self._client.cf.z(value))

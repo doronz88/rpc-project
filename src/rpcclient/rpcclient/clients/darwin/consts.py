@@ -1,5 +1,6 @@
 from enum import Enum, IntEnum, IntFlag, auto
 
+
 kCFAllocatorDefault = 0
 MACH_PORT_NULL = 0
 XPC_ARRAY_APPEND = 0xFFFFFFFFFFFFFFFF
@@ -191,8 +192,8 @@ class CFPropertyListFormat(IntEnum):
 
 class CFPropertyListMutabilityOptions(IntEnum):
     kCFPropertyListImmutable = 0
-    kCFPropertyListMutableContainers = (1 << 0,)
-    kCFPropertyListMutableContainersAndLeaves = (1 << 1,)
+    kCFPropertyListMutableContainers = 1 << 0
+    kCFPropertyListMutableContainersAndLeaves = 1 << 1
 
 
 class IOPMUserActiveType(IntEnum):

@@ -1,6 +1,8 @@
 import logging
 import threading
-from typing import Any, Callable, Generic, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, Generic, TypeVar
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class EventNotifier(Generic[E]):
 
         self.register(event, _wrapper)
 
-    def clear(self, event: Optional[E] = None) -> None:
+    def clear(self, event: E | None = None) -> None:
         """Remove all callbacks (optionally only for one event)"""
         with self._lock:
             if event is None:

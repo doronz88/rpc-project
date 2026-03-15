@@ -1,20 +1,32 @@
 import plistlib
 import struct
+from pathlib import PurePath
+from typing import TYPE_CHECKING, Generic
 
 import lief
-from parameter_decorators import path_to_str
+import zyncio
 
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import kSecCodeMagicEntitlement
 from rpcclient.core.subsystems.lief import Lief
 from rpcclient.exceptions import NoEntitlementsError
 
 
-class DarwinLief(Lief):
-    @path_to_str("path")
-    def get_entitlements(self, path: str) -> dict:
-        with self._client.fs.open(path, "r") as f:
-            buf = f.read()
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import BaseDarwinClient  # noqa: F401
+
+
+class DarwinLief(Lief["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    @zyncio.zmethod
+    async def get_entitlements(self, path: str | PurePath) -> dict:
+        async with await self._client.fs.open.z(path, "r") as f:
+            buf = await f.read.z()
+
         parsed = lief.parse(buf)
+
+        if not isinstance(parsed, lief.MachO.Binary):
+            raise TypeError(f"{str(path)!r} is not a Mach-O binary")
+
         code_signature = buf[
             parsed.code_signature.data_offset : parsed.code_signature.data_offset + parsed.code_signature.data_size
         ]

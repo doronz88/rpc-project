@@ -1,137 +1,183 @@
-from abc import ABC, abstractmethod
 from datetime import datetime
-from functools import cached_property
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Generic
+from typing_extensions import Self
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT, DarwinSymbolT_co
 from rpcclient.clients.darwin.common import CfSerializable
-from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core._types import ClientBound, SymbolBound
 from rpcclient.core.allocated import Allocated
-from rpcclient.exceptions import RpcClientException
+from rpcclient.core.subsystems.fs import RemoteTemporaryDir
+from rpcclient.utils import assert_cast, cached_async_method
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient, LazyObjectiveCClassSymbol
 
 
-class Duet:
-    def __init__(self, client: "DarwinClient") -> None:
+class Duet(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._client.load_framework("DuetActivityScheduler")
-        self.NSArray_cls = client.symbols.objc_getClass("NSArray")
-        self.CDPaths_cls = client.symbols.objc_getClass("_CDPaths")
-        self.DKEventQuery_cls = client.symbols.objc_getClass("_DKEventQuery")
-        self.DKKnowledgeStore_cls = client.symbols.objc_getClass("_DKKnowledgeStore")
-        self.DKKnowledgeStorage_cls = client.symbols.objc_getClass("_DKKnowledgeStorage")
-        self.DKSystemEventStreams_cls = client.symbols.objc_getClass("_DKSystemEventStreams")
-        self.DKSystemEventStreams_cls_cls = client.symbols.object_getClass(self.DKSystemEventStreams_cls)
 
-    def knowledge_store(self) -> "KnowledgeStoreDup":
+        client.load_framework_lazy("DuetActivityScheduler")
+        self.NSArray_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy("NSArray")
+        self.CDPaths_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy("_CDPaths")
+        self.DKEventQuery_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy("_DKEventQuery")
+        self.DKKnowledgeStore_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy(
+            "_DKKnowledgeStore"
+        )
+        self.DKKnowledgeStorage_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy(
+            "_DKKnowledgeStorage"
+        )
+        self.DKSystemEventStreams_cls: LazyObjectiveCClassSymbol[DarwinSymbolT_co] = client.objc_get_class_lazy(
+            "_DKSystemEventStreams"
+        )
+
+    @zyncio.zproperty
+    @cached_async_method
+    async def DKSystemEventStreams_cls_cls(self) -> DarwinSymbolT_co:
+        return await self._client.symbols.objc_getClass.z(await self.DKSystemEventStreams_cls.resolve())
+
+    @zyncio.zmethod
+    async def knowledge_store(self) -> "KnowledgeStoreDup[DarwinSymbolT_co]":
         """Copy the on device knowledge store to a temp directory and open it read only."""
-        return KnowledgeStoreDup(self._client, self)
+        return await KnowledgeStoreDup.create(self._client)
 
-    def knowledge_store_xpc(self) -> "KnowledgeStoreXPC":
+    @zyncio.zmethod
+    async def knowledge_store_xpc(self) -> "KnowledgeStoreXPC[DarwinSymbolT_co]":
         """Connect directly to the live knowledge store via XPC."""
-        return KnowledgeStoreXPC(self._client, self)
+        return await KnowledgeStoreXPC.create(self._client)
 
 
-class DKEvent:
+class DKEvent(SymbolBound[DarwinSymbolT_co]):
     """Thin, *pythonic* wrapper around a private `_DKEvent` ObjectiveC object."""
 
-    def __init__(self, event: DarwinSymbol) -> None:
+    def __init__(self, event: DarwinSymbolT_co) -> None:
         """Initialise the wrapper.
 
         :param event: Underlying `_DKEvent` ObjectiveC event.
         """
-        self.native = event
+        self._symbol = event
+        self.native: DarwinSymbolT_co = event
 
-    @cached_property
-    def start(self) -> datetime:
+    @zyncio.zproperty
+    @cached_async_method
+    async def start(self) -> datetime:
         """Return the event's *start* timestamp.
 
         :returns: Event start time.
         """
-        return self.native.objc_call("startDate").py()
+        return await (await self.native.objc_call.z("startDate")).py.z(datetime)
 
-    @cached_property
-    def end(self) -> datetime:
+    @zyncio.zproperty
+    @cached_async_method
+    async def end(self) -> datetime:
         """Return the event's *end* timestamp (may equal *start*).
 
         :returns: Event end time.
         """
-        return self.native.objc_call("endDate").py()
+        return await (await self.native.objc_call.z("endDate")).py.z(datetime)
 
-    @cached_property
-    def metadata(self) -> str:
+    @zyncio.zproperty
+    @cached_async_method
+    async def metadata(self) -> str:
         """Return the event's metadata dictionary, if present.
 
         :returns: Metadata mapping or `None` when absent.
         """
-        return self.native.objc_call("metadata").cfdesc
+        return assert_cast(str, await (await self.native.objc_call.z("metadata")).get_cfdesc())
 
-    @cached_property
-    def stream(self) -> str:
+    @zyncio.zproperty
+    @cached_async_method
+    async def stream(self) -> str:
         """Return the name of the stream this event belongs to.
 
         :returns: Stream name.
         """
-        return self.native.objc_call("stream").objc_call("name").py()
+        return await (await (await self.native.objc_call.z("stream")).objc_call.z("name")).py.z(str)
 
-    @cached_property
-    def value(self) -> CfSerializable:
+    @zyncio.zproperty
+    @cached_async_method
+    async def value(self) -> CfSerializable:
         """Return the primary value associated with the event.
 
         :returns: Stream specific value type.
         """
-        return self.native.objc_call("value").objc_call("primaryValue").py()
+        return await (await (await self.native.objc_call.z("value")).objc_call.z("primaryValue")).py.z()
 
-    def __str__(self) -> str:
+    @zyncio.zproperty
+    async def description(self) -> str:
         """Pretty print the event for quick inspection.
 
         :returns: Formatted multi line string representation.
         """
-        output = f"DKEvent - {self.stream}\n\n"
-        output += f" value:\t{self.value}\n"
-        output += f" start:\t{self.start}\n"
-        output += f" end:\t{self.end}"
-        output += f" metadata:\n{self.metadata}"
+        cls = type(self)
+        output = f"DKEvent - {await cls.stream(self)}\n\n"
+        output += f" value:\t{await cls.value(self)}\n"
+        output += f" start:\t{await cls.start(self)}\n"
+        output += f" end:\t{await cls.end(self)}"
+        output += f" metadata:\n{await cls.metadata(self)}"
         return output
 
+    def __str__(self) -> str:
+        if zyncio.is_sync(self):
+            return self.description
+        return f"<{type(self).__name__} (async)>"
 
-class KnowledgeStoreContext(ABC, Allocated):
+
+class KnowledgeStoreContext(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Abstract context manager that exposes helper queries for `_DKKnowledgeStore`."""
 
-    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
-        """Collect available system event streams and store the *rpcclient* handle.
-
-        :param rpcclient.darwin.client.DarwinClient client:
-        :param duet:
-        """
-        Allocated.__init__(self)
+    def __init__(
+        self,
+        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        streams: dict[str, DarwinSymbolT_co],
+        knowledge_store: DarwinSymbolT_co,
+    ) -> None:
+        """Collect available system event streams and store the *rpcclient* handle."""
         self._client = client
-        self._duet = duet
-        self.streams: dict[str, DarwinSymbol] = {}
-        with client.safe_malloc(8) as count:
-            methods = client.symbols.class_copyMethodList(duet.DKSystemEventStreams_cls_cls, count)
-            for i in range(count[0]):
-                method_name = client.symbols.sel_getName(client.symbols.method_getName(methods[i])).peek_str()
-                stream = duet.DKSystemEventStreams_cls.objc_call(method_name)
-                self.streams[stream.objc_call("name").py()] = stream
+        self.streams: dict[str, DarwinSymbolT_co] = streams
+        self._knowledge_store: DarwinSymbolT_co = knowledge_store
 
-    def query_events(self, stream: str) -> list["DKEvent"]:
+    @staticmethod
+    async def get_streams(client: "BaseDarwinClient[DarwinSymbolT_co]") -> dict[str, DarwinSymbolT_co]:
+        streams = {}
+
+        async with client.safe_malloc.z(8) as count:
+            duet = client.duet
+            methods = await client.symbols.class_copyMethodList.z(
+                await type(duet).DKSystemEventStreams_cls_cls(duet), count
+            )
+            for i in range(await count.getindex(0)):
+                method_name = await (
+                    await client.symbols.sel_getName.z(await client.symbols.method_getName.z(await methods.getindex(i)))
+                ).peek_str.z()
+                stream = await duet.DKSystemEventStreams_cls.objc_call.z(method_name)
+                streams[await (await stream.objc_call.z("name")).py.z()] = stream
+
+        return streams
+
+    @zyncio.zmethod
+    async def query_events(self, stream: str) -> list["DKEvent"]:
         """Retrieve all events for a single stream.
 
         :param stream: Stream identifier.
         :returns: List of events or `None` when the stream is empty.
         """
-        raw_events = self._query_raw_events(stream)
-        event_count = raw_events.objc_call("count") if raw_events != 0 else 0
+        raw_events = await self._query_raw_events(stream)
+        event_count = await raw_events.objc_call.z("count") if raw_events != 0 else 0
         return (
-            [DKEvent(raw_events.objc_call("objectAtIndex:", i)) for i in range(event_count)] if event_count != 0 else []
+            [DKEvent(await raw_events.objc_call.z("objectAtIndex:", i)) for i in range(event_count)]
+            if event_count != 0
+            else []
         )
 
-    def query_events_streams(self, streams: Optional[list[str]] = None) -> dict[str, list["DKEvent"]]:
+    @zyncio.zmethod
+    async def query_events_streams(self, streams: list[str] | None = None) -> dict[str, list["DKEvent"]]:
         """Query multiple streams at once.
 
         :param streams: Specific streams to query. `None` queries all known streams.
@@ -140,109 +186,104 @@ class KnowledgeStoreContext(ABC, Allocated):
         events: dict[str, list[DKEvent]] = {}
         streams = list(self.streams.keys()) if streams is None else streams
         for stream in streams:
-            events_for_stream = self.query_events(stream)
+            events_for_stream = await self.query_events.z(stream)
             if len(events_for_stream) != 0:
                 events[stream] = events_for_stream
         return events
 
-    def _query_raw_events(self, stream: str) -> DarwinSymbol:
+    async def _query_raw_events(self, stream: str) -> DarwinSymbolT_co:
         """Build and execute a `_DKEventQuery` limited to *stream*.
 
         :param stream: Stream name.
         :returns: ObjectiveC array containing raw `_DKEvent` objects.
         """
-        query = self._duet.DKEventQuery_cls.objc_call("new")
+        query = await self._client.duet.DKEventQuery_cls.objc_call.z("new")
         try:
-            with self._client.safe_malloc(8) as buf:
-                buf[0] = self.streams[stream]
-                arr = self._duet.NSArray_cls.objc_call("arrayWithObjects:count:", buf, 1)
-                query.objc_call("setEventStreams:", arr)
-                return self._execute_query(query)
+            async with self._client.safe_malloc.z(8) as buf:
+                await buf.setindex(0, self.streams[stream])
+                arr = await self._client.duet.NSArray_cls.objc_call.z("arrayWithObjects:count:", buf, 1)
+                await query.objc_call.z("setEventStreams:", arr)
+                return await self._execute_query(query)
         finally:
-            query.objc_call("release")
+            await query.objc_call.z("release")
 
-    def _execute_query(self, query: DarwinSymbol) -> DarwinSymbol:
+    async def _execute_query(self: "KnowledgeStoreContext[DarwinSymbolT]", query: DarwinSymbolT) -> DarwinSymbolT:
         """Run *query* through the concrete :pyattr:`knowledge_store` implementation.
 
         :param query: Configured `_DKEventQuery` instance.
         :returns: ObjectiveC array with results.
         :raises RpcClientException: If :pyattr:`knowledge_store` is not yet initialized.
         """
-        if self.knowledge_store is None:
-            raise RpcClientException("KnowledgeStore not initialized")
-        with self._client.safe_malloc(8) as error:
-            return self.knowledge_store.objc_call("executeQuery:error:", query, error)
+        async with self._client.safe_malloc.z(8) as error:
+            return await self.knowledge_store.objc_call.z("executeQuery:error:", query, error)
 
-    def _deallocate(self):
+    async def _deallocate(self) -> None:
         """Release the allocated knowledge store object"""
-        self.knowledge_store.objc_call("release")
+        await self.knowledge_store.objc_call.z("release")
 
     @property
-    @abstractmethod
-    def knowledge_store(self) -> DarwinSymbol:
+    def knowledge_store(self) -> DarwinSymbolT_co:
         """Return the clients specific `_DKKnowledgeStore` handle.
 
         :returns: Concrete store.
         """
-        pass
+        return self._knowledge_store
 
 
-class KnowledgeStoreDup(KnowledgeStoreContext):
+class KnowledgeStoreDup(KnowledgeStoreContext[DarwinSymbolT_co]):
     """Copy the on device knowledge store to a temp directory and open it read only."""
 
-    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
-        """Create the temp directory, copy knowledge store files inside and init knowledge store objects.
+    def __init__(
+        self,
+        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        streams: dict[str, DarwinSymbolT_co],
+        knowledge_store: DarwinSymbolT_co,
+        tmp_dir: "RemoteTemporaryDir[BaseDarwinClient[DarwinSymbolT_co]]",
+    ) -> None:
+        """Create the temp directory, copy knowledge store files inside and init knowledge store objects."""
+        super().__init__(client, streams, knowledge_store)
+        self.tmp_dir: RemoteTemporaryDir[BaseDarwinClient[DarwinSymbolT_co]] = tmp_dir
 
-        :param rpcclient.darwin.client.DarwinClient client:
-        :param duet:
-        """
-        super().__init__(client, duet)
-        origin_path = client.fs.remote_path(duet.CDPaths_cls.objc_call("knowledgeDirectory").py())
-        self.tmp_dir = client.fs.remote_temp_dir()
-        tmp_knowledge_dir = str(self.tmp_dir / origin_path.name)
+    @classmethod
+    async def create(cls, client: "BaseDarwinClient[DarwinSymbolT_co]") -> Self:
+        origin_path = client.fs.remote_path(
+            await (await client.duet.CDPaths_cls.objc_call.z("knowledgeDirectory")).py.z(str)
+        )
+        tmp_dir = await client.fs.remote_temp_dir.z()
+        tmp_knowledge_dir = str(tmp_dir / origin_path.name)
         try:
-            client.fs.cp([origin_path], self.tmp_dir, recursive=True, force=False)
-            knowledge_storage = self._duet.DKKnowledgeStorage_cls.objc_call(
-                "storageWithDirectory:readOnly:", self._client.cf(tmp_knowledge_dir), 1
+            await client.fs.cp.z([origin_path], tmp_dir, recursive=True, force=False)
+            knowledge_storage = await client.duet.DKKnowledgeStorage_cls.objc_call.z(
+                "storageWithDirectory:readOnly:", await client.cf.z(tmp_knowledge_dir), 1
             )
-            knowledge_store = self._duet.DKKnowledgeStore_cls.objc_call("alloc")
-            self._knowledge_store = knowledge_store.objc_call(
+            knowledge_store = await client.duet.DKKnowledgeStore_cls.objc_call.z("alloc")
+            knowledge_store = await knowledge_store.objc_call.z(
                 "initWithKnowledgeStoreHandle:readOnly:", knowledge_storage, 1
             )
         except Exception:
-            self.tmp_dir.deallocate()
+            await tmp_dir.deallocate.z()
             raise
 
-    def _deallocate(self):
+        return cls(
+            client,
+            await cls.get_streams(client),
+            knowledge_storage,
+            tmp_dir,
+        )
+
+    async def _deallocate(self) -> None:
         """Delete the allocated temp dir and release the allocated knowledge store object"""
-        self.tmp_dir.deallocate()
-        super()._deallocate()
-
-    @property
-    def knowledge_store(self) -> Optional[DarwinSymbol]:
-        """Expose the read only copied knowledge store handle.
-
-        :returns: Store handle or `None` if context not entered.
-        """
-        return self._knowledge_store
+        await self.tmp_dir.deallocate.z()
+        await super()._deallocate()
 
 
-class KnowledgeStoreXPC(KnowledgeStoreContext):
+class KnowledgeStoreXPC(KnowledgeStoreContext[DarwinSymbolT_co]):
     """Connect directly to the live knowledge store via XPC."""
 
-    def __init__(self, client: "DarwinClient", duet: Duet) -> None:
-        """connect to the XPC knowledge store interface on the device.
-
-        :param rpcclient.darwin.client.DarwinClient client:
-        :param duet:
-        """
-        super().__init__(client, duet)
-        self._knowledge_store: DarwinSymbol = duet.DKKnowledgeStore_cls.objc_call("knowledgeStore")
-
-    @property
-    def knowledge_store(self) -> Optional[DarwinSymbol]:
-        """Expose the live XPC backed knowledge store handle.
-
-        :returns: Store handle.
-        """
-        return self._knowledge_store
+    @classmethod
+    async def create(cls, client: "BaseDarwinClient[DarwinSymbolT_co]") -> Self:
+        return cls(
+            client,
+            await cls.get_streams(client),
+            await client.duet.DKKnowledgeStore_cls.objc_call.z("knowledgeStore"),
+        )

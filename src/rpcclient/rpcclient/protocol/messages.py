@@ -1,10 +1,11 @@
 import importlib
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from rpcclient.protos.rpc_api_pb2 import ReplyError
 from rpcclient.protos.rpc_pb2 import ProtocolConstants
 from rpcclient.registry import Registry
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class RpcMessageRegistry:
 
     """
 
-    def __init__(self, init_data: Optional[dict] = None, modules: Optional[list[str]] = None):
+    def __init__(self, init_data: dict | None = None, modules: list[str] | None = None) -> None:
         self._messages: Registry[int, type[Any]] = Registry()
         self._messages.register(ProtocolConstants.REP_ERROR, ReplyError)
         if init_data is None:
@@ -57,23 +58,24 @@ class RpcMessageRegistry:
             rep_class = getattr(mod, f"Reply{camel}", None)
             if req_class is None or rep_class is None:
                 logger.warning(f"Skipping {name}: missing Request{camel} or Reply{camel} in {module_path}")
+                continue
             pair_count += 1
             self.register_pair(value, req_class, rep_class)
         logger.debug(f"Loaded {pair_count} bindings from {module_path}")
 
-    def register_pair(self, msg_id: int, req_class: type[Any], rep_class: type[Any]):
+    def register_pair(self, msg_id: int, req_class: type[Any], rep_class: type[Any]) -> None:
         if msg_id > ProtocolConstants.RPC_MAX_REQ_MSG_ID:
             raise ValueError(f"Invalid msg_id: {msg_id}")
         self._messages.register(msg_id, req_class)
         self._messages.register(msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID, rep_class)
 
-    def unregister_pair(self, msg_id: int):
+    def unregister_pair(self, msg_id: int) -> None:
         if msg_id > ProtocolConstants.RPC_MAX_REQ_MSG_ID:
             raise ValueError(f"Invalid msg_id: {msg_id}")
         self._messages.unregister(msg_id)
         self._messages.unregister(msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID)
 
-    def update(self, data: dict, overwrite: bool = False):
+    def update(self, data: dict, overwrite: bool = False) -> None:
         self._messages.update(data, overwrite)
 
     def clone(self) -> "RpcMessageRegistry":

@@ -1,40 +1,51 @@
 import logging
-from typing import TYPE_CHECKING, Any, Optional
-from uuid import UUID
+from typing import TYPE_CHECKING, Any, Generic
+
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.core._types import ClientBound
+from rpcclient.utils import cached_async_method
+
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from rpcclient.clients.ios.client import IosClient
+    from rpcclient.clients.ios.client import BaseIosClient
 
 
-class Call:
+class Call(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Represents a single ongoing call."""
 
-    def __init__(self, client: "IosClient", controller: Any, call: Any) -> None:
+    def __init__(
+        self, client: "BaseIosClient[DarwinSymbolT_co]", controller: DarwinSymbolT_co, call: DarwinSymbolT_co
+    ) -> None:
         self._client = client
-        self._controller = controller
-        self._call = call
+        self._controller: DarwinSymbolT_co = controller
+        self._call: DarwinSymbolT_co = call
 
-    def disconnect(self) -> None:
+    @zyncio.zmethod
+    async def disconnect(self) -> None:
         """Disconnect the current call."""
-        self._send_action("CXEndCallAction")
+        await self._send_action("CXEndCallAction")
 
-    def answer(self) -> None:
+    @zyncio.zmethod
+    async def answer(self) -> None:
         """Answer the current call."""
-        self._send_action("CXAnswerCallAction")
+        await self._send_action("CXAnswerCallAction")
 
-    def _send_action(self, action_name: str) -> None:
-        action_class = self._client.symbols.objc_getClass(action_name)
-        action = action_class.objc_call("alloc").objc_call("initWithCallUUID:", self._uuid)
-        self._controller.objc_call("requestTransactionWithAction:completion:", action, self._client.get_dummy_block())
+    async def _send_action(self, action_name: str) -> None:
+        action_class = await self._client.symbols.objc_getClass.z(action_name)
+        action = await (await action_class.objc_call.z("alloc")).objc_call.z("initWithCallUUID:", await self._uuid())
+        await self._controller.objc_call.z(
+            "requestTransactionWithAction:completion:", action, await self._client.get_dummy_block.z()
+        )
 
-    @property
-    def _uuid(self) -> UUID:
-        return self._call.objc_call("UUID")
+    async def _uuid(self) -> Any:
+        return await self._call.objc_call.z("UUID")
 
 
-class Telephony:
+class Telephony(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Telephony utilities backed by CallKit and CoreTelephony.
 
@@ -42,22 +53,36 @@ class Telephony:
     to be set to "com.apple.coretelephony".
     """
 
-    def __init__(self, client: "IosClient") -> None:
+    def __init__(self, client: "BaseIosClient[DarwinSymbolT_co]") -> None:
         self._client = client
-        self._client.load_framework("CallKit")
-        self.cx_call_controller = self._client.symbols.objc_getClass("CXCallController").objc_call("new")
-        self.cx_call_observer = self.cx_call_controller.objc_call("callObserver")
-        self.ct_message_center = self._client.symbols.objc_getClass("CTMessageCenter").objc_call("sharedMessageCenter")
+        self._client.load_framework_lazy("CallKit")
 
-    def dial(self, number: str) -> None:
+    @zyncio.zproperty
+    @cached_async_method
+    async def cx_call_controller(self) -> DarwinSymbolT_co:
+        return await (await self._client.symbols.objc_getClass.z("CXCallController")).objc_call.z("new")
+
+    @zyncio.zproperty
+    @cached_async_method
+    async def cx_call_observer(self) -> DarwinSymbolT_co:
+        return await (await type(self).cx_call_controller(self)).objc_call.z("callObserver")
+
+    @zyncio.zproperty
+    @cached_async_method
+    async def ct_message_center(self) -> DarwinSymbolT_co:
+        return await (await self._client.symbols.objc_getClass.z("CTMessageCenter")).objc_call.z("sharedMessageCenter")
+
+    @zyncio.zmethod
+    async def dial(self, number: str) -> None:
         """
         Start a call to a number.
 
         Use `current_call` to access the created call.
         """
-        self._client.symbols.CTCallDial(self._client.cf(number))
+        await self._client.symbols.CTCallDial.z(await self._client.cf.z(number))
 
-    def send_sms(self, to_address: str, text: str, smsc: str = "1111") -> None:
+    @zyncio.zmethod
+    async def send_sms(self, to_address: str, text: str, smsc: str = "1111") -> None:
         """
         Send an SMS message.
 
@@ -65,29 +90,27 @@ class Telephony:
         :param text: Message text.
         :param smsc: Originator short message service center address.
         """
-        self.ct_message_center.objc_call(
+        await (await type(self).ct_message_center(self)).objc_call.z(
             "sendSMSWithText:serviceCenter:toAddress:",
-            self._client.cf(text),
-            self._client.cf(smsc),
-            self._client.cf(to_address),
+            await self._client.cf.z(text),
+            await self._client.cf.z(smsc),
+            await self._client.cf.z(to_address),
         )
 
-    @property
-    def current_call(self) -> Optional[Call]:
+    @zyncio.zproperty
+    async def current_call(self) -> Call | None:
         """
         Return an object representing the current active call, if any.
         """
-        calls = self.cx_call_observer.objc_call("calls")
-        call_count = calls.objc_call("count")
+        calls = await (await type(self).cx_call_observer(self)).objc_call.z("calls")
+        call_count = await calls.objc_call.z("count")
 
-        call_list = []
-        for i in range(call_count):
-            call_list.append(calls.objc_call("objectAtIndex:", i))
+        call_list = [await calls.objc_call.z("objectAtIndex:", i) for i in range(call_count)]
 
         for call_id in range(call_count):
             call = call_list[call_id]
-            if call.objc_call("hasEnded"):
+            if await call.objc_call.z("hasEnded"):
                 continue
-            return Call(self._client, self.cx_call_controller, call)
+            return Call(self._client, await type(self).cx_call_controller(self), call)
 
         return None

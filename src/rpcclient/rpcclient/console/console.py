@@ -1,18 +1,19 @@
 import dataclasses
 import logging
 import sys
-from typing import Any, Optional, Union
+from typing import Any
 
 import click
 import IPython
 from IPython import get_ipython
 from traitlets.config import Config
 
-from rpcclient.client_manager import ClientManager, ClientType
+from rpcclient.client_manager import ClientManager, CoreClient
 from rpcclient.console.extensions.keybindings import get_keybindings
 from rpcclient.exceptions import NoSuchClientError
 from rpcclient.registry import Registry, RegistryEvent
 from rpcclient.utils import prompt_selection
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class HelpSnippet:
 class ConsoleContext:
     """Per-client console state (active client and its user namespace)."""
 
-    p: ClientType
+    p: CoreClient
     user_ns: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @property
@@ -90,8 +91,8 @@ class Console:
         """Initialize the console with a client manager and event wiring."""
         self.mgr = mgr
         self._contexts = Registry()
-        self._current: Union[int, None] = None
-        self._previous: Union[int, None] = None
+        self._current: int | None = None
+        self._previous: int | None = None
         self._ipython = None
         self._baseline_keys = None
         self._auto_switch_on_create = True
@@ -112,7 +113,7 @@ class Console:
                 continue
             self._contexts.register(cid, ConsoleContext(client))
 
-    def setup_shell(self, switch_cid: Union[int, None] = None) -> None:
+    def setup_shell(self, switch_cid: int | None = None) -> None:
         """One-time shell setup: quiet logs, capture baseline, and optionally switch."""
         if self._setup_done:
             return
@@ -126,9 +127,9 @@ class Console:
 
     def interactive(
         self,
-        additional_namespace: Optional[dict] = None,
-        switch_cid: Optional[int] = None,
-        startup_files: Optional[tuple[str]] = None,
+        additional_namespace: dict | None = None,
+        switch_cid: int | None = None,
+        startup_files: tuple[str] | None = None,
     ) -> None:
         """Launch the IPython shell with custom config and extensions."""
         sys.argv = ["a"]
@@ -160,7 +161,7 @@ class Console:
         IPython.start_ipython(config=ipython_config, user_ns=namespace)
         self.mgr.clear()
 
-    def switch(self, cid: Union[int, None] = None) -> None:
+    def switch(self, cid: int | None = None) -> None:
         """Switch the active console context by client ID (or interactively pick one)."""
         if not self._contexts.items():
             raise NoSuchClientError("No clients available")
@@ -211,7 +212,7 @@ class Console:
     # Client manager — event handlers
     # ---------------------------------------------------------------------------
 
-    def _on_registered(self, cid, client: ClientType, internal: bool) -> None:
+    def _on_registered(self, cid, client: CoreClient, internal: bool) -> None:
         """Event: auto-switch to a newly created client if enabled."""
         if not (self._auto_switch_on_create and self._ipython):
             return

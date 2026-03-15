@@ -1,39 +1,45 @@
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import RpcAppleScriptError
 
+
 if TYPE_CHECKING:
-    from rpcclient.clients.macos.client import MacosClient
+    from rpcclient.clients.macos.client import BaseMacosClient
 
 logger = logging.getLogger(__name__)
 
 
-class AppleScript:
-    def __init__(self, client: "MacosClient"):
+class AppleScript(ClientBound["BaseMacosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseMacosClient[DarwinSymbolT_co]") -> None:
         """
         :param client: rpcclient.macos.MacosClient
         """
         self._client = client
 
-    def execute(self, script: str) -> None:
-        with self._client.safe_malloc(8) as error:
-            error[0] = 0
-            apple_script = (
-                self._client.symbols.objc_getClass("NSAppleScript")
-                .objc_call("alloc")
-                .objc_call("initWithSource:", self._client.cf(script))
-            )
-            apple_script.objc_call("executeAndReturnError:", error)
-            if error[0]:
-                raise RpcAppleScriptError(error[0].objc_call("description").py())
-            apple_script.objc_call("release")
+    @zyncio.zmethod
+    async def execute(self, script: str) -> None:
+        async with self._client.safe_malloc.z(8) as error:
+            await error.setindex(0, 0)
+            apple_script = await (
+                await (await self._client.symbols.objc_getClass.z("NSAppleScript")).objc_call.z("alloc")
+            ).objc_call.z("initWithSource:", await self._client.cf.z(script))
+            await apple_script.objc_call.z("executeAndReturnError:", error)
+            if await error.getindex(0):
+                raise RpcAppleScriptError((await (await error.getindex(0)).objc_call.z("description")).py.z())
+            await apple_script.objc_call.z("release")
 
-    def say(self, message: str, voice: Optional[str] = None):
+    @zyncio.zmethod
+    async def say(self, message: str, voice: str | None = None) -> None:
         script = f'say "{message}"'
         if voice is not None:
             script += f' using "{voice}"'
-        self.execute(script)
+        await self.execute.z(script)
 
-    def beep(self, count: int) -> None:
-        self.execute(f"beep {count}")
+    @zyncio.zmethod
+    async def beep(self, count: int) -> None:
+        await self.execute.z(f"beep {count}")

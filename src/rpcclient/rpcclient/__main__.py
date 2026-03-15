@@ -1,12 +1,13 @@
 import logging
-from typing import Optional
 
 import click
 import coloredlogs
 
 from rpcclient.client_manager import ClientManager
+from rpcclient.clients.darwin.client import BaseDarwinClient
 from rpcclient.console.console import Console, disable_loggers
 from rpcclient.transports import DEFAULT_PORT
+
 
 coloredlogs.install(level=logging.DEBUG)
 
@@ -38,7 +39,7 @@ def rpclocal(startup_files: tuple[str]) -> None:
 @click.option("-l", "--load-all-libraries", is_flag=True, help="load all libraries")
 @startup_files_option
 def rpcclient(
-    hostname: Optional[str], port: int, rebind_symbols: bool, load_all_libraries: bool, startup_files: tuple[str]
+    hostname: str | None, port: int, rebind_symbols: bool, load_all_libraries: bool, startup_files: tuple[str]
 ):
     """
     Start the console.
@@ -51,10 +52,11 @@ def rpcclient(
     if hostname:
         client = manager.create(hostname=hostname, port=port)
         cid = client.id
-        if rebind_symbols:
-            client.rebind_symbols()
-        if load_all_libraries:
-            client.load_all_libraries()
+        if isinstance(client, BaseDarwinClient):
+            if rebind_symbols:
+                client.rebind_symbols()
+            if load_all_libraries:
+                client.load_all_libraries()
 
     Console(manager).interactive(switch_cid=cid, startup_files=startup_files)
 

@@ -1,14 +1,21 @@
 from collections import UserDict
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Generic
 
 import IPython
+import zyncio
 from pygments import formatters, highlight, lexers
 
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.clients.darwin.common import CfSerializable
+from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core._types import ClientBound
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import RpcClientException
 
+
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 SHELL_USAGE = """
 # Welcome to SCPreference plist interactive editor!
@@ -30,133 +37,158 @@ d.commit()
 """
 
 
-class SCPreference(Allocated):
-    def __init__(self, client: "DarwinClient", preferences_id: str, ref):
-        super().__init__()
+class SCPreference(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", preferences_id: str, ref) -> None:
         self._client = client
         self._ref = ref
-        self._preferences_id = preferences_id
+        self._preferences_id: str = preferences_id
 
-    @property
-    def keys(self) -> list[str]:
+    @zyncio.zproperty
+    async def keys(self) -> list[str]:
         """wrapper for SCPreferencesCopyKeyList"""
-        return self._client.symbols.SCPreferencesCopyKeyList(self._ref).py()
+        return await (await self._client.symbols.SCPreferencesCopyKeyList.z(self._ref)).py.z(list)
 
-    def _set(self, key: str, value):
+    async def _set(self, key: str, value) -> None:
         """wrapper for SCPreferencesSetValue"""
-        if not self._client.symbols.SCPreferencesSetValue(self._ref, self._client.cf(key), self._client.cf(value)):
+        if not await self._client.symbols.SCPreferencesSetValue.z(
+            self._ref,
+            await self._client.cf.z(key),
+            await self._client.cf.z(value),
+        ):
             raise RpcClientException(f"SCPreferencesSetValue failed to set: {key}")
 
-    def set(self, key: str, value):
+    @zyncio.zmethod
+    async def set(self, key: str, value) -> None:
         """set key:value and commit the change"""
-        self._set(key, value)
-        self._commit()
+        await self._set(key, value)
+        await self._commit()
 
-    def set_dict(self, d: dict):
+    @zyncio.zmethod
+    async def set_dict(self, d: Mapping) -> None:
         """set the entire preference dictionary (clear if already exists) and commit the change"""
-        self._clear()
-        self._update_dict(d)
-        self._commit()
+        await self._clear()
+        await self._update_dict(d)
+        await self._commit()
 
-    def _update_dict(self, d: dict):
+    async def _update_dict(self, d: Mapping) -> None:
         """update preference dictionary"""
         for k, v in d.items():
-            self._set(k, v)
+            await self._set(k, v)
 
-    def update_dict(self, d: dict):
+    @zyncio.zmethod
+    async def update_dict(self, d: Mapping) -> None:
         """update preference dictionary and commit"""
-        self._update_dict(d)
-        self._commit()
+        await self._update_dict(d)
+        await self._commit()
 
-    def _remove(self, key: str):
+    async def _remove(self, key: str) -> None:
         """wrapper for SCPreferencesRemoveValue"""
-        if not self._client.symbols.SCPreferencesRemoveValue(self._ref, self._client.cf(key)):
+        if not await self._client.symbols.SCPreferencesRemoveValue.z(self._ref, await self._client.cf.z(key)):
             raise RpcClientException(f"SCPreferencesRemoveValue failed to remove: {key}")
 
-    def remove(self, key: str):
+    @zyncio.zmethod
+    async def remove(self, key: str) -> None:
         """remove given key and commit"""
-        self._remove(key)
-        self._commit()
+        await self._remove(key)
+        await self._commit()
 
-    def get(self, key: str):
+    @zyncio.zmethod
+    async def get(self, key: str) -> CfSerializable:
         """wrapper for SCPreferencesGetValue"""
-        return self._client.symbols.SCPreferencesGetValue(self._ref, self._client.cf(key)).py()
+        return await (
+            await self._client.symbols.SCPreferencesGetValue.z(self._ref, await self._client.cf.z(key))
+        ).py.z()
 
-    def get_dict(self) -> dict:
+    @zyncio.zmethod
+    async def get_dict(self) -> dict:
         """get a dictionary representation"""
         result = {}
-        for k in self.keys:
-            result[k] = self.get(k)
+        for k in await type(self).keys(self):
+            result[k] = await self.get.z(k)
         return result
 
-    def interactive(self):
+    def interactive(self: "SCPreference[DarwinSymbol]") -> None:
         """open an interactive IPython shell for viewing and editing"""
-        plist = Plist(self)
-        IPython.embed(
+        plist = zyncio.run_sync(Plist.create(self))
+        IPython.embed(  # pyright: ignore[reportAttributeAccessIssue]
             header=highlight(SHELL_USAGE, lexers.PythonLexer(), formatters.TerminalTrueColorFormatter(style="native")),
             user_ns={
                 "d": plist,
             },
         )
 
-    def _clear(self):
+    async def _clear(self) -> None:
         """clear dictionary"""
-        for k in self.keys:
-            self._remove(k)
+        for k in await type(self).keys(self):
+            await self._remove(k)
 
-    def clear(self):
+    @zyncio.zmethod
+    async def clear(self) -> None:
         """clear dictionary and commit"""
-        self._clear()
-        self._commit()
+        await self._clear()
+        await self._commit()
 
-    def _deallocate(self):
+    async def _deallocate(self) -> None:
         """free the preference object"""
-        self._client.symbols.CFRelease(self._ref)
+        await self._client.symbols.CFRelease.z(self._ref)
 
-    def _commit(self):
+    async def _commit(self) -> None:
         """commit all changes"""
-        if not self._client.symbols.SCPreferencesCommitChanges(self._ref):
+        if not await self._client.symbols.SCPreferencesCommitChanges.z(self._ref):
             raise RpcClientException("SCPreferencesCommitChanges failed")
-        self._client.symbols.SCPreferencesSynchronize(self._ref)
+        await self._client.symbols.SCPreferencesSynchronize.z(self._ref)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} NAME:{self._preferences_id}>"
 
 
-class Plist(UserDict):
-    def __init__(self, preference: SCPreference):
-        super().__init__(preference.get_dict())
+class Plist(UserDict, Generic[DarwinSymbolT_co]):
+    def __init__(self, preference: SCPreference[DarwinSymbolT_co], *, _dict: dict) -> None:
+        super().__init__(_dict)
         self._preference = preference
 
-    def commit(self):
-        self._preference.set_dict(self)
+    def __zync_proxy__(self) -> SCPreference[DarwinSymbolT_co]:
+        return self._preference
+
+    @staticmethod
+    async def create(preference: SCPreference[DarwinSymbolT_co]) -> "Plist[DarwinSymbolT_co]":
+        return Plist(preference, _dict=await preference.get_dict.z())
+
+    @zyncio.zmethod
+    async def commit(self) -> None:
+        await self._preference.set_dict.z(self)
 
 
-class SCPreferences:
+class SCPreferences(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     API to the SCPreferences* functions - preferences managed by SystemConfiguration framework.
     https://developer.apple.com/documentation/systemconfiguration/scpreferences?language=objc
     """
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
 
-    def open(self, preferences_id: str) -> SCPreference:
+    @zyncio.zmethod
+    async def open(self, preferences_id: str) -> SCPreference[DarwinSymbolT_co]:
         """get an SCPreference from a given preferences_id"""
-        ref = self._client.symbols.SCPreferencesCreate(0, self._client.cf("rpcserver"), self._client.cf(preferences_id))
+        ref = await self._client.symbols.SCPreferencesCreate.z(
+            0, await self._client.cf.z("rpcserver"), await self._client.cf.z(preferences_id)
+        )
         if not ref:
             raise RpcClientException(f"SCPreferencesCreate failed for: {preferences_id}")
         return SCPreference(self._client, preferences_id, ref)
 
-    def get_keys(self, preferences_id: str) -> list[str]:
+    @zyncio.zmethod
+    async def get_keys(self, preferences_id: str) -> list[str]:
         """get all keys from given preferences_id"""
-        with self.open(preferences_id) as o:
-            return o.keys
+        async with await self.open.z(preferences_id) as o:
+            return await type(o).keys(o)
 
-    def get_dict(self, preferences_id: str):
+    @zyncio.zmethod
+    async def get_dict(self, preferences_id: str) -> dict:
         """get dict from given preferences_id"""
-        with self.open(preferences_id) as o:
-            return o.get_dict()
+        async with await self.open.z(preferences_id) as o:
+            return await o.get_dict.z()

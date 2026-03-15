@@ -2,6 +2,10 @@ import datetime
 
 import pytest
 
+from rpcclient.clients.darwin.client import DarwinClient
+from rpcclient.clients.darwin.common import CfSerializable
+
+
 pytestmark = pytest.mark.darwin
 
 
@@ -21,5 +25,5 @@ pytestmark = pytest.mark.darwin
         [{"key": "value"}, [1, 2]],
     ],
 )
-def test_serialization(client, data):
+def test_serialization(client: DarwinClient, data: CfSerializable) -> None:
     assert client.cf(data).py() == data

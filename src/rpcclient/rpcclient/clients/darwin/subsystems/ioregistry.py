@@ -1,163 +1,192 @@
-from typing import TYPE_CHECKING
+from collections.abc import AsyncGenerator, Generator
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
+from typing_extensions import Self
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.consts import MACH_PORT_NULL, kCFAllocatorDefault, kIOServicePlane
 from rpcclient.clients.darwin.structs import io_name_t, io_object_t, mach_port_t
+from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core._types import ClientBound
 from rpcclient.core.allocated import Allocated
 from rpcclient.exceptions import BadReturnValueError, RpcClientException
 
+
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
-class IOService(Allocated):
+CfSerializableT = TypeVar("CfSerializableT", bound=CfSerializable)
+_CfSerializableAny = cast(type[CfSerializable], object)
+
+
+class IOService(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """representation of a remote IOService"""
 
-    def __init__(self, client: "DarwinClient", service):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", service: DarwinSymbolT_co, name: str) -> None:
         super().__init__()
         self._client = client
-        self._service = service
+        self._service: DarwinSymbolT_co = service
+        self.name: str = name
 
-    @property
-    def name(self) -> str:
-        with self._client.safe_malloc(io_name_t.sizeof()) as name:
-            if self._client.symbols.IORegistryEntryGetName(self._service, name):
+    @classmethod
+    async def create(cls, client: "BaseDarwinClient[DarwinSymbolT_co]", service: int) -> Self:
+        async with client.safe_malloc.z(io_name_t.sizeof()) as name:
+            if await client.symbols.IORegistryEntryGetName.z(service, name):
                 raise BadReturnValueError("IORegistryEntryGetName failed")
-            return name.peek_str()
+            name = await name.peek_str.z()
 
-    @property
-    def properties(self) -> dict:
-        with self._client.safe_malloc(8) as p_properties:
-            if self._client.symbols.IORegistryEntryCreateCFProperties(
+        return cls(client, client.symbol(service), name)
+
+    @zyncio.zproperty
+    async def properties(self) -> dict:
+        async with self._client.safe_malloc.z(8) as p_properties:
+            if await self._client.symbols.IORegistryEntryCreateCFProperties.z(
                 self._service, p_properties, kCFAllocatorDefault, 0
             ):
                 raise BadReturnValueError("IORegistryEntryCreateCFProperties failed")
-            return p_properties[0].py()
+            return await (await p_properties.getindex(0)).py.z(dict)
 
-    def __iter__(self):
-        with self._client.safe_malloc(io_object_t.sizeof()) as p_child_iter:
-            if self._client.symbols.IORegistryEntryGetChildIterator(self._service, kIOServicePlane, p_child_iter):
+    @zyncio.zgeneratormethod
+    async def _iter(self) -> "AsyncGenerator[IOService[DarwinSymbolT_co]]":
+        async with self._client.safe_malloc.z(io_object_t.sizeof()) as p_child_iter:
+            if await self._client.symbols.IORegistryEntryGetChildIterator.z(
+                self._service, kIOServicePlane, p_child_iter
+            ):
                 raise BadReturnValueError("IORegistryEntryGetChildIterator failed")
-            child_iter = p_child_iter[0]
+            child_iter = await p_child_iter.getindex(0)
 
-        while True:
-            child = self._client.symbols.IOIteratorNext(child_iter)
-            if not child:
-                break
-            s = IOService(self._client, child)
-            yield s
+        while child := await self._client.symbols.IOIteratorNext.z(child_iter):
+            yield await IOService.create(self._client, child)
 
-    def set(self, properties: dict):
-        self._client.symbols.IORegistryEntrySetCFProperties(self._service, self._client.cf(properties))
+    def __iter__(self: "IOService[DarwinSymbol]") -> "Generator[IOService[DarwinSymbol]]":
+        return self._iter()
 
-    def get(self, key: str):
-        return self._client.symbols.IORegistryEntryCreateCFProperty(
-            self._service, self._client.cf(key), kCFAllocatorDefault, 0
-        ).py()
+    def __aiter__(self) -> "AsyncGenerator[IOService[DarwinSymbolT_co]]":
+        return self._iter.z()
 
-    def _deallocate(self):
-        self._client.symbols.IOObjectRelease(self._service)
+    @zyncio.zmethod
+    async def set(self, properties: dict) -> None:
+        await self._client.symbols.IORegistryEntrySetCFProperties.z(self._service, await self._client.cf.z(properties))
+
+    @zyncio.zmethod
+    async def get(
+        self, key: str, typ: type[CfSerializableT] | tuple[type[CfSerializableT], ...] = _CfSerializableAny
+    ) -> CfSerializableT:
+        return await (
+            await self._client.symbols.IORegistryEntryCreateCFProperty.z(
+                self._service, await self._client.cf.z(key), kCFAllocatorDefault, 0
+            )
+        ).py.z(typ)
+
+    async def _deallocate(self) -> None:
+        await self._client.symbols.IOObjectRelease.z(self._service)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} NAME:{self.name}>"
 
 
-class BacklightControlService(IOService):
-    @property
-    def display_parameters(self) -> dict:
-        return self.get("IODisplayParameters")
+class BacklightControlService(IOService[DarwinSymbolT_co]):
+    @zyncio.zproperty
+    async def display_parameters(self) -> dict:
+        return await self.get.z("IODisplayParameters", dict)
 
-    @property
-    def brightness(self) -> int:
-        return self.display_parameters["brightness"]["value"]
+    @zyncio.zproperty
+    async def _brightness(self) -> int:
+        return await (await type(self).display_parameters(self))["brightness"]["value"]
 
-    @brightness.setter
-    def brightness(self, value: int):
-        self.set({"EnableBacklight": bool(value)})
-        self.set({"brightness": value})
-
-
-class PowerSourceService(IOService):
-    @property
-    def battery_voltage(self) -> int:
-        return self.get("AppleRawBatteryVoltage")
-
-    @property
-    def charging(self) -> bool:
-        return self.get("IsCharging")
-
-    @charging.setter
-    def charging(self, value: bool):
-        self.set({"IsCharging": value, "ExternalConnected": value})
-
-    @property
-    def external_connected(self) -> bool:
-        return self.get("ExternalConnected")
-
-    @external_connected.setter
-    def external_connected(self, value: bool):
-        self.set({"ExternalConnected": value})
-
-    @property
-    def current_capacity(self) -> int:
-        return self.get("CurrentCapacity")
-
-    @current_capacity.setter
-    def current_capacity(self, value: int):
-        self.set({"CurrentCapacity": value})
-
-    @property
-    def at_warn_level(self) -> bool:
-        return self.get("AtWarnLevel")
-
-    @at_warn_level.setter
-    def at_warn_level(self, value: bool):
-        self.set({"AtWarnLevel": value})
-
-    @property
-    def time_remaining(self) -> int:
-        return self.get("TimeRemaining")
-
-    @property
-    def temperature(self) -> int:
-        return self.get("Temperature")
-
-    @temperature.setter
-    def temperature(self, value: int):
-        self.set({"Temperature": value})
+    @_brightness.setter
+    async def brightness(self, value: int) -> None:
+        await self.set.z({"EnableBacklight": bool(value)})
+        await self.set.z({"brightness": value})
 
 
-class IORegistry:
+class PowerSourceService(IOService[DarwinSymbolT_co]):
+    @zyncio.zproperty
+    async def battery_voltage(self) -> int:
+        return await self.get.z("AppleRawBatteryVoltage", int)
+
+    @zyncio.zproperty
+    async def _charging(self) -> bool:
+        return await self.get.z("IsCharging", bool)
+
+    @_charging.setter
+    async def charging(self, value: bool) -> None:
+        await self.set.z({"IsCharging": value, "ExternalConnected": value})
+
+    @zyncio.zproperty
+    async def _external_connected(self) -> bool:
+        return await self.get.z("ExternalConnected", bool)
+
+    @_external_connected.setter
+    async def external_connected(self, value: bool) -> None:
+        await self.set.z({"ExternalConnected": value})
+
+    @zyncio.zproperty
+    async def _current_capacity(self) -> int:
+        return await self.get.z("CurrentCapacity", int)
+
+    @_current_capacity.setter
+    async def current_capacity(self, value: int) -> None:
+        await self.set.z({"CurrentCapacity": value})
+
+    @zyncio.zproperty
+    async def _at_warn_level(self) -> bool:
+        return await self.get.z("AtWarnLevel", bool)
+
+    @_at_warn_level.setter
+    async def at_warn_level(self, value: bool) -> None:
+        await self.set.z({"AtWarnLevel": value})
+
+    @zyncio.zproperty
+    async def time_remaining(self) -> int:
+        return await self.get.z("TimeRemaining", int)
+
+    @zyncio.zproperty
+    async def _temperature(self) -> int:
+        return await self.get.z("Temperature", int)
+
+    @_temperature.setter
+    async def temperature(self, value: int) -> None:
+        await self.set.z({"Temperature": value})
+
+
+class IORegistry(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     IORegistry utils
     https://developer.apple.com/library/archive/documentation/DeviceDrivers/Conceptual/IOKitFundamentals/TheRegistry/TheRegistry.html
     """
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
 
-    @property
-    def backlight_control(self) -> BacklightControlService:
-        service = self._client.symbols.IOServiceGetMatchingService(
-            0, self._client.cf({"IOPropertyMatch": {"backlight-control": True}})
+    @zyncio.zproperty
+    async def backlight_control(self) -> BacklightControlService[DarwinSymbolT_co]:
+        service = await self._client.symbols.IOServiceGetMatchingService.z(
+            0, await self._client.cf.z({"IOPropertyMatch": {"backlight-control": True}})
         )
         if not service:
             raise RpcClientException("IOServiceGetMatchingService failed")
-        return BacklightControlService(self._client, service)
+        return await BacklightControlService.create(self._client, service)
 
-    @property
-    def power_source(self) -> PowerSourceService:
-        service = self._client.symbols.IOServiceGetMatchingService(
-            0, self._client.symbols.IOServiceMatching("IOPMPowerSource")
+    @zyncio.zproperty
+    async def power_source(self) -> PowerSourceService[DarwinSymbolT_co]:
+        service = await self._client.symbols.IOServiceGetMatchingService.z(
+            0, await self._client.symbols.IOServiceMatching.z("IOPMPowerSource")
         )
         if not service:
             raise RpcClientException("IOServiceGetMatchingService failed")
-        return PowerSourceService(self._client, service)
+        return await PowerSourceService.create(self._client, service)
 
-    @property
-    def root(self) -> IOService:
-        with self._client.safe_malloc(mach_port_t.sizeof()) as p_master_port:
-            self._client.symbols.IOMasterPort(MACH_PORT_NULL, p_master_port)
-            return IOService(self._client, self._client.symbols.IORegistryGetRootEntry(p_master_port[0]))
+    @zyncio.zproperty
+    async def root(self) -> IOService[DarwinSymbolT_co]:
+        async with self._client.safe_malloc.z(mach_port_t.sizeof()) as p_master_port:
+            await self._client.symbols.IOMasterPort.z(MACH_PORT_NULL, p_master_port)
+            return await IOService.create(
+                self._client, await self._client.symbols.IORegistryGetRootEntry.z(await p_master_port.getindex(0))
+            )

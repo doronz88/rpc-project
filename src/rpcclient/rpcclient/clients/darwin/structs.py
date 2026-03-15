@@ -52,6 +52,7 @@ from rpcclient.core.structs.generic import (
     uint64_t,
 )
 
+
 MAXPATHLEN = 1024
 _SYS_NAMELEN = 256
 

@@ -1,29 +1,29 @@
-from typing import TYPE_CHECKING
+import zyncio
 
+from rpcclient.core._types import ClientBound, ClientT_co
 from rpcclient.core.structs.consts import SIGTERM
 from rpcclient.exceptions import BadReturnValueError
 
-if TYPE_CHECKING:
-    from rpcclient.core.client import CoreClient
 
-
-class Processes:
-    def __init__(self, client: "CoreClient"):
+class Processes(ClientBound[ClientT_co]):
+    def __init__(self, client: ClientT_co) -> None:
         """
         process manager
         :param rpcclient.darwin_client.Client client: client
         """
         self._client = client
 
-    def kill(self, pid: int, sig: int = SIGTERM):
+    @zyncio.zmethod
+    async def kill(self, pid: int, sig: int = SIGTERM) -> None:
         """Send a signal to a remote process."""
-        if self._client.symbols.kill(pid, sig) != 0:
-            raise BadReturnValueError(f"kill({pid}, {sig}) failed ({self._client.last_error})")
+        if await self._client.symbols.kill.z(pid, sig) != 0:
+            raise BadReturnValueError(f"kill({pid}, {sig}) failed ({await self._client.get_last_error.z()})")
 
-    def waitpid(self, pid: int, flags: int = 0):
+    @zyncio.zmethod
+    async def waitpid(self, pid: int, flags: int = 0) -> int:
         """Wait for a remote process to change state and return status."""
-        with self._client.safe_malloc(8) as stat_loc:
-            err = self._client.symbols.waitpid(pid, stat_loc, flags).c_int64
+        async with self._client.safe_malloc.z(8) as stat_loc:
+            err = (await self._client.symbols.waitpid.z(pid, stat_loc, flags)).c_int64
             if err == -1:
-                raise BadReturnValueError(f"waitpid(): returned {err} ({self._client.last_error})")
-            return stat_loc[0]
+                raise BadReturnValueError(f"waitpid(): returned {err} ({await self._client.get_last_error.z()})")
+            return int(await stat_loc.getindex(0))
