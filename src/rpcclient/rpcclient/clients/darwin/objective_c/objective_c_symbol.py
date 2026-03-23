@@ -63,7 +63,7 @@ class ObjectiveCSymbol(DarwinSymbol):
         :return: DarwinSymbol object.
         :rtype: DarwinSymbol
         """
-        return DarwinSymbol.create(value, self._client)
+        return self._client.symbol(value)
 
     def reload(self):
         """
@@ -81,7 +81,7 @@ class ObjectiveCSymbol(DarwinSymbol):
             for prop in object_data["properties"]
         ]
 
-        class_object = DarwinSymbol.create(object_data["class_address"], self._client)
+        class_object = self._client.symbol(object_data["class_address"])
         class_wrapper = Class(self._client, class_object)
 
         self.ivars = ivars_list
