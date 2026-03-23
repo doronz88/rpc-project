@@ -220,7 +220,9 @@ class DarwinClient(CoreClient):
         if objc_data == 0:
             return None
         count = self.symbols.CFDataGetLength(objc_data)
-        result = plistlib.loads(self.symbols.CFDataGetBytePtr(objc_data).peek(count))
+        with self.safe_malloc(count) as buf:
+            self.symbols.CFDataGetBytes(objc_data, 0, count, buf)
+            result = plistlib.loads(buf.peek(count))
         objc_data.objc_call("release")
         return result
 
