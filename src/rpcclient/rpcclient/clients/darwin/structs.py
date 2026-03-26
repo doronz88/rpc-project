@@ -642,6 +642,18 @@ pipe_fdinfo = Struct(
     "pipeinfo" / pipe_info,
 )
 
+pshm_info = Struct(
+    "pshm_stat" / vinfo_stat,
+    "pshm_mappaddr" / uint64_t,
+    "_pshm_name" / Bytes(MAXPATHLEN),
+    "pshm_name" / Computed(lambda x: x._pshm_name.split(b"\x00", 1)[0].decode()),
+)
+
+pshm_fdinfo = Struct(
+    "pfi" / proc_fileinfo,
+    "pshminfo" / pshm_info,
+)
+
 vm_region_basic_info = Struct(
     "protection" / vm_prot_t,
     "max_protection" / vm_prot_t,
