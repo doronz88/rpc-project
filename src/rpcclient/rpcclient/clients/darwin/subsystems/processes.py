@@ -42,12 +42,14 @@ from rpcclient.clients.darwin.structs import (
     LOAD_COMMAND_TYPE,
     MAXPATHLEN,
     PROC_PIDFDPIPEINFO,
+    PROC_PIDFDPSHMINFO,
     PROC_PIDFDSOCKETINFO,
     PROC_PIDFDVNODEPATHINFO,
     PROC_PIDLISTFDS,
     PROC_PIDTASKALLINFO,
     PROX_FDTYPE_KQUEUE,
     PROX_FDTYPE_PIPE,
+    PROX_FDTYPE_PSHM,
     PROX_FDTYPE_SOCKET,
     PROX_FDTYPE_VNODE,
     TASK_DYLD_INFO_COUNT,
@@ -65,6 +67,7 @@ from rpcclient.clients.darwin.structs import (
     proc_fdinfo,
     proc_taskallinfo,
     procargs2_t,
+    pshm_fdinfo,
     so_family_t,
     so_kind_t,
     socket_fdinfo,
@@ -118,6 +121,11 @@ class KQueueFd(Fd):
 @dataclasses.dataclass()
 class PipeFd(Fd):
     pass
+
+
+@dataclasses.dataclass()
+class SharedMemoryFd(Fd):
+    path: str
 
 
 @dataclasses.dataclass()
@@ -649,6 +657,9 @@ class Process:
             elif fd.proc_fdtype == PROX_FDTYPE_PIPE:
                 result.append(PipeFd(fd=fd.proc_fd))
 
+            elif fd.proc_fdtype == PROX_FDTYPE_PSHM:
+                result.append(SharedMemoryFd(fd=fd.proc_fd, path=parsed.pshminfo.pshm_name))
+
             elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
                 if parsed.psi.soi_kind in (so_kind_t.SOCKINFO_TCP, so_kind_t.SOCKINFO_IN):
                     correct_class = SOCKET_TYPE_DATACLASS[parsed.psi.soi_family][parsed.psi.soi_kind]
@@ -738,6 +749,19 @@ class Process:
                             )
 
                         result.append(FdStruct(fd=fd, struct=pipe_info.parse(vi_buf.peek(pipe_info.sizeof()))))
+
+                    elif fd.proc_fdtype == PROX_FDTYPE_PSHM:
+                        vs = self._client.symbols.proc_pidfdinfo(
+                            self.pid, fd.proc_fd, PROC_PIDFDPSHMINFO, vi_buf, vi_size
+                        )
+                        if not vs:
+                            if self._client.errno == errno.EBADF:
+                                continue
+                            raise BadReturnValueError(
+                                f"proc_pidinfo(PROC_PIDFDPSHMINFO) failed ({self._client.last_error})"
+                            )
+
+                        result.append(FdStruct(fd=fd, struct=pshm_fdinfo.parse(vi_buf.peek(pshm_fdinfo.sizeof()))))
 
             return result
 

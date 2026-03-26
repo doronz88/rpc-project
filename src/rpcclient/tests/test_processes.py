@@ -1,7 +1,10 @@
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
+from rpcclient.clients.darwin.subsystems.processes import SharedMemoryFd
+from rpcclient.core.structs.consts import O_CREAT, O_RDWR
 from rpcclient.exceptions import LaunchError
 from rpcclient.transports import DEFAULT_PORT
 
@@ -32,6 +35,23 @@ def test_process_object(client):
     assert fds[0].fd == 0
     assert fds[1].fd == 1
     assert fds[2].fd == 2
+
+
+@pytest.mark.darwin
+def test_process_object_includes_shared_memory_fd(client):
+    shm_name = f"/rpc-{uuid4().hex[:8]}"
+    fd = client.symbols.shm_open(shm_name, O_RDWR | O_CREAT, 0o600).c_int32
+    if fd < 0:
+        client.raise_errno_exception(f"shm_open({shm_name}) failed")
+
+    try:
+        shm_fds = [item for item in client.processes.get_self().fds if isinstance(item, SharedMemoryFd)]
+        assert any(item.fd == fd and item.path == shm_name for item in shm_fds)
+    finally:
+        if client.symbols.close(fd) != 0:
+            client.raise_errno_exception(f"close({fd}) failed")
+        if client.symbols.shm_unlink(shm_name) != 0:
+            client.raise_errno_exception(f"shm_unlink({shm_name}) failed")
 
 
 def test_get_memgraph_snapshot(client):
