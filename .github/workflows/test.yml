@@ -1,11 +1,12 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: pull request
+name: Run tests
 
 on:
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,7 +14,7 @@ concurrency:
 
 jobs:
   python-app:
-    if: '! github.event.pull_request.draft'
+    if: "! github.event.pull_request.draft"
     runs-on: ubuntu-latest
 
     defaults:
@@ -23,7 +24,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: [ 3.9, "3.10", 3.11, 3.12, 3.13 ]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +36,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-            python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade pip
       - name: Build
         run: |
           python3 -m pip install mypy-protobuf protobuf grpcio-tools
@@ -44,17 +45,22 @@ jobs:
           python3 -m build
       - name: Install
         run: |
-          python3 -m pip install .
+          python3 -m pip install .[dev]
       - name: pre-commit
         run: |
-            python3 -m pip install pre-commit    
-            pre-commit run --all-files
+          python3 -m pip install pre-commit
+          pre-commit run --all-files
+      - name: type-check
+        uses: jakebailey/pyright-action@v3
+        with:
+          working-directory: src/rpcclient
+          stats: "true"
       - name: Run help
         run: |
           python3 -m rpcclient --help
 
   build-linux-server:
-    if: '! github.event.pull_request.draft'
+    if: "! github.event.pull_request.draft"
     runs-on: ${{ matrix.os }}
 
     defaults:
@@ -86,15 +92,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler libprotobuf-dev libprotoc-dev protobuf-c-compiler
           make -C ../protos/ c_protos
-          
-          
+
+
           mkdir build
           cd build
           cmake .. -DTARGET=LINUX
           make
 
   pytest:
-    if: '! github.event.pull_request.draft'
+    if: "! github.event.pull_request.draft"
     needs: [python-app, build-linux-server]
     runs-on: ${{ matrix.os }}
 
@@ -107,9 +113,6 @@ jobs:
         include:
           - os: macos-latest
             arch: arm64
-            python-version: "3.9"
-          - os: macos-latest
-            arch: arm64
             python-version: "3.10"
           - os: macos-latest
             arch: arm64
@@ -117,10 +120,7 @@ jobs:
           - os: macos-latest
             arch: arm64
             python-version: "3.12"
-          
-          - os: macos-latest
-            arch: x86_64
-            python-version: "3.9"
+
           - os: macos-latest
             arch: x86_64
             python-version: "3.10"
@@ -155,8 +155,7 @@ jobs:
           python3 -m pip install mypy-protobuf protobuf grpcio-tools
           make -C ../protos/ python_protos
           python -m pip install --upgrade pip
-          python -m pip install -U pytest
-          python -m pip install -U .
+          python -m pip install -U .[test]
       - name: pytest
         working-directory: ./src/rpcclient
         run: |

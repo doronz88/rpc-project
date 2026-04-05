@@ -1,8 +1,10 @@
 import threading
+from collections.abc import Mapping
 from enum import Enum, auto
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from rpcclient.event_notifier import EventNotifier
+
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -19,7 +21,7 @@ class RegistryEvent(Enum):
 class Registry(Generic[K, V]):
     """Thread-safe 1:1 registry (key -> value)."""
 
-    def __init__(self, initial_data: Optional[dict[K, V]] = None, notifier: Optional[EventNotifier] = None) -> None:
+    def __init__(self, initial_data: Mapping[K, V] | None = None, notifier: EventNotifier | None = None) -> None:
         self._lock = threading.RLock()
         self._data: dict[K, V] = {}
         self.notifier: EventNotifier = notifier or EventNotifier()
@@ -41,7 +43,7 @@ class Registry(Generic[K, V]):
             self._data.pop(key, None)
         self.notifier.notify(RegistryEvent.UNREGISTERED, key)
 
-    def update(self, entries: dict[K, V], overwrite: bool = False) -> None:
+    def update(self, entries: Mapping[K, V], overwrite: bool = False) -> None:
         for key, value in entries.items():
             self.register(key, value, overwrite)
 
@@ -56,7 +58,7 @@ class Registry(Generic[K, V]):
             self._data.clear()
         self.notifier.notify(RegistryEvent.CLEARED)
 
-    def get(self, key: K) -> Optional[V]:
+    def get(self, key: K) -> V | None:
         """Get value for a key, or None if missing."""
         with self._lock:
             return self._data.get(key)

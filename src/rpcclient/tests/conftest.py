@@ -1,23 +1,40 @@
-from contextlib import closing, suppress
+from collections.abc import AsyncGenerator, Generator
+from contextlib import suppress
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 
-from rpcclient.client_manager import ClientManager
-from rpcclient.clients.darwin.client import DarwinClient
-from rpcclient.clients.ios.client import IosClient
+from rpcclient.client_manager import AsyncClientManager, ClientManager
+from rpcclient.clients.darwin.client import BaseDarwinClient, DarwinClient
+from rpcclient.clients.ios.client import BaseIosClient
+from rpcclient.core.subsystems.fs import RemotePath
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
+from tests._types import AsyncClient, SyncClient
 
 
 @pytest.fixture
-def client():
-    with closing(ClientManager().create(hostname="127.0.0.1")) as c:
+def client() -> Generator[SyncClient]:
+    with ClientManager().create(hostname="127.0.0.1") as c:
+        yield c
+
+
+@pytest_asyncio.fixture
+async def async_client() -> AsyncGenerator[AsyncClient]:
+    async with await AsyncClientManager().create(hostname="127.0.0.1") as c:
         yield c
 
 
 @pytest.fixture
-def tmp_path(client):
+def darwin_client() -> Generator[DarwinClient]:
+    with ClientManager().create(hostname="127.0.0.1") as c:
+        assert isinstance(c, DarwinClient)
+        yield c
+
+
+@pytest.fixture
+def tmp_path(client: SyncClient) -> Generator[RemotePath[SyncClient]]:
     tmp_path = "/tmp"
     with suppress(BadReturnValueError):
         tmp_path = client.fs.readlink(tmp_path)
@@ -29,12 +46,12 @@ def tmp_path(client):
         client.fs.remove(filename, recursive=True)
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser) -> None:
     parser.addoption("--ci", action="store_true", default=False, help="Don't run local only tests")
     parser.addoption("--local-machine", action="store_true", default=False, help="Run local-machine tests")
 
 
-def pytest_configure(config):
+def pytest_configure(config) -> None:
     config.addinivalue_line(
         "markers",
         """local_only: marks tests that require features the CI lacks (deselect with '-m "not local_only"')""",
@@ -45,16 +62,16 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "arm: marks tests that require arm architecture to run")
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config, items) -> None:
     skip_local_only = pytest.mark.skip(reason="remove --ci option to run")
     skip_not_darwin = pytest.mark.skip(reason="Darwin system is required for this test")
     skip_not_ios = pytest.mark.skip(reason="Ios system is required for this test")
     skip_not_arm = pytest.mark.skip(reason="Arm arch is required for this test")
     skip_not_local_machine = pytest.mark.skip(reason="Local machine is required for this test")
 
-    with closing(ClientManager().create(hostname="127.0.0.1")) as c:
-        is_darwin = isinstance(c, DarwinClient)
-        is_ios = isinstance(c, IosClient)
+    with ClientManager().create(hostname="127.0.0.1") as c:
+        is_darwin = isinstance(c, BaseDarwinClient)
+        is_ios = isinstance(c, BaseIosClient)
         is_arm = c.arch == ARCH_ARM64
 
     for item in items:

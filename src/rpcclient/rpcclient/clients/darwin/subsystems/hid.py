@@ -1,8 +1,10 @@
-import contextlib
-import time
+from collections.abc import AsyncGenerator
 from enum import Enum
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import (
     IOHIDDigitizerEventMask,
     IOHIDDigitizerTransducerType,
@@ -24,10 +26,13 @@ from rpcclient.clients.darwin.consts import (
     kHIDUsage_Csmr_VolumeDecrement,
     kHIDUsage_Csmr_VolumeIncrement,
 )
+from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import BadReturnValueError
+from rpcclient.utils import zync_sleep
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
 class TouchEventType(Enum):
@@ -69,98 +74,120 @@ EVENT_TYPE_PARAMS = {
 }
 
 
-class Hid:
+class Hid(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Control HID devices and simulate events"""
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         self._client = client
 
-    def send_double_home_button_press(self):
-        self.send_home_button_press()
-        self.send_home_button_press()
+    @zyncio.zmethod
+    async def send_double_home_button_press(self) -> None:
+        await self.send_home_button_press.z()
+        await self.send_home_button_press.z()
 
-    def send_rewind_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Rewind)
+    @zyncio.zmethod
+    async def send_rewind_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Rewind)
 
-    def send_random_play_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_RandomPlay)
+    @zyncio.zmethod
+    async def send_random_play_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_RandomPlay)
 
-    def send_repeat_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Repeat)
+    @zyncio.zmethod
+    async def send_repeat_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Repeat)
 
-    def send_fast_forward_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_FastForward)
+    @zyncio.zmethod
+    async def send_fast_forward_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_FastForward)
 
-    def send_play_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Play)
+    @zyncio.zmethod
+    async def send_play_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Play)
 
-    def send_pause_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Pause)
+    @zyncio.zmethod
+    async def send_pause_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Pause)
 
-    def send_play_pause_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_PlayOrPause)
+    @zyncio.zmethod
+    async def send_play_pause_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_PlayOrPause)
 
-    def send_search_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_ACSearch)
+    @zyncio.zmethod
+    async def send_search_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_ACSearch)
 
-    def send_mute_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Mute)
+    @zyncio.zmethod
+    async def send_mute_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Mute)
 
-    def send_home_button_press(self):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Menu)
+    @zyncio.zmethod
+    async def send_home_button_press(self) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Menu)
 
-    def send_power_button_press(self, interval: int = 0):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_Power, interval=interval)
+    @zyncio.zmethod
+    async def send_power_button_press(self, interval: int = 0) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_Power, interval=interval)
 
-    def send_volume_down_button_press(self, interval: int = 0):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_VolumeDecrement, interval=interval)
+    @zyncio.zmethod
+    async def send_volume_down_button_press(self, interval: int = 0) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_VolumeDecrement, interval=interval)
 
-    def send_volume_up_button_press(self, interval: int = 0):
-        self.send_key_press(kHIDPage_Consumer, kHIDUsage_Csmr_VolumeIncrement, interval=interval)
+    @zyncio.zmethod
+    async def send_volume_up_button_press(self, interval: int = 0) -> None:
+        await self.send_key_press.z(kHIDPage_Consumer, kHIDUsage_Csmr_VolumeIncrement, interval=interval)
 
-    def send_key_press(self, page: int, key_code: int, interval: Union[float, int] = 0):
-        self.send_keyboard_event(page, key_code, True)
+    @zyncio.zmethod
+    async def send_key_press(self, page: int, key_code: int, interval: float | int = 0) -> None:
+        await self.send_keyboard_event.z(page, key_code, True)
         if interval:
-            time.sleep(interval)
-        self.send_keyboard_event(page, key_code, False)
+            await zync_sleep(self._client.__zync_mode__, interval)
+        await self.send_keyboard_event.z(page, key_code, False)
 
-    def send_keyboard_event(self, page: int, key_code: int, down: bool):
-        event = self._client.symbols.IOHIDEventCreateKeyboardEvent(
-            kCFAllocatorDefault, self._client.symbols.mach_absolute_time(), page, key_code, down, 0
+    @zyncio.zmethod
+    async def send_keyboard_event(self, page: int, key_code: int, down: bool) -> None:
+        event = await self._client.symbols.IOHIDEventCreateKeyboardEvent.z(
+            kCFAllocatorDefault, await self._client.symbols.mach_absolute_time.z(), page, key_code, down, 0
         )
         if not event:
             raise BadReturnValueError("IOHIDEventCreateKeyboardEvent() failed")
 
-        self.dispatch(event)
+        await self.dispatch.z(event)
 
-    def send_swipe_right(self):
-        self.send_swipe(0.5, 0.5, 1.0, 0.5)
+    @zyncio.zmethod
+    async def send_swipe_right(self) -> None:
+        await self.send_swipe.z(0.5, 0.5, 1.0, 0.5)
 
-    def send_swipe_left(self):
-        self.send_swipe(0.5, 0.5, 0.0, 0.5)
+    @zyncio.zmethod
+    async def send_swipe_left(self) -> None:
+        await self.send_swipe.z(0.5, 0.5, 0.0, 0.5)
 
-    def send_swipe_up(self):
-        self.send_swipe(0.5, 1.5, 0.5, 0.5)
+    @zyncio.zmethod
+    async def send_swipe_up(self) -> None:
+        await self.send_swipe.z(0.5, 1.5, 0.5, 0.5)
 
-    def send_swipe_down(self):
-        self.send_swipe(0.5, 0.5, 0.5, 1.5)
+    @zyncio.zmethod
+    async def send_swipe_down(self) -> None:
+        await self.send_swipe.z(0.5, 0.5, 0.5, 1.5)
 
-    def send_swipe(self, from_x: float, from_y: float, to_x: float, to_y: float):
-        self.send_touch_event(TouchEventType.TOUCH_DOWN, from_x, from_y)
-        time.sleep(TOUCH_EVENT_SLEEP)
-        self.send_touch_event(TouchEventType.TOUCH_MOVE, to_x, to_y)
-        self.send_touch_event(TouchEventType.TOUCH_UP, to_x, to_y)
+    @zyncio.zmethod
+    async def send_swipe(self, from_x: float, from_y: float, to_x: float, to_y: float) -> None:
+        await self.send_touch_event.z(TouchEventType.TOUCH_DOWN, from_x, from_y)
+        await zync_sleep(self._client.__zync_mode__, TOUCH_EVENT_SLEEP)
+        await self.send_touch_event.z(TouchEventType.TOUCH_MOVE, to_x, to_y)
+        await self.send_touch_event.z(TouchEventType.TOUCH_UP, to_x, to_y)
 
-    def send_touch_event(self, event_type: TouchEventType, x: float, y: float, pressure: float = 0.4):
+    @zyncio.zmethod
+    async def send_touch_event(self, event_type: TouchEventType, x: float, y: float, pressure: float = 0.4) -> None:
         params = EVENT_TYPE_PARAMS[event_type]
 
-        timestamp = self._client.symbols.mach_absolute_time()
+        timestamp = await self._client.symbols.mach_absolute_time.z()
 
         event_flags = params["event_flags"]
         touch = params["touch"]
         button_mask = params["button_mask"]
 
-        parent = self.create_digitizer_event(
+        parent = await self.create_digitizer_event.z(
             IOHIDDigitizerTransducerType.kIOHIDDigitizerTransducerTypeHand,
             0,
             0,
@@ -177,15 +204,16 @@ class Hid:
             timestamp=timestamp,
         )
 
-        child = self.create_digitizer_finger_event(
+        child = await self.create_digitizer_finger_event.z(
             2, 2, event_flags, button_mask, x, y, 0.0, pressure, 0.0, touch, touch, 0, timestamp=timestamp
         )
-        self._client.symbols.IOHIDEventAppendEvent(parent, child)
-        self.dispatch(parent)
+        await self._client.symbols.IOHIDEventAppendEvent.z(parent, child)
+        await self.dispatch.z(parent)
 
-    def create_digitizer_event(
+    @zyncio.zmethod
+    async def create_digitizer_event(
         self,
-        type_: Union[IOHIDDigitizerTransducerType, int],
+        type_: IOHIDDigitizerTransducerType | int,
         index: int,
         identity: int,
         event_mask: int,
@@ -201,9 +229,9 @@ class Hid:
         timestamp=None,
     ):
         if timestamp is None:
-            timestamp = self._client.symbols.mach_absolute_time()
+            timestamp = await self._client.symbols.mach_absolute_time.z()
 
-        event = self._client.symbols.IOHIDEventCreateDigitizerEvent(
+        event = await self._client.symbols.IOHIDEventCreateDigitizerEvent.z(
             kCFAllocatorDefault,
             timestamp,
             type_,
@@ -224,15 +252,16 @@ class Hid:
         if not event:
             raise BadReturnValueError("IOHIDEventCreateDigitizerEvent() failed")
 
-        self._client.symbols.IOHIDEventSetIntegerValue(event, IOHIDEventField.kIOHIDEventFieldIsBuiltIn, 0)
-        self._client.symbols.IOHIDEventSetIntegerValue(
+        await self._client.symbols.IOHIDEventSetIntegerValue.z(event, IOHIDEventField.kIOHIDEventFieldIsBuiltIn, 0)
+        await self._client.symbols.IOHIDEventSetIntegerValue.z(
             event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1
         )
-        self._client.symbols.IOHIDEventSetSenderID(event, 0x8000000817319375)
+        await self._client.symbols.IOHIDEventSetSenderID.z(event, 0x8000000817319375)
 
         return event
 
-    def create_digitizer_finger_event(
+    @zyncio.zmethod
+    async def create_digitizer_finger_event(
         self,
         index: int,
         identity: int,
@@ -247,11 +276,11 @@ class Hid:
         touch: bool,
         options: int,
         timestamp=None,
-    ):
+    ) -> DarwinSymbolT_co:
         if timestamp is None:
-            timestamp = self._client.symbols.mach_absolute_time()
+            timestamp = await self._client.symbols.mach_absolute_time.z()
 
-        event = self._client.symbols.IOHIDEventCreateDigitizerFingerEvent(
+        event = await self._client.symbols.IOHIDEventCreateDigitizerFingerEvent.z(
             kCFAllocatorDefault,
             timestamp,
             index,
@@ -271,14 +300,14 @@ class Hid:
         if not event:
             raise BadReturnValueError("IOHIDEventCreateDigitizerFingerEvent() failed")
 
-        self._client.symbols.IOHIDEventSetFloatValue(
+        await self._client.symbols.IOHIDEventSetFloatValue.z(
             event, IOHIDEventFieldDigitizer.kIOHIDEventFieldDigitizerMajorRadius, 0.5
         )
         return event
 
-    @contextlib.contextmanager
-    def create_hid_client(self):
-        client = self._client.symbols.IOHIDEventSystemClientCreate(0)
+    @zyncio.zcontextmanagermethod
+    async def create_hid_client(self) -> AsyncGenerator[DarwinSymbolT_co]:
+        client = await self._client.symbols.IOHIDEventSystemClientCreate.z(0)
 
         if not client:
             raise BadReturnValueError("IOHIDEventSystemClientCreate() failed")
@@ -286,8 +315,9 @@ class Hid:
         try:
             yield client
         finally:
-            self._client.symbols.CFRelease(client)
+            await self._client.symbols.CFRelease.z(client)
 
-    def dispatch(self, event):
-        with self.create_hid_client() as hid_client:
-            self._client.symbols.IOHIDEventSystemClientDispatchEvent(hid_client, event)
+    @zyncio.zmethod
+    async def dispatch(self, event):
+        async with self.create_hid_client.z() as hid_client:
+            await self._client.symbols.IOHIDEventSystemClientDispatchEvent.z(hid_client, event)

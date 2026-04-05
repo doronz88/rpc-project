@@ -1,43 +1,52 @@
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.structs import timeval
+from rpcclient.core._types import ClientBound
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
-class Time:
-    def __init__(self, client: "DarwinClient"):
+class Time(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._client.load_framework("CoreTime")
+        client.load_framework_lazy("CoreTime")
 
-    def now(self) -> datetime:
+    @zyncio.zmethod
+    async def now(self) -> datetime:
         """get current time"""
-        with self._client.safe_calloc(timeval.sizeof()) as current:
-            self._client.symbols.gettimeofday(current, 0)
-            time_of_day = timeval.parse(current.peek(timeval.sizeof()))
+        async with self._client.safe_calloc.z(timeval.sizeof()) as current:
+            await self._client.symbols.gettimeofday.z(current, 0)
+            time_of_day = await current.parse.z(timeval)
         return datetime.fromtimestamp(time_of_day.tv_sec + (time_of_day.tv_usec / (10**6)))
 
-    def set_current(self, new_time: datetime):
+    @zyncio.zmethod
+    async def set_current(self, new_time: datetime) -> None:
         """set current time"""
-        self._client.symbols.TMSetAutomaticTimeZoneEnabled(0)
-        with self._client.safe_calloc(timeval.sizeof()) as current:
-            current.poke(timeval.build({"tv_sec": int(new_time.timestamp()), "tv_usec": new_time.microsecond}))
-            self._client.symbols.settimeofday(current, 0)
+        await self._client.symbols.TMSetAutomaticTimeZoneEnabled.z(0)
+        async with self._client.safe_calloc.z(timeval.sizeof()) as current:
+            await current.poke.z(timeval.build({"tv_sec": int(new_time.timestamp()), "tv_usec": new_time.microsecond}))
+            await self._client.symbols.settimeofday.z(current, 0)
 
-    def set_auto(self):
+    @zyncio.zmethod
+    async def set_auto(self) -> None:
         """opt-in automatic time settings"""
-        self._client.symbols.TMSetAutomaticTimeZoneEnabled(1)
+        await self._client.symbols.TMSetAutomaticTimeZoneEnabled.z(1)
 
-    @property
-    def is_set_automatically(self):
+    @zyncio.zproperty
+    async def is_set_automatically(self) -> bool:
         """tell is time settings are set to automatic"""
-        return bool(self._client.symbols.TMIsAutomaticTimeZoneEnabled())
+        return bool(await self._client.symbols.TMIsAutomaticTimeZoneEnabled.z())
 
-    def boot_time(self) -> datetime:
-        timestamp = timeval.parse(self._client.sysctl.get_by_name("kern.boottime")).tv_sec
+    @zyncio.zmethod
+    async def boot_time(self) -> datetime:
+        timestamp = timeval.parse(await self._client.sysctl.get_by_name.z("kern.boottime")).tv_sec
         return datetime.fromtimestamp(timestamp)

@@ -1,10 +1,16 @@
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import RpcPermissionError
+from rpcclient.utils import cached_async_method
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
 class CLAuthorizationStatus(Enum):
@@ -15,65 +21,72 @@ class CLAuthorizationStatus(Enum):
     kCLAuthorizationStatusAuthorizedWhenInUse = 4
     kCLAuthorizationStatusAuthorized = kCLAuthorizationStatusAuthorizedAlways
 
-    @classmethod
-    def from_value(cls, value: int):
-        for i in cls:
-            if i.value == value:
-                return i
 
-
-class Location:
+class Location(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Wrapper to CLLocationManager
     https://developer.apple.com/documentation/corelocation/cllocationmanager?language=objc
     """
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         self._client = client
-        self._client.load_framework("CoreLocation")
+        client.load_framework_lazy("CoreLocation")
 
-        self._CLLocationManager = self._client.symbols.objc_getClass("CLLocationManager")
-        self._location_manager = self._CLLocationManager.objc_call("sharedManager")
+    @cached_async_method
+    async def _get_CLLocationManager(self) -> DarwinSymbolT_co:
+        return await self._client.symbols.objc_getClass.z("CLLocationManager")
 
-    @property
-    def location_services_enabled(self) -> bool:
+    @cached_async_method
+    async def _get_location_manager(self) -> DarwinSymbolT_co:
+        return await (await self._get_CLLocationManager()).objc_call.z("sharedManager")
+
+    @zyncio.zproperty
+    async def _location_services_enabled(self) -> bool:
         """opt-in status for location services"""
-        return bool(self._location_manager.objc_call("locationServicesEnabled"))
+        return bool((await self._get_location_manager()).objc_call.z("locationServicesEnabled"))
 
-    @location_services_enabled.setter
-    def location_services_enabled(self, value: bool):
+    @_location_services_enabled.setter
+    async def location_services_enabled(self, value: bool) -> None:
         """opt-in status for location services"""
-        self._CLLocationManager.objc_call("setLocationServicesEnabled:", value)
+        await (await self._get_CLLocationManager()).objc_call.z("setLocationServicesEnabled:", value)
 
-    @property
-    def authorization_status(self) -> CLAuthorizationStatus:
+    @zyncio.zproperty
+    async def authorization_status(self) -> CLAuthorizationStatus:
         """authorization status for current server process of accessing location services"""
-        return CLAuthorizationStatus.from_value(self._location_manager.objc_call("authorizationStatus"))
+        return CLAuthorizationStatus((await self._get_location_manager()).objc_call.z("authorizationStatus"))
 
-    @property
-    def last_sample(self) -> Optional[dict]:
+    @zyncio.zproperty
+    async def last_sample(self) -> dict | None:
         """last taken location sample (or None if there isn't any)"""
-        location = self._location_manager.objc_call("location")
+        location = await (await self._get_location_manager()).objc_call.z("location")
         if not location:
             return None
-        return location.objc_call("jsonObject").py()
+        return await (await location.objc_call.z("jsonObject")).py.z(dict)
 
-    def request_always_authorization(self) -> None:
+    @zyncio.zmethod
+    async def request_always_authorization(self) -> None:
         """Request authorization to always query location data"""
-        self._location_manager.objc_call("requestAlwaysAuthorization")
+        await (await self._get_location_manager()).objc_call.z("requestAlwaysAuthorization")
 
-    def start_updating_location(self):
+    @zyncio.zmethod
+    async def start_updating_location(self) -> None:
         """request location updates from CLLocationManager"""
-        if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
+        if (
+            await type(self).authorization_status(self)
+        ).value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
             raise RpcPermissionError()
-        self._location_manager.objc_call("startUpdatingLocation")
+        await (await self._get_location_manager()).objc_call.z("startUpdatingLocation")
 
-    def stop_updating_location(self):
+    @zyncio.zmethod
+    async def stop_updating_location(self) -> None:
         """stop requesting location updates from CLLocationManager"""
-        self._location_manager.objc_call("stopUpdatingLocation")
+        await (await self._get_location_manager()).objc_call.z("stopUpdatingLocation")
 
-    def request_oneshot_location(self):
+    @zyncio.zmethod
+    async def request_oneshot_location(self) -> None:
         """requests the one-time delivery of the user's current location"""
-        if self.authorization_status.value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
+        if (
+            await type(self).authorization_status(self)
+        ).value < CLAuthorizationStatus.kCLAuthorizationStatusAuthorizedAlways.value:
             raise RpcPermissionError()
-        self._location_manager.objc_call("requestLocation")
+        await (await self._get_location_manager()).objc_call.z("requestLocation")

@@ -1,9 +1,11 @@
 import socket as pysock
-import typing
 from collections import namedtuple
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+import zyncio
 
 from rpcclient.clients.darwin.structs import timeval
+from rpcclient.core._types import ClientBound, ClientT_co
 from rpcclient.core.allocated import Allocated
 from rpcclient.core.structs.consts import (
     AF_INET,
@@ -21,38 +23,49 @@ from rpcclient.core.structs.consts import (
     SOCK_STREAM,
     SOL_SOCKET,
 )
-from rpcclient.core.structs.generic import hostent, ifaddrs, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un, uint32_t
-from rpcclient.core.symbol import Symbol
+from rpcclient.core.structs.generic import (
+    parse_hostent,
+    parse_ifaddrs,
+    sockaddr,
+    sockaddr_in,
+    sockaddr_in6,
+    sockaddr_un,
+    uint32_t,
+)
+from rpcclient.core.symbol import BaseSymbol
 from rpcclient.exceptions import BadReturnValueError
 
+
 if TYPE_CHECKING:
-    from rpcclient.core.client import CoreClient
+    pass
+
 
 Interface = namedtuple("Interface", "name address netmask broadcast")
 Hostentry = namedtuple("Hostentry", "name aliases addresses")
 
 
-class Socket(Allocated):
+class Socket(Allocated[ClientT_co]):
     CHUNK_SIZE = 1024
 
-    def __init__(self, client: "CoreClient", fd: int):
+    def __init__(self, client: ClientT_co, fd: int) -> None:
         """
         :param rpcclient.client.client.Client client:
         :param fd:
         """
         super().__init__()
         self._client = client
-        self.fd = fd
-        self._blocking = self._getblocking()
+        self.fd: int = fd
+        self._blocking: bool | None
         self._timeout = None
 
-    def _deallocate(self):
+    async def _deallocate(self) -> None:
         """Close the remote socket file descriptor."""
-        fd = self._client.symbols.close(self.fd).c_int32
+        fd = (await self._client.symbols.close.z(self.fd)).c_int32
         if fd < 0:
             raise BadReturnValueError(f"failed to close fd: {fd}")
 
-    def send(self, buf: typing.Union[bytes, Symbol], size: Optional[int] = None, flags: int = 0) -> int:
+    @zyncio.zmethod
+    async def send(self, buf: bytes | BaseSymbol, size: int | None = None, flags: int = 0) -> int:
         """
         Send bytes from buf on the remote socket fd.
 
@@ -62,35 +75,37 @@ class Socket(Allocated):
         :return: how many bytes were sent
         """
         if size is None:
-            if isinstance(buf, Symbol):
+            if isinstance(buf, BaseSymbol):
                 raise ValueError("cannot calculate size argument for Symbol objects")
             size = len(buf)
-        n = self._client.symbols.send(self.fd, buf, size, MSG_NOSIGNAL | flags).c_int64
+        n = (await self._client.symbols.send.z(self.fd, buf, size, MSG_NOSIGNAL | flags)).c_int64
         if n < 0:
-            if self._client.errno == EPIPE:
-                self.deallocate()
-            self._client.raise_errno_exception(f"failed to send on fd: {self.fd}")
+            if await self._client.get_errno.z() == EPIPE:
+                await self.deallocate.z()
+            await self._client.raise_errno_exception.z(f"failed to send on fd: {self.fd}")
         return n
 
-    def sendall(self, buf: bytes, flags: int = 0) -> None:
+    @zyncio.zmethod
+    async def sendall(self, buf: bytes, flags: int = 0) -> None:
         """Send the entire buffer, retrying until all bytes are written."""
         size = len(buf)
         offset = 0
-        with self._client.safe_malloc(size) as block:
-            block.poke(buf)
+        async with self._client.safe_malloc.z(size) as block:
+            await block.poke.z(buf)
             while offset < size:
-                sent = self.send(block + offset, size - offset, flags=flags)
+                sent = await self.send.z(block + offset, size - offset, flags=flags)
                 offset += sent
 
-    def _recv(self, chunk: Symbol, size: int, flags: int = 0) -> bytes:
-        err = self._client.symbols.recv(self.fd, chunk, size, MSG_NOSIGNAL | flags).c_int64
+    async def _recv(self, chunk: BaseSymbol, size: int, flags: int = 0) -> bytes:
+        err = (await self._client.symbols.recv.z(self.fd, chunk, size, MSG_NOSIGNAL | flags)).c_int64
         if err < 0:
-            self._client.raise_errno_exception(f"recv() failed for fd: {self.fd}")
+            await self._client.raise_errno_exception.z(f"recv() failed for fd: {self.fd}")
         elif err == 0:
-            self._client.raise_errno_exception(f"recv() failed for fd: {self.fd} (peer closed)")
-        return chunk.peek(err)
+            await self._client.raise_errno_exception.z(f"recv() failed for fd: {self.fd} (peer closed)")
+        return await chunk.peek.z(err)
 
-    def recv(self, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
+    @zyncio.zmethod
+    async def recv(self, size: int = CHUNK_SIZE, flags: int = 0) -> bytes:
         """
         Receive up to size bytes from the remote socket fd.
 
@@ -98,101 +113,119 @@ class Socket(Allocated):
         :param flags: flags for recv() syscall. MSG_NOSIGNAL will always be added
         :return: received bytes
         """
-        with self._client.safe_malloc(size) as chunk:
-            return self._recv(chunk, size, flags=flags)
+        async with self._client.safe_malloc.z(size) as chunk:
+            return await self._recv(chunk, size, flags=flags)
 
-    def recvall(self, size: int, flags: int = 0) -> bytes:
+    @zyncio.zmethod
+    async def recvall(self, size: int, flags: int = 0) -> bytes:
         """recv at remote until all buffer is received"""
         buf = b""
-        with self._client.safe_malloc(size) as chunk:
+        async with self._client.safe_malloc.z(size) as chunk:
             while len(buf) < size:
-                buf += self._recv(chunk, size - len(buf), flags=flags)
+                buf += await self._recv(chunk, size - len(buf), flags=flags)
         return buf
 
-    def setsockopt(self, level: int, option_name: int, option_value: bytes):
-        if self._client.symbols.setsockopt(self.fd, level, option_name, option_value, len(option_value)) != 0:
-            self._client.raise_errno_exception(f"setsockopt() failed: {self._client.last_error}")
+    @zyncio.zmethod
+    async def setsockopt(self, level: int, option_name: int, option_value: bytes):
+        if await self._client.symbols.setsockopt.z(self.fd, level, option_name, option_value, len(option_value)) != 0:
+            await self._client.raise_errno_exception.z(f"setsockopt() failed: {await self._client.get_last_error.z()}")
 
-    def setbufsize(self, size: int) -> None:
-        self.setsockopt(SOL_SOCKET, SO_SNDBUF, uint32_t.build(size))
-        self.setsockopt(SOL_SOCKET, SO_RCVBUF, uint32_t.build(size))
+    @zyncio.zmethod
+    async def setbufsize(self, size: int) -> None:
+        await self.setsockopt.z(SOL_SOCKET, SO_SNDBUF, uint32_t.build(size))
+        await self.setsockopt.z(SOL_SOCKET, SO_RCVBUF, uint32_t.build(size))
 
-    def settimeout(self, seconds: int):
+    @zyncio.zmethod
+    async def settimeout(self, seconds: int) -> None:
         self._timeout = seconds
-        self.setsockopt(SOL_SOCKET, SO_RCVTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
-        self.setsockopt(SOL_SOCKET, SO_SNDTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
+        await self.setsockopt.z(SOL_SOCKET, SO_RCVTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
+        await self.setsockopt.z(SOL_SOCKET, SO_SNDTIMEO, timeval.build({"tv_sec": seconds, "tv_usec": 0}))
 
-    def gettimeout(self) -> typing.Optional[int]:
+    @zyncio.zmethod
+    async def gettimeout(self) -> int | None:
         return self._timeout
 
-    def setblocking(self, blocking: bool):
-        opts = self._client.symbols.fcntl(self.fd, F_GETFL, 0).c_uint64
+    @zyncio.zmethod
+    async def setblocking(self, blocking: bool) -> None:
+        opts = (await self._client.symbols.fcntl.z(self.fd, F_GETFL, 0)).c_uint64
         if not blocking:
             opts |= O_NONBLOCK
         else:
             opts &= ~O_NONBLOCK
-        if self._client.symbols.fcntl(self.fd, F_SETFL, opts) != 0:
-            self._client.raise_errno_exception(f"fcntl() failed: {self._client.last_error}")
+        if await self._client.symbols.fcntl.z(self.fd, F_SETFL, opts) != 0:
+            await self._client.raise_errno_exception.z(f"fcntl() failed: {await self._client.get_last_error.z()}")
         self._blocking = blocking
 
-    def getblocking(self) -> bool:
+    @zyncio.zmethod
+    async def getblocking(self) -> bool:
+        if self._blocking is None:
+            self._blocking = await self._getblocking()
+
         return self._blocking
 
-    def _getblocking(self) -> bool:
-        return not bool(self._client.symbols.fcntl(self.fd, F_GETFL, 0) & O_NONBLOCK)
+    async def _getblocking(self) -> bool:
+        return not bool(await self._client.symbols.fcntl.z(self.fd, F_GETFL, 0) & O_NONBLOCK)
 
-    def __repr__(self):
-        return f"<{self.__class__.__name__} FD:{self.fd} BLOCKING:{self._blocking}>"
+    def __repr__(self) -> str:
+        if zyncio.is_sync(self):
+            blocking = self.getblocking()
+        else:
+            blocking = self._blocking if self._blocking is not None else "<unknown>"
+        return f"<{self.__class__.__name__} FD:{self.fd} BLOCKING:{blocking}>"
 
 
-class Network:
-    def __init__(self, client: "CoreClient"):
+class Network(ClientBound[ClientT_co]):
+    def __init__(self, client: ClientT_co) -> None:
         """
         :param rpcclient.client.client.Client client:
         """
         self._client = client
 
-    def socket(self, family=AF_INET, socktype=SOCK_STREAM, proto=0) -> int:
+    @zyncio.zmethod
+    async def socket(self, family=AF_INET, socktype=SOCK_STREAM, proto=0) -> int:
         """Create a remote socket and return its file descriptor."""
-        result = self._client.symbols.socket(family, socktype, proto).c_int64
+        result = (await self._client.symbols.socket.z(family, socktype, proto)).c_int64
         if result == 0:
-            self._client.raise_errno_exception(f"failed to create socket: {result}")
+            await self._client.raise_errno_exception.z(f"failed to create socket: {result}")
         return result
 
-    def tcp_connect(self, address: str, port: int) -> Socket:
+    @zyncio.zmethod
+    async def tcp_connect(self, address: str, port: int) -> Socket:
         """make target connect to given address:port and get socket object"""
         family = AF_INET6 if ":" in address else AF_INET
-        sockfd = self.socket(family=family, socktype=SOCK_STREAM, proto=0)
+        sockfd = await self.socket.z(family=family, socktype=SOCK_STREAM, proto=0)
         if family == AF_INET:
             servaddr = sockaddr_in.build({"sin_addr": pysock.inet_pton(family, address), "sin_port": port})
         else:
             servaddr = sockaddr_in6.build({"sin6_addr": pysock.inet_pton(family, address), "sin6_port": port})
-        self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
+        await self._client.set_errno.z(0)
+        error = (await self._client.symbols.connect.z(sockfd, servaddr, len(servaddr))).c_int64
         if error == -1:
-            self._client.symbols.close(sockfd)
-            self._client.raise_errno_exception(f"failed connecting to: {address}:{port}")
+            await self._client.symbols.close.z(sockfd)
+            await self._client.raise_errno_exception.z(f"failed connecting to: {address}:{port}")
         return Socket(self._client, sockfd)
 
-    def unix_connect(self, filename: str) -> Socket:
+    @zyncio.zmethod
+    async def unix_connect(self, filename: str) -> Socket:
         """make target connect to given unix path and get socket object"""
-        sockfd = self.socket(family=AF_UNIX, socktype=SOCK_STREAM, proto=0)
+        sockfd = await self.socket.z(family=AF_UNIX, socktype=SOCK_STREAM, proto=0)
         servaddr = sockaddr_un.build({"sun_path": filename})
-        self._client.errno = 0
-        error = self._client.symbols.connect(sockfd, servaddr, len(servaddr)).c_int64
+        await self._client.set_errno.z(0)
+        error = (await self._client.symbols.connect.z(sockfd, servaddr, len(servaddr))).c_int64
         if error == -1:
-            self._client.symbols.close(sockfd)
-            self._client.raise_errno_exception(f"failed connecting to: {filename}")
+            await self._client.symbols.close.z(sockfd)
+            await self._client.raise_errno_exception.z(f"failed connecting to: {filename}")
         return Socket(self._client, sockfd)
 
-    def gethostbyname(self, name: str) -> Optional[Hostentry]:
+    @zyncio.zmethod
+    async def gethostbyname(self, name: str) -> Hostentry | None:
         """Query DNS record. Returns None if not found."""
         aliases = []
         addresses = []
-        result = self._client.symbols.gethostbyname(name)
+        result = await self._client.symbols.gethostbyname.z(name)
         if result == 0:
             return None
-        result = hostent(self._client).parse_stream(result)
+        result = await parse_hostent(self._client, result)
         p_aliases = result.h_aliases
 
         i = 0
@@ -209,16 +242,15 @@ class Network:
 
         return Hostentry(name=result.h_name, aliases=aliases, addresses=addresses)
 
-    @property
-    def interfaces(self) -> list[Interface]:
+    @zyncio.zproperty
+    async def interfaces(self) -> list[Interface]:
         """get current interfaces"""
         results = []
-        my_ifaddrs = ifaddrs(self._client)
-        with self._client.safe_calloc(8) as addresses:
-            if self._client.symbols.getifaddrs(addresses).c_int64 < 0:
-                self._client.raise_errno_exception("getifaddrs failed")
+        async with self._client.safe_calloc.z(8) as addresses:
+            if (await self._client.symbols.getifaddrs.z(addresses)).c_int64 < 0:
+                await self._client.raise_errno_exception.z("getifaddrs failed")
 
-            current = my_ifaddrs.parse_stream(addresses[0])
+            current = await parse_ifaddrs(self._client, await addresses.getindex(0))
 
             while current:
                 family = sockaddr.parse(current.ifa_addr.peek(sockaddr.sizeof())).sa_family
@@ -233,5 +265,5 @@ class Network:
 
                 current = current.ifa_next
 
-            self._client.symbols.freeifaddrs(addresses[0])
+            await self._client.symbols.freeifaddrs.z(await addresses.getindex(0))
         return results

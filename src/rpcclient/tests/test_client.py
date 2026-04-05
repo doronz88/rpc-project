@@ -1,7 +1,12 @@
+from collections.abc import Iterable
+
 import pytest
 
+from rpcclient.clients.darwin.client import DarwinClient
+from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.subsystems.decorator import SubsystemNotAvailable, subsystem
 from rpcclient.exceptions import ArgumentError
+from tests._types import AsyncClient, SyncClient
 
 
 def _get_subsystems(client) -> list[str]:
@@ -13,29 +18,32 @@ def _get_subsystems(client) -> list[str]:
     return sorted(names)
 
 
-def test_peek(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_peek(client: SyncClient) -> None:
     with client.safe_malloc(0x100) as peekable:
         client.peek(peekable, 0x100)
 
 
-def test_poke(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_poke(client: SyncClient) -> None:
     with client.safe_malloc(0x100) as peekable:
         client.poke(peekable, b"a" * 0x100)
+
+
+@pytest.mark.asyncio
+async def test_peek_async(async_client: AsyncClient) -> None:
+    async with async_client.safe_malloc(0x100) as peekable:
+        await async_client.peek(peekable, 0x100)
+
+
+@pytest.mark.asyncio
+async def test_poke_async(async_client: AsyncClient) -> None:
+    async with async_client.safe_malloc(0x100) as peekable:
+        await async_client.poke(peekable, b"a" * 0x100)
 
 
 @pytest.mark.parametrize(
     "params", [([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])]
 )
-def test_16args(client, params):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_16args(client: SyncClient, params: list[int]) -> None:
     with client.safe_malloc(0x100) as peekable:
         client.symbols.test_16args(peekable, *params)
         for i in range(len(params)):
@@ -43,7 +51,7 @@ def test_16args(client, params):
 
 
 @pytest.mark.parametrize(
-    "va_list_index,params,expected",
+    ("va_list_index", "params", "expected"),
     [
         (2, ["%f", 15.5], "15.500000"),
         (2, ["%f %f", 15.5, 7.3], "15.500000 7.300000"),
@@ -54,88 +62,58 @@ def test_16args(client, params):
     ],
 )
 @pytest.mark.arm
-def test_va_list_call(client, va_list_index, params, expected):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_va_list_call(client: SyncClient, va_list_index: int, params: Iterable[RemoteCallArg], expected: str) -> None:
     with client.safe_malloc(0x100) as peekable:
         client.symbols.sprintf(peekable, *params, va_list_index=va_list_index)
         assert expected == peekable.peek_str()
 
 
 @pytest.mark.arm
-def test_floating_point_call(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_floating_point_call(client: SyncClient) -> None:
     assert client.symbols.sqrt(16.0, return_float64=True) == 4.0
 
 
-def test_peek_invalid_address(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_peek_invalid_address(client: SyncClient) -> None:
     # Server config: -DSAFE_WRITE raises ArgumentError for invalid address; else, ConnectionError.
     with pytest.raises((ArgumentError, ConnectionError)):
         client.peek(0, 0x10)
 
 
-def test_poke_invalid_address(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_poke_invalid_address(client: SyncClient) -> None:
     # Server config: -DSAFE_WRITE raises ArgumentError for invalid address; else, ConnectionError.
     with pytest.raises((ArgumentError, ConnectionError)):
         client.poke(0, b"a")
 
 
-def test_get_dummy_block(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+@pytest.mark.darwin
+def test_get_dummy_block(client: DarwinClient) -> None:
     client.cf([1, 2, 3]).objc_call("enumerateObjectsUsingBlock:", client.get_dummy_block())
 
 
-def test_listdir(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_listdir(client: SyncClient) -> None:
     entries = client.listdir("/")
     assert entries[0].d_name == "."
     assert entries[1].d_name == ".."
 
 
-def test_calloc(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_calloc(client: SyncClient) -> None:
     with client.safe_calloc(0x100) as zeros:
         assert client.peek(zeros, 0x100) == b"\x00" * 0x100
 
 
-def test_env_get_set(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_env_get_set(client: SyncClient) -> None:
     client.setenv("TEST", "test")
     assert client.getenv("TEST") == "test"
 
 
-def test_environ(client):
-    """
-    :param rpcclient.client.Client client:
-    """
+def test_environ(client: SyncClient) -> None:
     assert len(client.environ) > 0
     for e in client.environ:
         assert "=" in e
 
 
-def test_all_subsystems_initialize(client):
-    """
-    :param rpcclient.client.Client client:
-
-    Ensure each @subsystem property is initialized and not SubsystemNotAvailable.
-    """
+def test_all_subsystems_initialize(client: SyncClient) -> None:
+    """Ensure each @subsystem property is initialized and not SubsystemNotAvailable."""
     subsystem_names = _get_subsystems(client)
     failures: dict[str, str] = {}
 

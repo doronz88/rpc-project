@@ -2,8 +2,12 @@ from io import StringIO
 
 import pytest
 
+from rpcclient.clients.darwin.client import DarwinClient
+from tests._types import SyncClient
 
-def test_spawn_fds(client):
+
+@pytest.mark.darwin
+def test_spawn_fds(client: DarwinClient) -> None:
     pid = client.spawn(["/bin/sleep", "5"], stdout=StringIO(), stdin="", background=True).pid
 
     # should only have: stdin, stdout and stderr
@@ -14,14 +18,14 @@ def test_spawn_fds(client):
 
 @pytest.mark.local_only
 @pytest.mark.parametrize(
-    "argv,expected_stdout,success",
+    ("argv", "expected_stdout", "success"),
     [
         [["/bin/sleep", "0"], "", True],
         [["/bin/echo", "blat"], "blat", True],
         [["/bin/ls", "INVALID_PATH"], "No such file or directory", False],
     ],
 )
-def test_spawn_foreground_sanity(client, argv, expected_stdout, success):
+def test_spawn_foreground_sanity(client: SyncClient, argv: list[str], expected_stdout: str, success: bool) -> None:
     stdout = StringIO()
     if success:
         assert client.spawn(argv, stdout=stdout, stdin="").error == 0
@@ -33,19 +37,19 @@ def test_spawn_foreground_sanity(client, argv, expected_stdout, success):
 
 @pytest.mark.local_only
 @pytest.mark.parametrize(
-    "argv,expected_stdout,success",
+    ("argv", "expected_stdout", "success"),
     [
         [["/bin/sleep", "0"], "", True],
         [["/bin/echo", "blat"], "blat", True],
         [["/bin/ls", "INVALID_PATH"], "No such file or directory", False],
     ],
 )
-def test_spawn_foreground_stress(client, argv, expected_stdout, success):
+def test_spawn_foreground_stress(client: SyncClient, argv: list[str], expected_stdout: str, success: bool) -> None:
     for _i in range(100):
         test_spawn_foreground_sanity(client, argv, expected_stdout, success)
 
 
-def test_spawn_background_sanity(client):
+def test_spawn_background_sanity(client: SyncClient) -> None:
     spawn_result = client.spawn(["/bin/sleep", "5"], stdout=StringIO(), stdin="", background=True)
 
     # when running in background, no error is returned

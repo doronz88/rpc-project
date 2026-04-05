@@ -2,35 +2,66 @@
 name = "rpcclient"
 description = "rpcclient for connecting with the rpcserver"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007" }
-keywords = ["ios", "macos", "linux", "automation", "remote-shell", "remote-control", "ipython"]
+keywords = [
+    "ios",
+    "macos",
+    "linux",
+    "automation",
+    "remote-shell",
+    "remote-control",
+    "ipython",
+]
 authors = [
     { name = "doronz88", email = "doron88@gmail.com" },
     { name = "matan", email = "matan1008@gmail.com" },
-    { name = "netanelc305", email = "netanelc305@pm.me" }
+    { name = "netanelc305", email = "netanelc305@pm.me" },
 ]
 maintainers = [
     { name = "doronz88", email = "doron88@gmail.com" },
     { name = "matan", email = "matan1008@gmail.com" },
-    { name = "netanelc305", email = "netanelc305@pm.me" }
+    { name = "netanelc305", email = "netanelc305@pm.me" },
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
 ]
-dynamic = ["dependencies", "version"]
+dynamic = ["version"]
+dependencies = [
+    "construct>=2.9.29",
+    "construct-typing~=0.7.0",
+    "click",
+    "coloredlogs",
+    "IPython",
+    "traitlets",
+    "pygments",
+    "objc_types_decoder",
+    "pycrashreport>=1.0.2",
+    "lief",
+    "capstone>=5.0.3",
+    "xonsh",
+    "plumbum",
+    "pygnuutils",
+    "tqdm",
+    "osstatus>=1.0.2",
+    "requests",
+    "protobuf",
+    "inquirer3",
+    "zyncio~=0.15.0",
+]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-repeat"]
+test = ["pytest", "pytest-repeat", "pytest-asyncio"]
 docs = ["toml", "myst_parser", "sphinx", "sphinx-rtd-theme"]
+dev = ["rpcclient[test,docs]"]
 
 [project.urls]
 "Homepage" = "https://github.com/doronz88/rpc-project"
@@ -56,7 +87,7 @@ requires = ["setuptools>=43.0.0", "setuptools_scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 120
 fix = true
 
@@ -89,6 +120,8 @@ select = [
     "RUF",
     # tryceratops
     "TRY",
+    # isort
+    "I",
 ]
 ignore = [
     # LineTooLong
@@ -100,6 +133,23 @@ ignore = [
     # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
     "B019",
 ]
+exclude = ["rpcclient/protos/*"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+extra-standard-library = ["typing_extensions"]
 
 [tool.ruff.format]
 preview = true
+
+[tool.pyright]
+include = ["rpcclient", "tests"]
+ignore = [
+    "rpcclient/protos/*",
+    "rpcclient/core/xonshrc.py",
+    "rpcclient/console/*",       # Not yet typed
+]
+reportUnnecessaryComparison = "warning"
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"

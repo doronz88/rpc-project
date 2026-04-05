@@ -1,7 +1,13 @@
 import gc
 
+import pytest
 
-def test_allocate_file_fd_context_manager(client, tmp_path):
+from rpcclient.clients.darwin.client import DarwinClient
+from rpcclient.core.subsystems.fs import RemotePath
+
+
+@pytest.mark.darwin
+def test_allocate_file_fd_context_manager(client: DarwinClient, tmp_path: RemotePath[DarwinClient]) -> None:
     # make sure when the test starts, all previous Allocated references are freed
     gc.collect()
     fds_count = len(client.processes.get_by_pid(client.pid).fds)
@@ -10,7 +16,8 @@ def test_allocate_file_fd_context_manager(client, tmp_path):
     assert fds_count == len(client.processes.get_by_pid(client.pid).fds)
 
 
-def test_allocate_file_fd_explicit_deallocate(client, tmp_path):
+@pytest.mark.darwin
+def test_allocate_file_fd_explicit_deallocate(client: DarwinClient, tmp_path: RemotePath[DarwinClient]) -> None:
     # make sure when the test starts, all previous Allocated references are freed
     gc.collect()
     fds_count = len(client.processes.get_by_pid(client.pid).fds)
@@ -20,7 +27,8 @@ def test_allocate_file_fd_explicit_deallocate(client, tmp_path):
     assert fds_count == len(client.processes.get_by_pid(client.pid).fds)
 
 
-def test_listdir_fd_release(client, tmp_path):
+@pytest.mark.darwin
+def test_listdir_fd_release(client: DarwinClient) -> None:
     fds_count = len(client.processes.get_by_pid(client.pid).fds)
     client.fs.listdir("/")
     assert fds_count == len(client.processes.get_by_pid(client.pid).fds)

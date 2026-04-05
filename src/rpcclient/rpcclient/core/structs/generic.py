@@ -1,12 +1,13 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
+from typing_extensions import Self
 
 from construct import (
     Bytes,
+    Container,
     CString,
     Default,
     FlagsEnum,
     FormatField,
-    If,
     Int8ul,
     Int16sl,
     Int16ub,
@@ -15,7 +16,6 @@ from construct import (
     Int32ul,
     Int64sl,
     Int64ul,
-    LazyBound,
     PaddedString,
     Padding,
     Pointer,
@@ -25,8 +25,12 @@ from construct import (
 
 from rpcclient.core.structs.consts import AF_INET, AF_INET6, AF_UNIX
 
+
 if TYPE_CHECKING:
-    from rpcclient.core.client import CoreClient
+    from rpcclient.core.client import BaseCoreClient
+    from rpcclient.core.symbols_jar import BaseSymbol
+
+SymbolT_co = TypeVar("SymbolT_co", bound="BaseSymbol", covariant=True)
 
 UNIX_PATH_MAX = 104
 
@@ -91,43 +95,58 @@ block_literal = Struct(
 )
 
 
-class SymbolFormatField(FormatField):
+class SymbolFormatField(FormatField, Generic[SymbolT_co]):
     """
     A Symbol wrapper for construct
     """
 
-    def __init__(self, client: "CoreClient"):
-        super().__init__("<", "Q")
-        self._client = client
+    if TYPE_CHECKING:
 
-    def _parse(self, stream, context, path):
+        def __new__(cls, client: "BaseCoreClient[SymbolT_co]") -> Self: ...
+
+    def __init__(self, client: "BaseCoreClient[SymbolT_co]") -> None:
+        super().__init__("<", "Q")  # pyright: ignore[reportCallIssue]
+        self._client: BaseCoreClient[SymbolT_co] = client
+
+    def _parse(self, stream, context, path) -> SymbolT_co:
         return self._client.symbol(FormatField._parse(self, stream, context, path))
 
 
-def hostent(client) -> Struct:
-    return Struct(
-        "_h_name" / SymbolFormatField(client),
-        "h_name" / Pointer(this._h_name, CString("utf8")),
-        "h_aliases" / SymbolFormatField(client),
-        "h_addrtype" / Int32ul,
-        "h_length" / Int32ul,
-        "h_addr_list" / SymbolFormatField(client),
+async def parse_hostent(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
+    hostent = await ptr.parse.z(
+        Struct(
+            "h_name" / SymbolFormatField(client),
+            "h_aliases" / SymbolFormatField(client),
+            "h_addrtype" / Int32ul,
+            "h_length" / Int32ul,
+            "h_addr_list" / SymbolFormatField(client),
+        )
     )
+    hostent["h_name"] = await hostent.h_name.peek_str.z("utf-8")
+    return hostent
 
 
-def ifaddrs(client) -> Struct:
-    return Struct(
-        "_ifa_next" / SymbolFormatField(client),
-        "ifa_next" / If(this._ifa_next != 0, LazyBound(lambda: Pointer(this._ifa_next, ifaddrs(client)))),
-        "_ifa_name" / SymbolFormatField(client),
-        "ifa_name" / If(this._ifa_name != 0, Pointer(this._ifa_name, CString("utf8"))),
-        "ifa_flags" / Int32ul,
-        Padding(4),
-        "ifa_addr" / SymbolFormatField(client),
-        "ifa_netmask" / SymbolFormatField(client),
-        "ifa_dstaddr" / SymbolFormatField(client),
-        "ifa_data" / SymbolFormatField(client),
+async def parse_ifaddrs(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
+    ifaddrs = await ptr.parse.z(
+        Struct(
+            "ifa_next" / SymbolFormatField(client),
+            "ifa_name" / SymbolFormatField(client),
+            "ifa_flags" / Int32ul,
+            Padding(4),
+            "ifa_addr" / SymbolFormatField(client),
+            "ifa_netmask" / SymbolFormatField(client),
+            "ifa_dstaddr" / SymbolFormatField(client),
+            "ifa_data" / SymbolFormatField(client),
+        )
     )
+
+    if ifaddrs.ifa_next != 0:
+        ifaddrs["ifa_next"] = await parse_ifaddrs(client, ifaddrs.ifa_next)
+
+    if ifaddrs.ifa_name != 0:
+        ifaddrs["ifa_name"] = await ifaddrs.ifa_name.peek_str.z("utf-8")
+
+    return ifaddrs
 
 
 def Dl_info(client) -> Struct:

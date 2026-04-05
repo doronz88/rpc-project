@@ -8,9 +8,9 @@ import sys
 import tempfile
 import time
 from argparse import ArgumentParser
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Union
 from uuid import UUID
 
 import plumbum
@@ -203,7 +203,7 @@ class XonshRc:
         * VolDown: ControlShiftDown
         """)
 
-    def _register_arg_parse_alias(self, name: str, handler: Union[Callable, str]):
+    def _register_arg_parse_alias(self, name: str, handler: Callable | str):
         handler = ArgParserAlias(func=handler, has_args=True, prog=name)
         self._commands[name] = handler
         if XSH.aliases.get(name):
@@ -221,7 +221,7 @@ class XonshRc:
         for k, v in self._orig_aliases.items():
             XSH.aliases[k] = v
 
-    def _rpc_connect(self, client_to_reuse: Union[None, CoreClient, IosClient, MacosClient, LinuxClient]):
+    def _rpc_connect(self, client_to_reuse: None | CoreClient | IosClient | MacosClient | LinuxClient):
         """
         connect to remote rpcserver
         """

@@ -1,4 +1,7 @@
 from datetime import datetime
-from typing import Any, Union
+from typing import Any, TypeVar, cast
 
-CfSerializable = Union[dict[str, Any], list, tuple[Any, ...], str, bool, float, bytes, datetime, None]
+
+CfSerializable = dict[str, Any] | list | tuple[Any, ...] | str | bool | float | bytes | datetime | None
+CfSerializableT = TypeVar("CfSerializableT", bound=CfSerializable)
+CfSerializableAny = cast(type[CfSerializable], object)

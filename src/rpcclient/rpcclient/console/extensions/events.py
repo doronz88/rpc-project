@@ -1,7 +1,7 @@
 import ast
 import builtins
-from typing import Any
 
+from IPython.core.interactiveshell import ExecutionInfo
 from IPython.terminal.interactiveshell import TerminalInteractiveShell
 
 from rpcclient.clients.darwin.objective_c import objective_c_class
@@ -16,7 +16,7 @@ class RpcEvents:
         """Store the IPython shell reference."""
         self.ipython = ip
 
-    def pre_run_cell(self, info: Any) -> None:
+    def pre_run_cell(self, info: ExecutionInfo) -> None:
         """
         Before each cell: inject missing names by lazy-loading SymbolsJar or Objective-C classes.
         Expects `info.raw_cell` to contain the cell source.
@@ -25,8 +25,14 @@ class RpcEvents:
         if client is None:
             return
 
+        if info.raw_cell is None:
+            return
+
         # Skip parsing of this cell if it's an IPython's magic transformation (like '!', '?', '%')
-        if info.raw_cell != info.transformed_cell.rstrip("\n"):
+        if (
+            hasattr(info, "transformed_cell")  # Added in IPython 9.0, which requires Python 3.11+.
+            and info.raw_cell != info.transformed_cell.rstrip("\n")  # pyright: ignore[reportOptionalMemberAccess]
+        ):
             return
 
         for node in ast.walk(ast.parse(info.raw_cell)):
@@ -59,7 +65,7 @@ class RpcEvents:
 
             # 2) Darwin-specific: Objective-C class autoload / lazy reload
             if hasattr(client, "objc_get_class"):
-                if objc_class_place_holder:
+                if objc_class_place_holder and existing is not None:
                     existing.reload()
                     continue
 

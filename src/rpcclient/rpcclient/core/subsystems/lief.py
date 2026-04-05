@@ -1,30 +1,38 @@
-from collections import namedtuple
-from typing import TYPE_CHECKING
+from pathlib import PurePath
+from typing import NamedTuple
 
 import lief
-from parameter_decorators import path_to_str
+import zyncio
 
-Symbol = namedtuple("Symbol", "origin value")
-
-if TYPE_CHECKING:
-    from rpcclient.core.client import CoreClient
+from rpcclient.core._types import ClientBound, ClientT_co
 
 
-class Lief:
-    """ " parse and patch executable files"""
+class Symbol(NamedTuple):
+    origin: object
+    value: int
 
-    def __init__(self, client: "CoreClient"):
+
+class Lief(ClientBound[ClientT_co]):
+    """parse and patch executable files"""
+
+    def __init__(self, client: ClientT_co) -> None:
         self._client = client
 
-    @path_to_str("path")
-    def parse(self, path: str):
-        with self._client.fs.open(path, "r") as f:
-            return lief.parse(f.read())
+    @zyncio.zmethod
+    async def parse(
+        self, path: str | PurePath
+    ) -> lief.COFF.Binary | lief.ELF.Binary | lief.MachO.Binary | lief.OAT.Binary | lief.PE.Binary | None:
+        async with await self._client.fs.open.z(path, "r") as f:
+            return lief.parse(await f.read.z())
 
-    @path_to_str("path")
-    def get_symbols(self, path: str) -> dict[str, Symbol]:
-        result = {}
-        parsed = self.parse(path)
-        for s in parsed.symbols:
-            result[s.name] = Symbol(origin=s.origin, value=s.value)
-        return result
+    @zyncio.zmethod
+    async def get_symbols(self, path: str | PurePath) -> dict[str | bytes, Symbol]:
+        parsed = await self.parse.z(path)
+        assert parsed is not None
+        return {
+            s.name: Symbol(
+                origin=getattr(s, "origin", None),
+                value=s.value,
+            )
+            for s in parsed.symbols
+        }

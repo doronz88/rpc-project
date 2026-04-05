@@ -1,110 +1,177 @@
 from datetime import datetime
-from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Generic
 from uuid import UUID
 
+import zyncio
+from construct import Container
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.consts import XPC_ARRAY_APPEND
-from rpcclient.clients.darwin.symbol import DarwinSymbol
-from rpcclient.exceptions import RpcXpcSerializationError
+from rpcclient.core._types import ClientBound
+from rpcclient.core.symbol import AbstractSymbol
+from rpcclient.exceptions import BadReturnValueError, RpcXpcSerializationError
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
-class XPCObject(DarwinSymbol):
+class XPCObject(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, value: int, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
+        self._client = client
+        self._sym: DarwinSymbolT_co = client.symbol(value)
+
+    def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
+        return self._client.symbol(value)
+
+    @zyncio.zmethod
+    async def peek(self, count: int, offset: int = 0) -> bytes:
+        return await self._sym.peek.z(count, offset)
+
+    @zyncio.zmethod
+    async def poke(self, buf: bytes, offset: int = 0) -> Any:
+        return await self._sym.poke.z(buf, offset)
+
+    @zyncio.zmethod
+    async def peek_str(self, encoding="utf-8") -> str:
+        """peek string at given address"""
+        return await self._sym.peek_str.z(encoding=encoding)
+
     @property
-    def type(self) -> int:
-        return self._client.symbols.xpc_get_type(self)
+    def arch(self) -> object:
+        return self._client.arch
+
+    @property
+    def endianness(self) -> str:
+        return self._client._endianness
+
+    @zyncio.zmethod
+    async def get_dl_info(self) -> Container:
+        return await self._sym.get_dl_info.z()
+
+    @zyncio.zproperty
+    async def type(self) -> int:
+        return await self._client.symbols.xpc_get_type.z(self)
 
 
-class XPCArray(XPCObject):
-    def set_data(self, buf: bytes, index: int = XPC_ARRAY_APPEND) -> None:
+class XPCArray(XPCObject[DarwinSymbolT_co]):
+    @zyncio.zmethod
+    async def set_data(self, buf: bytes, index: int = XPC_ARRAY_APPEND) -> None:
         """
         See https://developer.apple.com/documentation/xpc/1505937-xpc_array_set_data?language=objc
         """
-        self._client.symbols.xpc_array_set_data(self, index, buf, len(buf))
+        await self._client.symbols.xpc_array_set_data.z(self, index, buf, len(buf))
 
 
-class XPCDictionary(XPCObject):
-    def set_string(self, key: str, value: str) -> None:
-        self._client.symbols.xpc_dictionary_set_string(self, key, value)
+class XPCDictionary(XPCObject[DarwinSymbolT_co]):
+    @zyncio.zmethod
+    async def set_string(self, key: str, value: str) -> None:
+        await self._client.symbols.xpc_dictionary_set_string.z(self, key, value)
 
-    def set_int64(self, key: str, value: int) -> None:
-        self._client.symbols.xpc_dictionary_set_int64(self, key, value)
+    @zyncio.zmethod
+    async def set_int64(self, key: str, value: int) -> None:
+        await self._client.symbols.xpc_dictionary_set_int64.z(self, key, value)
 
-    def set_uint64(self, key: str, value: int) -> None:
-        self._client.symbols.xpc_dictionary_set_uint64(self, key, value)
+    @zyncio.zmethod
+    async def set_uint64(self, key: str, value: int) -> None:
+        await self._client.symbols.xpc_dictionary_set_uint64.z(self, key, value)
 
-    def set_bool(self, key: str, value: bool) -> None:
-        self._client.symbols.xpc_dictionary_set_bool(self, key, value)
+    @zyncio.zmethod
+    async def set_bool(self, key: str, value: bool) -> None:
+        await self._client.symbols.xpc_dictionary_set_bool.z(self, key, value)
 
-    def set_data(self, key: str, value: bytes) -> None:
-        self._client.symbols.xpc_dictionary_set_data(self, key, value, len(value))
+    @zyncio.zmethod
+    async def set_data(self, key: str, value: bytes) -> None:
+        await self._client.symbols.xpc_dictionary_set_data.z(self, key, value, len(value))
 
-    def set_fd(self, key: str, value: int) -> None:
-        self._client.symbols.xpc_dictionary_set_fd(self, key, value)
+    @zyncio.zmethod
+    async def set_fd(self, key: str, value: int) -> None:
+        await self._client.symbols.xpc_dictionary_set_fd.z(self, key, value)
 
-    def set_uuid(self, key: str, value: UUID) -> None:
-        self._client.symbols.xpc_dictionary_set_uuid(self, key, value.bytes)
+    @zyncio.zmethod
+    async def set_uuid(self, key: str, value: UUID) -> None:
+        await self._client.symbols.xpc_dictionary_set_uuid.z(self, key, value.bytes)
 
-    def set_dictionary(self, key: str, value: int) -> None:
-        self._client.symbols.xpc_dictionary_set_dictionary(self, key, value)
+    @zyncio.zmethod
+    async def set_dictionary(self, key: str, value: int) -> None:
+        await self._client.symbols.xpc_dictionary_set_dictionary.z(self, key, value)
 
-    def set_object(self, obj: XPCObject) -> None:
-        self._client.symbols.xpc_dictionary_set_object(self, obj)
+    @zyncio.zmethod
+    async def set_object(self, obj: XPCObject) -> None:
+        await self._client.symbols.xpc_dictionary_set_object.z(self, obj)
 
-    def set_value(self, key: str, obj: XPCObject) -> None:
-        self._client.symbols.xpc_dictionary_set_value(self, key, obj)
+    @zyncio.zmethod
+    async def set_value(self, key: str, obj: XPCObject) -> None:
+        await self._client.symbols.xpc_dictionary_set_value.z(self, key, obj)
 
-    def get_string(self, key: str) -> str:
-        return self._client.symbols.xpc_dictionary_get_string(self, key).peek_str()
+    @zyncio.zmethod
+    async def get_string(self, key: str) -> str:
+        return await (await self._client.symbols.xpc_dictionary_get_string.z(self, key)).peek_str.z()
 
-    def get_int64(self, key: str) -> int:
-        return self._client.symbols.xpc_dictionary_get_int64(self, key).c_int64
+    @zyncio.zmethod
+    async def get_int64(self, key: str) -> int:
+        return (await self._client.symbols.xpc_dictionary_get_int64.z(self, key)).c_int64
 
-    def get_uint64(self, key: str) -> int:
-        return self._client.symbols.xpc_dictionary_get_uint64(self, key).c_uint64
+    @zyncio.zmethod
+    async def get_uint64(self, key: str) -> int:
+        return (await self._client.symbols.xpc_dictionary_get_uint64.z(self, key)).c_uint64
 
-    def get_bool(self, key: str) -> None:
-        return self._client.symbols.xpc_dictionary_get_bool(self, key).c_bool
+    @zyncio.zmethod
+    async def get_bool(self, key: str) -> bool:
+        return (await self._client.symbols.xpc_dictionary_get_bool.z(self, key)).c_bool
 
-    def get_data(self, key: str) -> bytes:
-        with self._client.safe_malloc(8) as p_length:
-            return self._client.symbols.xpc_dictionary_get_data(self, key, p_length).peek(p_length[0])
+    @zyncio.zmethod
+    async def get_data(self, key: str) -> bytes:
+        async with self._client.safe_malloc.z(8) as p_length:
+            return await (await self._client.symbols.xpc_dictionary_get_data.z(self, key, p_length)).peek.z(
+                await p_length.getindex(0)
+            )
 
-    def get_fd(self, key: str) -> int:
-        return self._client.symbols.xpc_dictionary_get_fd(self, key)
+    @zyncio.zmethod
+    async def get_fd(self, key: str) -> int:
+        return await self._client.symbols.xpc_dictionary_get_fd.z(self, key)
 
-    def get_uuid(self, key: str) -> str:
-        return self._client.symbols.xpc_dictionary_get_uuid(self, key).peek_str()
+    @zyncio.zmethod
+    async def get_uuid(self, key: str) -> str:
+        return await (await self._client.symbols.xpc_dictionary_get_uuid.z(self, key)).peek_str.z()
 
-    def get_dictionary(self, key: str) -> "XPCDictionary":
-        return XPCDictionary.create(self._client.symbols.xpc_dictionary_get_dictionary(self, key), self._client)
+    @zyncio.zmethod
+    async def get_dictionary(self, key: str) -> "XPCDictionary":
+        return XPCDictionary(await self._client.symbols.xpc_dictionary_get_dictionary.z(self, key), self._client)
 
-    def get_object(self, key: str) -> XPCObject:
-        return XPCObject.create(self._client.symbols.xpc_dictionary_get_object(self, key), self._client)
+    @zyncio.zmethod
+    async def get_object(self, key: str) -> XPCObject:
+        return XPCObject(await self._client.symbols.xpc_dictionary_get_object.z(self, key), self._client)
 
-    def get_value(self, key: str) -> XPCObject:
-        return XPCObject.create(self._client.symbols.xpc_dictionary_get_value(self, key), self._client)
+    @zyncio.zmethod
+    async def get_value(self, key: str) -> XPCObject:
+        return XPCObject(await self._client.symbols.xpc_dictionary_get_value.z(self, key), self._client)
 
 
-class Xpc:
-    def __init__(self, client: "DarwinClient"):
+class Xpc(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
-        self._client.load_framework("DuetActivityScheduler")
-        self.sharedScheduler = self._client.symbols.objc_getClass("_DASScheduler").objc_call("sharedScheduler")
+        self._client.load_framework_lazy("DuetActivityScheduler")
+        self._service_cache: dict[str, DarwinSymbolT_co] = {}
 
-    def create_xpc_dictionary(self) -> XPCDictionary:
-        return XPCDictionary.create(self._client.symbols.xpc_dictionary_create(0, 0, 0), self._client)
+    @zyncio.zproperty
+    async def sharedScheduler(self) -> DarwinSymbolT_co:
+        return await (await self._client.symbols.objc_getClass.z("_DASScheduler")).objc_call.z("sharedScheduler")
 
-    def create_xpc_array(self) -> XPCArray:
-        return XPCArray.create(self._client.symbols.xpc_array_create_empty(), self._client)
+    @zyncio.zmethod
+    async def create_xpc_dictionary(self) -> XPCDictionary:
+        return XPCDictionary(await self._client.symbols.xpc_dictionary_create.z(0, 0, 0), self._client)
 
-    def send_xpc_dictionary(self, service_name: str, message: XPCDictionary) -> XPCDictionary:
+    @zyncio.zmethod
+    async def create_xpc_array(self) -> XPCArray:
+        return XPCArray(await self._client.symbols.xpc_array_create_empty.z(), self._client)
+
+    @zyncio.zmethod
+    async def send_xpc_dictionary(self, service_name: str, message: XPCDictionary) -> XPCDictionary:
         """
         Send a native XPC dictionary to a XPC service synchronously and return result.
 
@@ -112,9 +179,10 @@ class Xpc:
         :param message: xpc message to send
         :return: received response
         """
-        return XPCDictionary.create(self.send_message_raw(service_name, message), self._client)
+        return XPCDictionary(await self.send_message_raw.z(service_name, message), self._client)
 
-    def send_message_using_cf_serialization(
+    @zyncio.zmethod
+    async def send_message_using_cf_serialization(
         self, service_name: str, message: CfSerializable, decode_cf: bool = True
     ) -> CfSerializable:
         """
@@ -125,19 +193,20 @@ class Xpc:
         :param decode_cf: should response be decoded as CFObject-over-XPCObject or a native XPC object
         :return: received response
         """
-        message_raw = self.encode_xpc_message_using_cf_serialization(message)
+        message_raw = await self.encode_xpc_message_using_cf_serialization.z(message)
         if message_raw == 0:
-            raise RpcXpcSerializationError()
-        response = self.send_message_raw(service_name, message_raw)
+            raise RpcXpcSerializationError
+        response = await self.send_message_raw.z(service_name, message_raw)
         if response == 0:
-            raise RpcXpcSerializationError()
+            raise RpcXpcSerializationError
         return (
-            self.decode_xpc_message_using_cf_serialization(response)
+            await self.decode_xpc_message_using_cf_serialization.z(response)
             if decode_cf
-            else self.decode_xpc_object_using_cf_serialization(response)
+            else await self.decode_xpc_object_using_cf_serialization.z(response)
         )
 
-    def send_object_using_cf_serialization(self, service_name: str, message: CfSerializable) -> CfSerializable:
+    @zyncio.zmethod
+    async def send_object_using_cf_serialization(self, service_name: str, message: CfSerializable) -> CfSerializable:
         """
         Send a native XPC object serialized over a CFObject to a XPC service synchronously and return reply.
 
@@ -145,59 +214,73 @@ class Xpc:
         :param message: xpc message to send
         :return: received response
         """
-        message_raw = self.encode_xpc_object_using_cf_serialization(message)
+        message_raw = await self.encode_xpc_object_using_cf_serialization.z(message)
         if message_raw == 0:
             raise RpcXpcSerializationError()
-        response = self.send_message_raw(service_name, message_raw)
+        response = await self.send_message_raw.z(service_name, message_raw)
         if response == 0:
             raise RpcXpcSerializationError()
-        return self.decode_xpc_object_using_cf_serialization(response)
+        return await self.decode_xpc_object_using_cf_serialization.z(response)
 
-    def decode_xpc_object_using_cf_serialization(self, address: DarwinSymbol) -> CfSerializable:
+    @zyncio.zmethod
+    async def decode_xpc_object_using_cf_serialization(self, address: int) -> CfSerializable:
         """
         Convert XPC object to python object using CF serialization.
         """
-        return self._client.symbols._CFXPCCreateCFObjectFromXPCObject(address).py()
+        return await (await self._client.symbols._CFXPCCreateCFObjectFromXPCObject.z(address)).py.z()
 
-    def encode_xpc_object_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbol:
+    @zyncio.zmethod
+    async def encode_xpc_object_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbolT_co:
         """
         Convert python object to XPC object using CF conversion.
         """
-        return self._client.symbols._CFXPCCreateXPCObjectFromCFObject(self._client.cf(obj))
+        return await self._client.symbols._CFXPCCreateXPCObjectFromCFObject.z(await self._client.cf.z(obj))
 
-    def decode_xpc_message_using_cf_serialization(self, address: DarwinSymbol) -> CfSerializable:
+    @zyncio.zmethod
+    async def decode_xpc_message_using_cf_serialization(self, address: int) -> CfSerializable:
         """
         Convert a CFObject serialized over an XPCObject to python object
         """
-        return self._client.symbols._CFXPCCreateCFObjectFromXPCMessage(address).py()
+        return await (await self._client.symbols._CFXPCCreateCFObjectFromXPCMessage.z(address)).py.z()
 
-    def encode_xpc_message_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbol:
+    @zyncio.zmethod
+    async def encode_xpc_message_using_cf_serialization(self, obj: CfSerializable) -> DarwinSymbolT_co:
         """
         Convert python object to a CFObject serialized over an XPCObject
         """
-        return self._client.symbols._CFXPCCreateXPCMessageWithCFObject(self._client.cf(obj))
+        return await self._client.symbols._CFXPCCreateXPCMessageWithCFObject.z(await self._client.cf.z(obj))
 
-    def send_message_raw(self, service_name: str, message_raw: DarwinSymbol) -> DarwinSymbol:
+    @zyncio.zmethod
+    async def send_message_raw(self, service_name: str, message_raw: int) -> DarwinSymbolT_co:
         """Send a RAW xpc object to given service_name and wait reply."""
-        conn = self._connect_to_mach_service(service_name)
-        return self._client.symbols.xpc_connection_send_message_with_reply_sync(conn, message_raw)
+        conn = await self._connect_to_mach_service(service_name)
+        return await self._client.symbols.xpc_connection_send_message_with_reply_sync.z(conn, message_raw)
 
-    def force_run_activities(self, activities: list[str]) -> None:
-        self.sharedScheduler.objc_call("forceRunActivities:", self._client.cf(activities))
+    @zyncio.zmethod
+    async def force_run_activities(self, activities: list[str]) -> None:
+        await (await type(self).sharedScheduler(self)).objc_call.z(
+            "forceRunActivities:", await self._client.cf.z(activities)
+        )
 
-    @property
-    def loaded_activities(self) -> dict:
-        return self._client.preferences.cf.get_dict("com.apple.xpc.activity2", "root")
+    @zyncio.zproperty
+    async def loaded_activities(self) -> dict:
+        return await self._client.preferences.cf.get_dict.z("com.apple.xpc.activity2", "root")
 
-    def set_activity_base_date(self, name: str, date: datetime) -> None:
-        activity_base_dates = self.loaded_activities["ActivityBaseDates"]
+    @zyncio.zmethod
+    async def set_activity_base_date(self, name: str, date: datetime) -> None:
+        activity_base_dates = (await type(self).loaded_activities(self))["ActivityBaseDates"]
         activity_base_dates[name] = date
-        self._client.preferences.cf.set("ActivityBaseDates", activity_base_dates, "com.apple.xpc.activity2", "root")
+        await self._client.preferences.cf.set.z(
+            "ActivityBaseDates", activity_base_dates, "com.apple.xpc.activity2", "root"
+        )
 
-    @cache
-    def _connect_to_mach_service(self, service_name) -> DarwinSymbol:
-        conn = self._client.symbols.xpc_connection_create_mach_service(service_name, 0, 0)
-        assert conn != 0, "failed to create xpc connection"
-        self._client.symbols.xpc_connection_set_event_handler(conn, self._client.get_dummy_block())
-        self._client.symbols.xpc_connection_resume(conn)
-        return conn
+    async def _connect_to_mach_service(self, service_name: str) -> DarwinSymbolT_co:
+        if service_name not in self._service_cache:
+            conn = await self._client.symbols.xpc_connection_create_mach_service.z(service_name, 0, 0)
+            if conn == 0:
+                raise BadReturnValueError("failed to create xpc connection")
+            await self._client.symbols.xpc_connection_set_event_handler.z(conn, await self._client.get_dummy_block.z())
+            await self._client.symbols.xpc_connection_resume.z(conn)
+            self._service_cache[service_name] = conn
+
+        return self._service_cache[service_name]

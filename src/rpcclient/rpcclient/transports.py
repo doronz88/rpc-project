@@ -1,15 +1,17 @@
+import asyncio
 import logging
 import os
+import socket
 import subprocess
-import time
 import urllib.request
-from socket import socket
-from typing import Union
 
 import requests
+import zyncio
 
 from rpcclient.exceptions import FailedToConnectError
-from rpcclient.protocol.rpc_bridge import RpcBridge
+from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
+from rpcclient.utils import zync_sleep
+
 
 logger = logging.getLogger(__name__)
 
@@ -18,34 +20,53 @@ PROJECT_URL = "https://api.github.com/repos/doronz88/rpc-project/releases/latest
 BINARY_NAME = "rpcserver_macosx"
 
 
-def create_tcp(
+@zyncio.zfunc
+async def create_tcp(
+    zync_mode: zyncio.Mode,
     *,
-    hostname: Union[str, None] = None,
-    host: Union[str, None] = None,
+    hostname: str | None = None,
+    host: str | None = None,
     port: int = DEFAULT_PORT,
-    timeout: Union[float, None] = None,
-) -> RpcBridge:
-    """Connect via TCP and return a ProtoSocket."""
+    timeout: float | None = None,
+) -> SyncRpcBridge | AsyncRpcBridge:
+    """Connect via TCP and return an `RpcBridge`."""
     target = hostname or host
     if not target:
-        raise TypeError('tcp(): provide "hostname" or "host"')
-    s = socket()
-    if timeout is not None:
-        s.settimeout(timeout)
+        raise TypeError('create_tcp(): provide "hostname" or "host"')
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
     try:
-        s.connect((target, port))
+        if zync_mode is zyncio.SYNC:
+            if timeout is not None:
+                s.settimeout(timeout)
+            s.connect((target, port))
+            s.settimeout(None)
+        else:
+            s.setblocking(False)
+            await asyncio.wait_for(
+                asyncio.get_running_loop().sock_connect(s, (target, port)),
+                timeout,
+            )
     except ConnectionRefusedError as e:
         s.close()
         raise FailedToConnectError() from e
-    return RpcBridge.connect(s)
+
+    bridge_class = SyncRpcBridge if zync_mode is zyncio.SYNC else AsyncRpcBridge
+
+    return await bridge_class.connect.z(s)
 
 
-def create_local(
-    *, project_url: str = PROJECT_URL, binary_name: str = BINARY_NAME, poll_interval: float = 0.1
-) -> RpcBridge:
+@zyncio.zfunc
+async def create_local(
+    zync_mode: zyncio.Mode,
+    *,
+    project_url: str = PROJECT_URL,
+    binary_name: str = BINARY_NAME,
+    poll_interval: float = 0.1,
+) -> SyncRpcBridge | AsyncRpcBridge:
     """
     Download the latest rpcserver release asset, spawn it locally on a free port,
-    and connect via TCP. Returns a ProtoSocket.
+    and connect via TCP. Returns an `RpcBridge`.
     """
     resp = requests.get(project_url)
     resp.raise_for_status()
@@ -58,7 +79,7 @@ def create_local(
             break
 
     # pick a free port
-    srv = socket()
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.bind(("127.0.0.1", 0))
     port = srv.getsockname()[1]
     srv.close()
@@ -70,12 +91,13 @@ def create_local(
     # poll until connectable
     while True:
         try:
-            return create_tcp(hostname="127.0.0.1", port=port)
+            return await create_tcp.run_zync(zync_mode, hostname="127.0.0.1", port=port)
         except FailedToConnectError:
-            time.sleep(poll_interval)
+            await zync_sleep(zync_mode, poll_interval)
 
 
-def create_using_protocol(*, client, path: str) -> RpcBridge:
-    if not hasattr(client, "create_worker") and callable(client.create_worker):
-        raise ValueError("No existing client supports protocol worker creation.")
-    return client.create_worker(path)
+@zyncio.zfunc
+async def create_using_protocol(zync_mode: zyncio.Mode, *, client, path: str) -> SyncRpcBridge | AsyncRpcBridge:
+    if not callable(getattr(client, "create_worker", None)):
+        raise ValueError("No existing client supports protocol worker creation.")  # noqa: TRY004
+    return await client.create_worker.z(zync_mode, path)

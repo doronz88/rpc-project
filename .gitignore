@@ -48,6 +48,8 @@ _CodeSignature
 # Build
 **/_version.py
 src/rpcserver/protos/
-src/rpcclient/rpcclient/protos/
 src/rpcserver/build/
+src/rpcclient/rpcclient/protos/
+src/rpcclient/build/
+src/rpcclient/dist/
 cmake-build-debug

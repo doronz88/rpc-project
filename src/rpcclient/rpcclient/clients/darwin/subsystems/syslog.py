@@ -1,18 +1,22 @@
 import datetime
 import logging
 import re
-from functools import cached_property
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+
+from rpcclient.clients.darwin._types import DarwinSymbolT, DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import OsLogLevel
 from rpcclient.clients.darwin.subsystems.cfpreferences import GLOBAL_DOMAIN, kCFPreferencesAnyHost
 from rpcclient.clients.darwin.subsystems.processes import Process
-from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core._types import ClientBound
 from rpcclient.core.structs.consts import SIGKILL
 from rpcclient.exceptions import BadReturnValueError, HarGlobalNotFoundError, MissingLibraryError
+from rpcclient.utils import cached_async_method
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 MOV_RDI_RBX = b"\x48\x89\xdf"
 XOR_ESI_ESI = b"\x31\xf6"
@@ -27,139 +31,147 @@ ARM_PATTERN = MOV_X0_X9 + MOV_X1_0 + MOV_W2_0XA
 logger = logging.getLogger(__name__)
 
 
-class OsLogPreferencesBase:
-    def __init__(self, client: "DarwinClient", obj: DarwinSymbol):
+class OsLogPreferencesBase(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", obj: DarwinSymbolT_co) -> None:
         self._client = client
-        self._object = obj
+        self._object: DarwinSymbolT_co = obj
 
-    @property
-    def name(self) -> str:
-        return self._object.objc_call("name").py()
+    @zyncio.zproperty
+    async def name(self) -> str:
+        return await (await self._object.objc_call.z("name")).py.z(str)
 
-    @property
-    def persisted_level(self) -> OsLogLevel:
-        return OsLogLevel(self._object.objc_call("persistedLevel"))
+    @zyncio.zproperty
+    async def _persisted_level(self) -> OsLogLevel:
+        return OsLogLevel(await self._object.objc_call.z("persistedLevel"))
 
-    @persisted_level.setter
-    def persisted_level(self, value: OsLogLevel) -> None:
-        self._object.objc_call("setPersistedLevel:", value)
+    @_persisted_level.setter
+    async def persisted_level(self, value: OsLogLevel) -> None:
+        await self._object.objc_call.z("setPersistedLevel:", value)
 
-    @property
-    def default_persisted_level(self) -> OsLogLevel:
-        return OsLogLevel(self._object.objc_call("defaultPersistedLevel"))
+    @zyncio.zproperty
+    async def default_persisted_level(self) -> OsLogLevel:
+        return OsLogLevel(await self._object.objc_call.z("defaultPersistedLevel"))
 
-    @property
-    def enabled_level(self) -> OsLogLevel:
-        return OsLogLevel(self._object.objc_call("enabledLevel"))
+    @zyncio.zproperty
+    async def _enabled_level(self) -> OsLogLevel:
+        return OsLogLevel(await self._object.objc_call.z("enabledLevel"))
 
-    @enabled_level.setter
-    def enabled_level(self, value: OsLogLevel) -> None:
-        self._object.objc_call("setEnabledLevel:", value)
+    @_enabled_level.setter
+    async def enabled_level(self, value: OsLogLevel) -> None:
+        await self._object.objc_call.z("setEnabledLevel:", value)
 
-    @property
-    def default_enabled_level(self) -> OsLogLevel:
-        return OsLogLevel(self._object.objc_call("defaultEnabledLevel"))
+    @zyncio.zproperty
+    async def default_enabled_level(self) -> OsLogLevel:
+        return OsLogLevel(await self._object.objc_call.z("defaultEnabledLevel"))
 
-    @property
-    def _verbosity_description(self) -> str:
+    @zyncio.zproperty
+    async def _verbosity_description(self) -> str:
+        enabled_level = await type(self).enabled_level(self)
+        persisted_level = await type(self).persisted_level(self)
         return (
-            f"ENABLED_LEVEL:{self.enabled_level.name}({self.enabled_level.value}) "
-            f"PERSISTED_LEVEL:{self.persisted_level.name}({self.persisted_level.value})"
+            f"ENABLED_LEVEL:{enabled_level.name}({enabled_level.value}) "
+            f"PERSISTED_LEVEL:{persisted_level.name}({persisted_level.value})"
         )
 
-    def reset(self) -> None:
-        self._object.objc_call("reset")
+    @zyncio.zmethod
+    async def reset(self) -> None:
+        await self._object.objc_call.z("reset")
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} NAME:{self.name} {self._verbosity_description}>"
+        if zyncio.is_sync(self):
+            return f"<{self.__class__.__name__} NAME:{self.name} {self._verbosity_description}>"
+        return f"<{self.__class__.__name__} (async)>"
 
 
-class OsLogPreferencesCategory(OsLogPreferencesBase):
-    def __init__(self, client: "DarwinClient", category: str, subsystem: DarwinSymbol):
-        obj = (
-            client.symbols.objc_getClass("OSLogPreferencesCategory")
-            .objc_call("alloc")
-            .objc_call("initWithName:subsystem:", client.cf(category), subsystem)
-        )
-        super().__init__(client, obj)
+class OsLogPreferencesCategory(OsLogPreferencesBase[DarwinSymbolT_co]):
+    @staticmethod
+    async def create(
+        client: "BaseDarwinClient[DarwinSymbolT]", category: str, subsystem: int
+    ) -> "OsLogPreferencesCategory[DarwinSymbolT]":
+        obj = await (
+            await (await client.symbols.objc_getClass.z("OSLogPreferencesCategory")).objc_call.z("alloc")
+        ).objc_call.z("initWithName:subsystem:", await client.cf.z(category), subsystem)
+        return OsLogPreferencesCategory(client, obj)
 
-    @property
-    def name(self) -> str:
-        return self._object.objc_call("name").py()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} NAME:{self.name} {self._verbosity_description}>"
+    @zyncio.zproperty
+    async def name(self) -> str:
+        return await (await self._object.objc_call.z("name")).py.z(str)
 
 
-class OsLogPreferencesSubsystem(OsLogPreferencesBase):
-    def __init__(self, client: "DarwinClient", subsystem: str):
-        obj = (
-            client.symbols.objc_getClass("OSLogPreferencesSubsystem")
-            .objc_call("alloc")
-            .objc_call("initWithName:", client.cf(subsystem))
-        )
-        super().__init__(client, obj)
+class OsLogPreferencesSubsystem(OsLogPreferencesBase[DarwinSymbolT_co]):
+    @staticmethod
+    async def create(
+        client: "BaseDarwinClient[DarwinSymbolT]", subsystem: str
+    ) -> "OsLogPreferencesSubsystem[DarwinSymbolT]":
+        obj = await (
+            await (await client.symbols.objc_getClass.z("OSLogPreferencesSubsystem")).objc_call.z("alloc")
+        ).objc_call.z("initWithName:", await client.cf.z(subsystem))
+        return OsLogPreferencesSubsystem(client, obj)
 
-    @property
-    def category_strings(self) -> list[OsLogPreferencesCategory]:
-        return self._object.objc_call("categories").py()
+    @zyncio.zproperty
+    async def category_strings(self) -> list[str]:
+        return await (await self._object.objc_call.z("categories")).py.z(list)
 
-    @property
-    def categories(self) -> list[OsLogPreferencesCategory]:
+    @zyncio.zproperty
+    async def categories(self) -> list[OsLogPreferencesCategory]:
         result = []
-        for name in self.category_strings:
-            result.append(self.get_category(name))
+        for name in await type(self).category_strings(self):
+            result.append(await self.get_category.z(name))
         return result
 
-    def get_category(self, name: str) -> OsLogPreferencesCategory:
-        return OsLogPreferencesCategory(self._client, name, self._object)
+    @zyncio.zmethod
+    async def get_category(self, name: str) -> OsLogPreferencesCategory:
+        return await OsLogPreferencesCategory.create(self._client, name, self._object)
 
 
-class OsLogPreferencesManager(OsLogPreferencesBase):
-    def __init__(self, client: "DarwinClient"):
-        obj = client.symbols.objc_getClass("OSLogPreferencesManager").objc_call("sharedManager")
-        super().__init__(client, obj)
+class OsLogPreferencesManager(OsLogPreferencesBase[DarwinSymbolT_co]):
+    @staticmethod
+    async def create(client: "BaseDarwinClient[DarwinSymbolT]") -> "OsLogPreferencesManager[DarwinSymbolT]":
+        obj = await (await client.symbols.objc_getClass.z("OSLogPreferencesManager")).objc_call.z("sharedManager")
+        return OsLogPreferencesManager(client, obj)
 
-    @property
-    def subsystem_strings(self) -> list[str]:
-        return self._object.objc_call("subsystems").py()
+    @zyncio.zproperty
+    async def subsystem_strings(self) -> list[str]:
+        return await (await self._object.objc_call.z("subsystems")).py.z(list)
 
-    @property
-    def subsystems(self) -> list[OsLogPreferencesSubsystem]:
+    @zyncio.zproperty
+    async def subsystems(self) -> list[OsLogPreferencesSubsystem]:
         result = []
-        for name in self.subsystem_strings:
-            result.append(self.get_subsystem(name))
+        for name in await type(self).subsystem_strings(self):
+            result.append(await self.get_subsystem.z(name))
         return result
 
-    def get_subsystem(self, name: str) -> OsLogPreferencesSubsystem:
-        return OsLogPreferencesSubsystem(self._client, name)
+    @zyncio.zmethod
+    async def get_subsystem(self, name: str) -> OsLogPreferencesSubsystem[DarwinSymbolT_co]:
+        return await OsLogPreferencesSubsystem.create(self._client, name)
 
 
-class Syslog:
-    """ " manage syslog"""
+class Syslog(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    """manage syslog"""
 
-    def __init__(self, client: "DarwinClient"):
-        """
-        @type client: rpcclient.darwin.client.DarwinClient
-        """
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         self._client = client
-        self._client.load_framework("LoggingSupport")
-        self.preferences_manager = OsLogPreferencesManager(self._client)
+        self._client.load_framework_lazy("LoggingSupport")
 
-    @cached_property
-    def _cfnetwork_base(self) -> int:
-        self._client.load_framework("CFNetwork")
-        cfnetwork = [
-            image
-            for image in self._client.images
-            if image.name.startswith("/System/Library/Frameworks/CFNetwork.framework")
-        ]
-        if len(cfnetwork) < 1:
-            raise MissingLibraryError()
-        return cfnetwork[0].base_address
+    @zyncio.zproperty
+    @cached_async_method
+    async def preferences_manager(self) -> OsLogPreferencesManager[DarwinSymbolT_co]:
+        return await OsLogPreferencesManager.create(self._client)
 
-    @cached_property
-    def _arm_enable_har_global(self) -> DarwinSymbol:
+    @cached_async_method
+    async def _cfnetwork_base(self) -> int:
+        await self._client.load_framework.z("CFNetwork")
+        try:
+            return next(
+                image
+                for image in await self._client.get_images.z()
+                if image.name.startswith("/System/Library/Frameworks/CFNetwork.framework")
+            ).base_address
+        except StopIteration:
+            raise MissingLibraryError from None
+
+    @cached_async_method
+    async def _arm_enable_har_global(self) -> DarwinSymbolT_co:
         """
         In order to find an unexported global variable, we use a sequence of instructions that we know comes after
         the aforementioned variable is accessed.
@@ -178,13 +190,13 @@ class Syslog:
 
         address = []
         regex_hex = r"0x[0-9a-fA-F]+"
-        start = self._cfnetwork_base
+        start = await self._cfnetwork_base()
         while True:
-            pattern_addr = self._client.symbols.memmem(start, 0xFFFFFFFF, ARM_PATTERN, len(ARM_PATTERN))
+            pattern_addr = await self._client.symbols.memmem.z(start, 0xFFFFFFFF, ARM_PATTERN, len(ARM_PATTERN))
             if pattern_addr == 0:
                 raise HarGlobalNotFoundError()
             pattern_sym = self._client.symbol(pattern_addr)
-            disass = (pattern_sym - len(ARM_PATTERN)).disass(8)
+            disass = await (pattern_sym - len(ARM_PATTERN)).disass.z(8)
             if disass[0].mnemonic == "adrp" and disass[1].mnemonic == "ldrb":
                 break
             # search next occurrence
@@ -194,8 +206,8 @@ class Syslog:
             address.append(int(re.findall(regex_hex, instruction.op_str)[0], 16))
         return self._client.symbol(sum(address))
 
-    @cached_property
-    def _intel_enable_har_global(self) -> DarwinSymbol:
+    @cached_async_method
+    async def _intel_enable_har_global(self) -> DarwinSymbolT_co:
         """
         In order to find an unexported global variable, we use a sequence of instructions that we know comes before
         the aforementioned variable is accessed.
@@ -210,13 +222,13 @@ class Syslog:
             88 1D 19 9C                 mov     cs:har_global_0, bl  <-----------------
         """
         op_str_pattern = "byte ptr [rip +"
-        start = self._cfnetwork_base
+        start = await self._cfnetwork_base()
         while True:
-            pattern_addr = self._client.symbols.memmem(start, 0xFFFFFFFF, INTEL_PATTERN, len(INTEL_PATTERN))
+            pattern_addr = await self._client.symbols.memmem.z(start, 0xFFFFFFFF, INTEL_PATTERN, len(INTEL_PATTERN))
             if pattern_addr == 0:
                 raise HarGlobalNotFoundError()
             pattern_sym = self._client.symbol(pattern_addr)
-            disass = (pattern_sym + len(INTEL_PATTERN)).disass(100)
+            disass = await (pattern_sym + len(INTEL_PATTERN)).disass.z(100)
             if (
                 disass[0].mnemonic == "call"
                 and disass[1].mnemonic == "mov"
@@ -227,50 +239,58 @@ class Syslog:
                 return self._client.symbol(disass[2].address + offset)
             start = pattern_addr + 1
 
-    @cached_property
-    def _enable_har_global(self) -> DarwinSymbol:
-        if self._client.uname.machine == "x86_64":
-            return self._intel_enable_har_global
-        return self._arm_enable_har_global
+    @cached_async_method
+    async def _enable_har_global(self) -> DarwinSymbolT_co:
+        if (await self._client.get_uname.z()).machine == "x86_64":
+            return await self._intel_enable_har_global()
+        return await self._arm_enable_har_global()
 
-    def install_cfnetwork_diagnostics_profile(self) -> None:
-        self._client.preferences.cf.set(
+    @zyncio.zmethod
+    async def install_cfnetwork_diagnostics_profile(self) -> None:
+        await self._client.preferences.cf.set.z(
             "AppleCFNetworkDiagnosticLogging", 3, GLOBAL_DOMAIN, username="kCFPreferencesAnyUser"
         )
 
-    def remove_cfnetwork_diagnostics_profile(self) -> None:
-        self._client.preferences.cf.remove(
+    @zyncio.zmethod
+    async def remove_cfnetwork_diagnostics_profile(self) -> None:
+        await self._client.preferences.cf.remove.z(
             "AppleCFNetworkDiagnosticLogging", GLOBAL_DOMAIN, username="kCFPreferencesAnyUser"
         )
 
-    def set_harlogger_for_process(self, value: bool, pid: int) -> None:
-        process = self._client.processes.get_by_pid(pid)
-        self._set_harlogger_for_process(value, process)
-        self.set_har_capture_global(True)
+    @zyncio.zmethod
+    async def set_harlogger_for_process(self, value: bool, pid: int) -> None:
+        process = await self._client.processes.get_by_pid.z(pid)
+        await self._set_harlogger_for_process(value, process)
+        await self.set_har_capture_global.z(True)
 
-    def set_harlogger_for_all(self, value: bool, expression: Optional[str] = None) -> None:
-        for p in self._client.processes.list():
+    @zyncio.zmethod
+    async def set_harlogger_for_all(self, value: bool, expression: str | None = None) -> None:
+        for p in await self._client.processes.list.z():
             if p.pid == 0:
                 continue
-            if expression and expression not in p.basename:
+            if expression and expression not in (await type(p).basename(p) or ""):
                 continue
             try:
-                self._set_harlogger_for_process(value, p)
-                logger.info(f"{'Enabled' if value else 'Disabled'} for {p.basename}")
+                await self._set_harlogger_for_process(value, p)
+                logger.info(f"{'Enabled' if value else 'Disabled'} for {await type(p).basename(p)}")
             except BadReturnValueError:
                 logger.exception(f"Failed To enable for {p}")
-        self.set_har_capture_global(True)
+        await self.set_har_capture_global.z(True)
 
-    def set_unredacted_logs(self, enable: bool = True):
+    @zyncio.zmethod
+    async def set_unredacted_logs(self, enable: bool = True) -> None:
         """
         enable/disable unredacted logs (allows seeing the <private> strings)
         https://github.com/EthanArbuckle/unredact-private-os_logs
         """
-        with self._client.preferences.sc.open("/Library/Preferences/Logging/com.apple.system.logging.plist") as pref:
-            pref.set_dict({"Enable-Logging": True, "Enable-Private-Data": enable})
-        self._client.processes.get_by_basename("logd").kill(SIGKILL)
+        async with await self._client.preferences.sc.open.z(
+            "/Library/Preferences/Logging/com.apple.system.logging.plist"
+        ) as pref:
+            await pref.set_dict.z({"Enable-Logging": True, "Enable-Private-Data": enable})
+        await (await self._client.processes.get_by_basename.z("logd")).kill.z(SIGKILL)
 
-    def set_har_capture_global(self, enable: bool = True):
+    @zyncio.zmethod
+    async def set_har_capture_global(self, enable: bool = True) -> None:
         """
         enable/disable HAR logging
         https://github.com/doronz88/harlogger
@@ -279,24 +299,24 @@ class Syslog:
         if enable:
             for user in users:
                 # settings copied from DiagnosticExtension.appex
-                self._client.preferences.cf.set(
+                await self._client.preferences.cf.set.z(
                     "har-capture-global",
                     datetime.datetime(9999, 12, 31, 23, 59, 59),
                     "com.apple.CFNetwork",
                     user,
                     hostname=kCFPreferencesAnyHost,
                 )
-                self._client.preferences.cf.set(
+                await self._client.preferences.cf.set.z(
                     "har-body-size-limit", 0x100000, "com.apple.CFNetwork", user, hostname=kCFPreferencesAnyHost
                 )
-                subsystem = self.preferences_manager.get_subsystem("com.apple.CFNetwork")
-                category = subsystem.get_category("HAR")
+                subsystem = await (await type(self).preferences_manager(self)).get_subsystem.z("com.apple.CFNetwork")
+                category = await subsystem.get_category.z("HAR")
 
-                category.enabled_level = 2
-                category.persisted_level = 2
+                await type(category).enabled_level.fset(category, OsLogLevel.DEFAULT)
+                await type(category).persisted_level.fset(category, OsLogLevel.DEFAULT)
         else:
             for user in users:
-                self._client.preferences.cf.set(
+                await self._client.preferences.cf.set.z(
                     "har-capture-global",
                     datetime.datetime(1970, 1, 1, 1, 1, 1),
                     "com.apple.CFNetwork",
@@ -304,8 +324,8 @@ class Syslog:
                     hostname=kCFPreferencesAnyHost,
                 )
 
-        if self._client.symbols.notify_post("com.apple.CFNetwork.har-capture-update"):
+        if await self._client.symbols.notify_post.z("com.apple.CFNetwork.har-capture-update"):
             raise BadReturnValueError("notify_post() failed")
 
-    def _set_harlogger_for_process(self, value: bool, process: Process) -> None:
-        process.poke(self._enable_har_global, value.to_bytes(1, "little"))
+    async def _set_harlogger_for_process(self, value: bool, process: Process) -> None:
+        await process.poke.z(await self._enable_har_global(), value.to_bytes(1, "little"))

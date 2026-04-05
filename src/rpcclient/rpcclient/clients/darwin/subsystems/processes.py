@@ -5,17 +5,17 @@ import logging
 import posixpath
 import re
 import struct
-import time
 from collections import namedtuple
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from functools import cached_property
-from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from pathlib import Path, PurePath
+from typing import TYPE_CHECKING, Generic, NoReturn, cast
+from typing_extensions import Self
 
+import zyncio
 from construct import Array, Container, Int32ul
-from parameter_decorators import path_to_str
 
+from rpcclient.clients.darwin._types import DarwinClientT_co, DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import (
     EXC_MASK_ALL,
     EXC_TYPES_COUNT,
@@ -77,11 +77,13 @@ from rpcclient.clients.darwin.structs import (
     vnode_fdinfowithpath,
     x86_thread_state64_t,
 )
-from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.clients.darwin.symbol import BaseDarwinSymbol
+from rpcclient.core._types import ClientBound
 from rpcclient.core.structs.consts import SEEK_SET, SIGKILL, SIGTERM
+from rpcclient.core.structs.generic import Dl_info
 from rpcclient.core.subsystems.processes import Processes
 from rpcclient.core.subsystems.sysctl import CTL, KERN
-from rpcclient.core.symbol import ADDRESS_SIZE_TO_STRUCT_FORMAT, Symbol
+from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.exceptions import (
     ArgumentError,
     BadReturnValueError,
@@ -91,9 +93,11 @@ from rpcclient.exceptions import (
     UnrecognizedSelectorError,
 )
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
+from rpcclient.utils import cached_async_method, zync_sleep
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 _CF_STRING_ARRAY_PREFIX_LEN = len('    "')
 _CF_STRING_ARRAY_SUFFIX_LEN = len('",')
@@ -108,42 +112,42 @@ CHUNK_SIZE = 1024 * 64
 APP_SUFFIX = ".app/"
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Fd:
     fd: int
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class KQueueFd(Fd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class PipeFd(Fd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class SharedMemoryFd(Fd):
     path: str
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class FileFd(Fd):
     path: str
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class UnixFd(Fd):
     path: str
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class SocketFd(Fd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv4SocketFd(SocketFd):
     local_address: str
     local_port: int
@@ -151,7 +155,7 @@ class Ipv4SocketFd(SocketFd):
     remote_port: int  # when remote 0, the socket is for listening
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv6SocketFd(SocketFd):
     local_address: str
     local_port: int
@@ -159,22 +163,22 @@ class Ipv6SocketFd(SocketFd):
     remote_port: int  # when remote 0, the socket is for listening
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv4TcpFd(Ipv4SocketFd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv6TcpFd(Ipv6SocketFd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv4UdpFd(Ipv4SocketFd):
     pass
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class Ipv6UdpFd(Ipv6SocketFd):
     pass
 
@@ -193,55 +197,61 @@ SOCKET_TYPE_DATACLASS = {
 }
 
 
-class Thread:
-    def __init__(self, client: "DarwinClient", thread_id: int):
+class Thread(ClientBound[DarwinClientT_co]):
+    def __init__(self, client: DarwinClientT_co, thread_id: int) -> None:
         """Initialize a thread wrapper for the given client and thread id."""
         self._client = client
-        self._thread_id = thread_id
+        self._thread_id: int = thread_id
 
     @property
     def thread_id(self) -> int:
         """Return the Mach thread id."""
         return self._thread_id
 
-    def get_state(self):
+    @zyncio.zmethod
+    async def get_state(self) -> Container:
         """Return the architecture-specific thread state."""
         raise NotImplementedError()
 
-    def set_state(self, state: dict):
+    @zyncio.zmethod
+    async def set_state(self, state: dict) -> None:
         """Set the architecture-specific thread state."""
         raise NotImplementedError()
 
-    def resume(self):
+    @zyncio.zmethod
+    async def resume(self) -> None:
         """Resume execution of the thread."""
         raise NotImplementedError()
 
-    def suspend(self):
+    @zyncio.zmethod
+    async def suspend(self) -> None:
         """Suspend execution of the thread."""
         raise NotImplementedError()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a debug representation of the thread."""
         return f"<{self.__class__.__name__} TID:{self._thread_id}>"
 
 
-class IntelThread64(Thread):
-    def get_state(self):
+class IntelThread64(Thread[DarwinClientT_co]):
+    @zyncio.zmethod
+    async def get_state(self) -> Container:
         """Fetch the x86_64 thread state."""
-        with (
-            self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_state,
-            self._client.safe_malloc(x86_thread_state64_t.sizeof()) as p_thread_state_count,
+        async with (
+            self._client.safe_malloc.z(x86_thread_state64_t.sizeof()) as p_state,
+            self._client.safe_malloc.z(x86_thread_state64_t.sizeof()) as p_thread_state_count,
         ):
-            p_thread_state_count[0] = x86_thread_state64_t.sizeof() // Int32ul.sizeof()
-            if self._client.symbols.thread_get_state(
+            await p_thread_state_count.setindex(0, x86_thread_state64_t.sizeof() // Int32ul.sizeof())
+            if await self._client.symbols.thread_get_state.z(
                 self._thread_id, x86_THREAD_STATE64, p_state, p_thread_state_count
             ):
                 raise BadReturnValueError("thread_get_state() failed")
-            return x86_thread_state64_t.parse_stream(p_state)
+            return await p_state.parse.z(x86_thread_state64_t)
 
-    def set_state(self, state: dict) -> None:
+    @zyncio.zmethod
+    async def set_state(self, state: dict) -> None:
         """Set the x86_64 thread state."""
-        if self._client.symbols.thread_set_state(
+        if await self._client.symbols.thread_set_state.z(
             self._thread_id,
             x86_THREAD_STATE64,
             x86_thread_state64_t.build(state),
@@ -250,23 +260,25 @@ class IntelThread64(Thread):
             raise BadReturnValueError("thread_set_state() failed")
 
 
-class ArmThread64(Thread):
-    def get_state(self):
+class ArmThread64(Thread[DarwinClientT_co]):
+    @zyncio.zmethod
+    async def get_state(self) -> Container:
         """Fetch the ARM64 thread state."""
-        with (
-            self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_state,
-            self._client.safe_malloc(arm_thread_state64_t.sizeof()) as p_thread_state_count,
+        async with (
+            self._client.safe_malloc.z(arm_thread_state64_t.sizeof()) as p_state,
+            self._client.safe_malloc.z(arm_thread_state64_t.sizeof()) as p_thread_state_count,
         ):
-            p_thread_state_count[0] = ARM_THREAD_STATE64_COUNT
-            if self._client.symbols.thread_get_state(
+            await p_thread_state_count.setindex(0, ARM_THREAD_STATE64_COUNT)
+            if await self._client.symbols.thread_get_state.z(
                 self._thread_id, ARMThreadFlavors.ARM_THREAD_STATE64, p_state, p_thread_state_count
             ):
                 raise BadReturnValueError("thread_get_state() failed")
-            return arm_thread_state64_t.parse_stream(p_state)
+            return await p_state.parse.z(arm_thread_state64_t)
 
-    def set_state(self, state: dict) -> None:
+    @zyncio.zmethod
+    async def set_state(self, state: dict) -> None:
         """Set the ARM64 thread state."""
-        if self._client.symbols.thread_set_state(
+        if await self._client.symbols.thread_set_state.z(
             self._thread_id,
             ARMThreadFlavors.ARM_THREAD_STATE64,
             arm_thread_state64_t.build(state),
@@ -274,26 +286,28 @@ class ArmThread64(Thread):
         ):
             raise BadReturnValueError("thread_set_state() failed")
 
-    def suspend(self):
+    @zyncio.zmethod
+    async def suspend(self) -> None:
         """Suspend execution of the ARM64 thread."""
-        if self._client.symbols.thread_suspend(self._thread_id):
+        if await self._client.symbols.thread_suspend.z(self._thread_id):
             raise BadReturnValueError("thread_suspend() failed")
 
-    def resume(self):
+    @zyncio.zmethod
+    async def resume(self) -> None:
         """Resume execution of the ARM64 thread."""
-        if self._client.symbols.thread_resume(self._thread_id):
+        if await self._client.symbols.thread_resume.z(self._thread_id):
             raise BadReturnValueError("thread_resume() failed")
 
 
 @dataclasses.dataclass
-class Region:
+class Region(Generic[DarwinSymbolT_co]):
     region_type: str
-    start: "ProcessSymbol"
+    start: "ProcessSymbol[DarwinSymbolT_co]"
     end: int
-    vsize: str
+    vsize: str | None
     protection: str
     protection_max: str
-    region_detail: str
+    region_detail: str | None
 
     @property
     def size(self) -> int:
@@ -324,33 +338,36 @@ class Frame:
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(kw_only=True)
 class Backtrace:
     flavor: str
-    time_start: float
-    time_end: float
+    time_start: float | None = None
+    time_end: float | None = None
     pid: int
     thread_id: int
     dispatch_queue_serial_num: int
     frames: list[Frame]
 
-    def __init__(self, vmu_backtrace: DarwinSymbol):
+    @staticmethod
+    async def _from_backtrace(vmu_backtrace: BaseDarwinSymbol) -> "Backtrace":
         """Parse a VMU backtrace description into structured fields."""
-        backtrace = vmu_backtrace.objc_call("description").py()
+        backtrace = await (await vmu_backtrace.objc_call.z("description")).py.z(str)
         match = re.match(
-            r"VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time>.+?) "
-            r"Process: (?P<pid>\d+) Thread: (?P<thread_id>.+?)  Dispatch queue serial num: "
-            r"(?P<dispatch_queue_serial_num>\d+)\)",
+            (
+                r"VMUBacktrace \(Flavor: (?P<flavor>.+?) Simple Time: (?P<time>.+?) "
+                r"Process: (?P<pid>\d+) Thread: (?P<thread_id>.+?)  Dispatch queue serial num: "
+                r"(?P<dispatch_queue_serial_num>\d+)\)"
+            ),
             backtrace,
         )
-        self.flavor = match.group("flavor")
-        self.pid = int(match.group("pid"))
-        self.thread_id = int(match.group("thread_id"), 16)
-        self.dispatch_queue_serial_num = int(match.group("dispatch_queue_serial_num"))
+        assert match is not None
 
-        self.frames = []
-        for frame in re.findall(_BACKTRACE_FRAME_REGEX, backtrace):
-            self.frames.append(
+        return Backtrace(
+            flavor=match.group("flavor"),
+            pid=int(match.group("pid")),
+            thread_id=int(match.group("thread_id"), 16),
+            dispatch_queue_serial_num=int(match.group("dispatch_queue_serial_num")),
+            frames=[
                 Frame(
                     depth=int(frame[0]),
                     address=int(frame[1], 0),
@@ -358,9 +375,11 @@ class Backtrace:
                     offset=int(frame[3], 0),
                     symbol_name=frame[4],
                 )
-            )
+                for frame in re.findall(_BACKTRACE_FRAME_REGEX, backtrace)
+            ],
+        )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a formatted backtrace representation."""
         buf = f"<{self.__class__.__name__} PID: {self.pid} TID: {self.thread_id}\n"
         for frame in self.frames:
@@ -369,63 +388,67 @@ class Backtrace:
         return buf
 
 
-class ProcessSymbol(Symbol):
-    @classmethod
-    def create(cls, value: int, client, process):
-        """Create a ProcessSymbol bound to a process."""
-        symbol = super().create(value, client)
-        symbol = ProcessSymbol(symbol)
-        symbol._prepare(client)
-        symbol.process = process
-        return symbol
+class ProcessSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    def __init__(self, value: int, process: "Process[DarwinSymbolT_co]") -> None:
+        self._client: BaseDarwinClient[DarwinSymbolT_co] = process._client
+        self.process: Process[DarwinSymbolT_co] = process
 
-    def _symbol_from_value(self, value: int):
+    def _symbol_from_value(self, value: int) -> Self:
         """Clone this symbol for the given value."""
-        return self.create(value, self._client, self.process)
+        return type(self)(value, self.process)
 
-    def peek(self, count: int) -> bytes:
+    @zyncio.zmethod
+    async def peek(self, count: int, offset: int = 0) -> bytes:
         """Read bytes from process memory at this address."""
-        return self.process.peek(self, count)
+        return await self.process.peek.z(self + offset, count)
 
-    def poke(self, buf: bytes) -> None:
+    @zyncio.zmethod
+    async def poke(self, buf: bytes, offset: int = 0) -> None:
         """Write bytes to process memory at this address."""
-        return self.process.poke(self, buf)
+        return await self.process.poke.z(self + offset, buf)
 
-    def peek_str(self, encoding="utf-8") -> str:
+    @zyncio.zmethod
+    async def peek_str(self, encoding="utf-8") -> str:
         """peek string at given address"""
-        return self.process.peek_str(self, encoding)
+        return await self.process.peek_str.z(self, encoding)
 
-    @property
-    def dl_info(self) -> Container:
+    @zyncio.zproperty
+    async def dl_info(self) -> Container:
         """Raise because dl_info is not available for remote process symbols."""
         raise NotImplementedError("dl_info isn't implemented for remote process symbols")
 
-    @property
-    def name(self) -> str:
+    @zyncio.zproperty
+    async def name(self) -> str:
         """Return the symbol name for this address."""
-        return self.process.get_symbol_name(self)
+        return await self.process.get_symbol_name.z(self)
+
+    @zyncio.zproperty
+    async def filename(self) -> str:
+        """Return the image path containing this symbol."""
+        return (await self.process.get_symbol_image.z(await type(self).name(self))).path
+
+    @zyncio.zmethod
+    async def get_dl_info(self) -> "Container":
+        dl_info = Dl_info(self._client)
+        sizeof = dl_info.sizeof()
+        async with self._client.safe_malloc.z(sizeof) as info:
+            if await self._client.symbols.dladdr.z(self, info) == 0:
+                await self._client.raise_errno_exception.z(f"failed to extract info for: {self}")
+            return dl_info.parse(await info.read.z(sizeof))
 
     @property
-    def filename(self) -> str:
-        """Return the image path containing this symbol."""
-        return self.process.get_symbol_image(self.name).path
+    def arch(self) -> object:
+        return self._client.arch
 
-    def __getitem__(self, item) -> "ProcessSymbol":
-        """Dereference and return the pointer at the given index."""
-        fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
-        addr = self + item * self.item_size
-        deref = struct.unpack(self._client._endianness + fmt, self.process.peek(addr, self.item_size))[0]
-        return self.create(deref, self._client, self.process)
+    @property
+    def endianness(self) -> str:
+        return self._client._endianness
 
-    def __setitem__(self, item, value):
-        """Write a pointer-sized value at the given index."""
-        fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
-        value = struct.pack(self._client._endianness + fmt, int(value))
-        self.process.poke(self + item * self.item_size, value)
-
-    def __call__(self, *args, **kwargs):
+    def call(self, *args, **kwargs) -> NoReturn:
         """Disallow calling a process symbol as a function."""
         raise RpcClientException("ProcessSymbol is not callable")
+
+    __call__ = call
 
 
 @dataclasses.dataclass
@@ -441,8 +464,8 @@ class MachPortInfo:
     rights: list[str]
     ipc_object: int
     dead: bool
-    proc_name: Optional[str] = None
-    thread_info: Optional[MachPortThreadInfo] = None
+    proc_name: str | None = None
+    thread_info: MachPortThreadInfo | None = None
 
     @property
     def has_recv_right(self) -> bool:
@@ -460,179 +483,223 @@ class MachPortCrossRefInfo:
     name: int
     ipc_object: int
     recv_right_pid: int
-    recv_right_proc_name: str
+    recv_right_proc_name: str | None
 
 
-class SymbolOwner:
+class SymbolOwner(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     def __init__(
-        self, client: "DarwinClient", process, symbol_owner_opaque1: ProcessSymbol, symbol_owner_opaque2: ProcessSymbol
+        self,
+        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        process: "Process[DarwinSymbolT_co]",
+        symbol_owner_opaque1: ProcessSymbol[DarwinSymbolT_co],
+        symbol_owner_opaque2: ProcessSymbol[DarwinSymbolT_co],
     ) -> None:
         """Initialize a symbol owner wrapper."""
-        self._client = client
-        self._process = process
-        self.symbol_owner_opaque1 = symbol_owner_opaque1
-        self.symbol_owner_opaque2 = symbol_owner_opaque2
+        self._client: BaseDarwinClient[DarwinSymbolT_co] = client
+        self._process: Process[DarwinSymbolT_co] = process
+        self.symbol_owner_opaque1: ProcessSymbol[DarwinSymbolT_co] = symbol_owner_opaque1
+        self.symbol_owner_opaque2: ProcessSymbol[DarwinSymbolT_co] = symbol_owner_opaque2
 
-    def get_symbol_address(self, name: str) -> ProcessSymbol:
+    @zyncio.zmethod
+    async def get_symbol_address(self, name: str) -> ProcessSymbol[DarwinSymbolT_co]:
         """Resolve a symbol address by name."""
-        symbol = self._client.symbols.CSSymbolOwnerGetSymbolWithName(
-            self.symbol_owner_opaque1, self.symbol_owner_opaque2, name, return_raw=True
-        )
-        return ProcessSymbol.create(
-            self._client.symbols.CSSymbolGetRange(symbol.x0, symbol.x1), self._client, self._process
+        symbol = await self._client.symbols.CSSymbolOwnerGetSymbolWithName.z(
+            self.symbol_owner_opaque1,
+            self.symbol_owner_opaque2,
+            name,
+            return_raw=True,
         )
 
+        return self._process.get_process_symbol(await self._client.symbols.CSSymbolGetRange.z(symbol.x0, symbol.x1))
 
-class Symbolicator:
+
+class Symbolicator(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     def __init__(
-        self, client: "DarwinClient", process, symbolicator_opaque1: ProcessSymbol, symbolicator_opaque2: ProcessSymbol
+        self,
+        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        process: "Process[DarwinSymbolT_co]",
+        symbolicator_opaque1: ProcessSymbol[DarwinSymbolT_co],
+        symbolicator_opaque2: ProcessSymbol[DarwinSymbolT_co],
     ) -> None:
         """Initialize a symbolicator wrapper."""
-        self._client = client
-        self._process = process
-        self.symbolicator_opaque1 = symbolicator_opaque1
-        self.symbolicator_opaque2 = symbolicator_opaque2
+        self._client: BaseDarwinClient[DarwinSymbolT_co] = client
+        self._process: Process[DarwinSymbolT_co] = process
+        self.symbolicator_opaque1: ProcessSymbol[DarwinSymbolT_co] = symbolicator_opaque1
+        self.symbolicator_opaque2: ProcessSymbol[DarwinSymbolT_co] = symbolicator_opaque2
 
-    def get_symbol_owner(self, library_basename: str) -> SymbolOwner:
+    @zyncio.zmethod
+    async def get_symbol_owner(self, library_basename: str) -> SymbolOwner[DarwinSymbolT_co]:
         """Resolve a symbol owner by library basename."""
-        symbol_owner = self._client.symbols.CSSymbolicatorGetSymbolOwnerWithNameAtTime(
-            self.symbolicator_opaque1, self.symbolicator_opaque2, library_basename, kCSNow, return_raw=True
+        symbol_owner = await self._client.symbols.CSSymbolicatorGetSymbolOwnerWithNameAtTime.z(
+            self.symbolicator_opaque1,
+            self.symbolicator_opaque2,
+            library_basename,
+            kCSNow,
+            return_raw=True,
         )
         return SymbolOwner(self._client, self._process, symbol_owner.x0, symbol_owner.x1)
 
 
-class Process:
+class Process(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     PEEK_STR_CHUNK_SIZE = 0x100
 
-    def __init__(self, client: "DarwinClient", pid: int):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", pid: int) -> None:
         """Initialize a process wrapper for a pid."""
         self._client = client
-        self._pid = pid
+        self._pid: int = pid
 
         if self._client.arch == ARCH_ARM64:
             self._thread_class = ArmThread64
         else:
             self._thread_class = IntelThread64
 
-    def kill(self, sig: int = SIGTERM):
+    @zyncio.zmethod
+    async def kill(self, sig: int = SIGTERM) -> None:
         """Send a signal to the remote process."""
-        return self._client.processes.kill(self._pid, sig)
+        return await self._client.processes.kill.z(self._pid, sig)
 
-    def waitpid(self, flags: int = 0):
+    @zyncio.zmethod
+    async def waitpid(self, flags: int = 0) -> int:
         """Wait for the remote process to change state and return status."""
-        return self._client.processes.waitpid(self._pid, flags)
+        return await self._client.processes.waitpid.z(self._pid, flags)
 
-    def peek(self, address: int, size: int) -> bytes:
+    @zyncio.zmethod
+    async def peek(self, address: int, size: int) -> bytes:
         """peek at memory address"""
-        with self._client.safe_malloc(size) as buf, self._client.safe_malloc(8) as p_size:
-            p_size[0] = size
-            if self._client.symbols.vm_read_overwrite(self.task_read, address, size, buf, p_size):
+        async with self._client.safe_malloc.z(size) as buf, self._client.safe_malloc.z(8) as p_size:
+            await p_size.setindex(0, size)
+            if await self._client.symbols.vm_read_overwrite.z(
+                await type(self).task_read(self), address, size, buf, p_size
+            ):
                 raise BadReturnValueError("vm_read() failed")
-            return buf.peek(size)
+            return await buf.peek.z(size)
 
-    def peek_str(self, address: int, encoding="utf-8") -> str:
+    @zyncio.zmethod
+    async def peek_str(self, address: int, encoding="utf-8") -> str:
         """peek string at memory address"""
         size = self.PEEK_STR_CHUNK_SIZE
         buf = b""
 
         while size:
             try:
-                buf += self.peek(address, size)
+                buf += await self.peek.z(address, size)
                 if b"\x00" in buf:
                     return buf.split(b"\x00", 1)[0].decode(encoding)
                 address += size
             except BadReturnValueError:
                 size = size // 2
+        else:
+            raise RuntimeError("Failed to find string terminator")
 
-    def poke(self, address: int, buf: bytes):
+    @zyncio.zmethod
+    async def poke(self, address: int, buf: bytes) -> None:
         """poke at memory address"""
-        if self._client.symbols.vm_write(self.task, address, buf, len(buf)):
+        if await self._client.symbols.vm_write.z(await type(self).task(self), address, buf, len(buf)):
             raise BadReturnValueError("vm_write() failed")
 
-    def get_symbol_name(self, address: int) -> str:
+    @zyncio.zmethod
+    async def get_symbol_name(self, address: int) -> str:
         """Resolve a symbol name for the given address."""
         if self._client.arch != ARCH_ARM64:
             raise NotImplementedError("implemented only on ARCH_ARM64")
-        result = self.vmu_object_identifier.objc_call("symbolForAddress:", address, return_raw=True)
+        result = await (await type(self).vmu_object_identifier(self)).objc_call_raw.z("symbolForAddress:", address)
         if result.x0 == 0 and result.x1 == 0:
             raise SymbolAbsentError()
-        return self._client.symbols.CSSymbolGetName(result.x0, result.x1).peek_str()
+        return await (await self._client.symbols.CSSymbolGetName.z(result.x0, result.x1)).peek_str.z()
 
-    def get_symbol_image(self, name: str) -> Image:
+    @zyncio.zmethod
+    async def get_symbol_image(self, name: str) -> Image:
         """Find the image containing the named symbol."""
-        for image in self.images:
-            result = self.get_symbol_address(name, posixpath.basename(image.path))
+        for image in await type(self).images(self):
+            result = await self.get_symbol_address.z(name, posixpath.basename(image.path))
             if result:
                 return image
 
         raise ProcessSymbolAbsentError()
 
-    def get_symbol_class_info(self, address: int) -> DarwinSymbol:
+    @zyncio.zmethod
+    async def get_symbol_class_info(self, address: int) -> DarwinSymbolT_co:
         """Return Objective-C class info for the given address."""
-        return self.vmu_object_identifier.objc_call("classInfoForMemory:length:", address, 8)
+        return await (await type(self).vmu_object_identifier(self)).objc_call.z(
+            "classInfoForMemory:length:", address, 8
+        )
 
-    def get_symbol_address(self, name: str, lib: Optional[str] = None) -> Union[DarwinSymbol, ProcessSymbol]:
+    @zyncio.zmethod
+    async def get_symbol_address(
+        self, name: str, lib: str | None = None
+    ) -> DarwinSymbolT_co | ProcessSymbol[DarwinSymbolT_co]:
         """Resolve a symbol address, optionally within a library."""
         if lib is not None:
-            address = self.vmu_object_identifier.objc_call("addressOfSymbol:inLibrary:", name, lib).c_uint64
-            if self.pid == self._client.pid:
+            address = (
+                await (await type(self).vmu_object_identifier(self)).objc_call.z(
+                    "addressOfSymbol:inLibrary:", name, lib
+                )
+            ).c_uint64
+            if self.pid == await self._client.get_pid.z():
                 return self._client.symbol(address)
-            return ProcessSymbol.create(address, self._client, self)
+            return self.get_process_symbol(address)
 
-        image = self.get_symbol_image(name)
-        return self.get_symbol_address(name, posixpath.basename(image.path))
+        image = await self.get_symbol_image.z(name)
+        return await self.get_symbol_address.z(name, posixpath.basename(image.path))
 
-    @property
-    def loaded_classes(self):
+    @zyncio.zgeneratormethod
+    async def loaded_classes(self) -> AsyncGenerator[LoadedClass]:
         """Yield realized Objective-C classes for the process."""
-        realized_classes = self.vmu_object_identifier.objc_call("realizedClasses")
+        realized_classes = await (await type(self).vmu_object_identifier(self)).objc_call.z("realizedClasses")
 
-        for i in range(1, realized_classes.objc_call("count") + 1):
-            class_info = realized_classes.objc_call("classInfoForIndex:", i)
-            name = class_info.objc_call("className").py()
-            type_name = class_info.objc_call("typeName").py()
-            binary_path = class_info.objc_call("binaryPath").py()
+        for i in range(1, await realized_classes.objc_call.z("count") + 1):
+            class_info = await realized_classes.objc_call.z("classInfoForIndex:", i)
+            name = await (await class_info.objc_call.z("className")).py.z(str)
+            type_name = await (await class_info.objc_call.z("typeName")).py.z(str)
+            binary_path = await (await class_info.objc_call.z("binaryPath")).py.z(str)
             yield LoadedClass(name=name, type_name=type_name, binary_path=binary_path)
 
-    @property
-    def images(self) -> list[Image]:
+    @zyncio.zproperty
+    async def images(self) -> list[Image]:
         """get loaded image list"""
         result = []
 
-        with (
-            self._client.safe_malloc(task_dyld_info_data_t.sizeof()) as dyld_info,
-            self._client.safe_calloc(8) as count,
+        async with (
+            self._client.safe_malloc.z(task_dyld_info_data_t.sizeof()) as dyld_info,
+            self._client.safe_calloc.z(8) as count,
         ):
-            count[0] = TASK_DYLD_INFO_COUNT
-            if self._client.symbols.task_info(self.task_read, TASK_DYLD_INFO, dyld_info, count):
+            await count.setindex(0, TASK_DYLD_INFO_COUNT)
+            if await self._client.symbols.task_info.z(
+                await type(self).task_read(self), TASK_DYLD_INFO, dyld_info, count
+            ):
                 raise BadReturnValueError("task_info(TASK_DYLD_INFO) failed")
-            dyld_info_data = task_dyld_info_data_t.parse_stream(dyld_info)
+            dyld_info_data = await dyld_info.parse.z(task_dyld_info_data_t)
+
         all_image_infos = all_image_infos_t.parse(
-            self.peek(dyld_info_data.all_image_info_addr, dyld_info_data.all_image_info_size)
+            await self.peek.z(dyld_info_data.all_image_info_addr, dyld_info_data.all_image_info_size)
         )
 
-        buf = self.peek(all_image_infos.infoArray, all_image_infos.infoArrayCount * dyld_image_info_t.sizeof())
+        buf = await self.peek.z(all_image_infos.infoArray, all_image_infos.infoArrayCount * dyld_image_info_t.sizeof())
         for image in Array(all_image_infos.infoArrayCount, dyld_image_info_t).parse(buf):
-            path = self.peek_str(image.imageFilePath)
+            path = await self.peek_str.z(image.imageFilePath)
             result.append(Image(address=self.get_process_symbol(image.imageLoadAddress), path=path))
         return result
 
-    @property
-    def app_images(self) -> list[Image]:
+    @zyncio.zproperty
+    async def app_images(self) -> list[Image]:
         """Return images that belong to the app bundle."""
-        return [image for image in self.images if APP_SUFFIX in image.path]
+        return [image for image in await type(self).images(self) if APP_SUFFIX in image.path]
 
-    @property
-    def threads(self) -> list[Thread]:
+    @zyncio.zproperty
+    async def threads(self) -> list[Thread]:
         """Return the list of threads in the process."""
         result = []
-        with self._client.safe_malloc(8) as threads, self._client.safe_malloc(4) as count:
+
+        async with self._client.safe_malloc.z(8) as threads, self._client.safe_malloc.z(4) as count:
             count.item_size = 4
-            if self._client.symbols.task_threads(self.task_read, threads, count):
+            if await self._client.symbols.task_threads.z(await type(self).task_read(self), threads, count):
                 raise BadReturnValueError("task_threads() failed")
 
-            for tid in Array(count[0].c_uint32, Int32ul).parse(threads[0].peek(count[0] * 4)):
+            for tid in Array((await count.getindex(0)).c_uint32, Int32ul).parse(
+                await (await threads.getindex(0)).peek.z(await count.getindex(0) * 4)
+            ):
                 result.append(self._thread_class(self._client, tid))
+
         return result
 
     @property
@@ -640,11 +707,11 @@ class Process:
         """get pid"""
         return self._pid
 
-    @property
-    def fds(self) -> list[Fd]:
+    @zyncio.zproperty
+    async def fds(self) -> list[Fd]:
         """get a list of process opened file descriptors"""
         result = []
-        for fdstruct in self.fd_structs:
+        for fdstruct in await self.fd_structs.z():
             fd = fdstruct.fd
             parsed = fdstruct.struct
 
@@ -683,37 +750,38 @@ class Process:
 
         return result
 
-    @property
-    def fd_structs(self) -> list[FdStruct]:
+    @zyncio.zmethod
+    async def fd_structs(self) -> list[FdStruct]:
         """get a list of process opened file descriptors as raw structs"""
         result = []
-        size = self._client.symbols.proc_pidinfo(self.pid, PROC_PIDLISTFDS, 0, 0, 0)
+        size = await self._client.symbols.proc_pidinfo.z(self.pid, PROC_PIDLISTFDS, 0, 0, 0)
 
         vi_size = 8196  # should be enough for all structs
-        with self._client.safe_malloc(vi_size) as vi_buf:
-            with self._client.safe_malloc(size) as fdinfo_buf:
-                size = int(self._client.symbols.proc_pidinfo(self.pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
+        async with self._client.safe_malloc.z(vi_size) as vi_buf:
+            async with self._client.safe_malloc.z(size) as fdinfo_buf:
+                size = int(await self._client.symbols.proc_pidinfo.z(self.pid, PROC_PIDLISTFDS, 0, fdinfo_buf, size))
                 if not size:
                     raise BadReturnValueError("proc_pidinfo(PROC_PIDLISTFDS) failed")
 
-                for fd in Array(size // proc_fdinfo.sizeof(), proc_fdinfo).parse(fdinfo_buf.peek(size)):
+                for fd in Array(size // proc_fdinfo.sizeof(), proc_fdinfo).parse(await fdinfo_buf.peek.z(size)):
                     if fd.proc_fdtype == PROX_FDTYPE_VNODE:
                         # file
-                        vs = self._client.symbols.proc_pidfdinfo(
+                        vs = await self._client.symbols.proc_pidfdinfo.z(
                             self.pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, vi_buf, vi_size
                         )
                         if not vs:
-                            if self._client.errno == errno.EBADF:
+                            if await self._client.get_errno.z() == errno.EBADF:
                                 # lsof treats this as fine
                                 continue
                             raise BadReturnValueError(
                                 f"proc_pidinfo(PROC_PIDFDVNODEPATHINFO) failed for fd: {fd.proc_fd} "
-                                f"({self._client.last_error})"
+                                f"({await self._client.get_last_error.z()})"
                             )
 
                         result.append(
                             FdStruct(
-                                fd=fd, struct=vnode_fdinfowithpath.parse(vi_buf.peek(vnode_fdinfowithpath.sizeof()))
+                                fd=fd,
+                                struct=vnode_fdinfowithpath.parse(await vi_buf.peek.z(vnode_fdinfowithpath.sizeof())),
                             )
                         )
 
@@ -722,231 +790,252 @@ class Process:
 
                     elif fd.proc_fdtype == PROX_FDTYPE_SOCKET:
                         # socket
-                        vs = self._client.symbols.proc_pidfdinfo(
+                        vs = await self._client.symbols.proc_pidfdinfo.z(
                             self.pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, vi_buf, vi_size
                         )
                         if not vs:
-                            if self._client.errno == errno.EBADF:
+                            if await self._client.get_errno.z() == errno.EBADF:
                                 # lsof treats this as fine
                                 continue
                             raise BadReturnValueError(
-                                f"proc_pidinfo(PROC_PIDFDSOCKETINFO) failed ({self._client.last_error})"
+                                f"proc_pidinfo(PROC_PIDFDSOCKETINFO) failed ({await self._client.get_last_error.z()})"
                             )
 
-                        result.append(FdStruct(fd=fd, struct=socket_fdinfo.parse(vi_buf.peek(vi_size))))
+                        result.append(FdStruct(fd=fd, struct=socket_fdinfo.parse(await vi_buf.peek.z(vi_size))))
 
                     elif fd.proc_fdtype == PROX_FDTYPE_PIPE:
                         # pipe
-                        vs = self._client.symbols.proc_pidfdinfo(
+                        vs = await self._client.symbols.proc_pidfdinfo.z(
                             self.pid, fd.proc_fd, PROC_PIDFDPIPEINFO, vi_buf, vi_size
                         )
                         if not vs:
-                            if self._client.errno == errno.EBADF:
+                            if await self._client.get_errno.z() == errno.EBADF:
                                 # lsof treats this as fine
                                 continue
                             raise BadReturnValueError(
-                                f"proc_pidinfo(PROC_PIDFDPIPEINFO) failed ({self._client.last_error})"
+                                f"proc_pidinfo(PROC_PIDFDPIPEINFO) failed ({await self._client.get_last_error.z()})"
                             )
 
-                        result.append(FdStruct(fd=fd, struct=pipe_info.parse(vi_buf.peek(pipe_info.sizeof()))))
+                        result.append(FdStruct(fd=fd, struct=pipe_info.parse(await vi_buf.peek.z(pipe_info.sizeof()))))
 
                     elif fd.proc_fdtype == PROX_FDTYPE_PSHM:
-                        vs = self._client.symbols.proc_pidfdinfo(
+                        vs = await self._client.symbols.proc_pidfdinfo.z(
                             self.pid, fd.proc_fd, PROC_PIDFDPSHMINFO, vi_buf, vi_size
                         )
                         if not vs:
-                            if self._client.errno == errno.EBADF:
+                            if await self._client.get_errno.z() == errno.EBADF:
                                 continue
                             raise BadReturnValueError(
-                                f"proc_pidinfo(PROC_PIDFDPSHMINFO) failed ({self._client.last_error})"
+                                f"proc_pidinfo(PROC_PIDFDPSHMINFO) failed ({await self._client.get_last_error.z()})"
                             )
 
-                        result.append(FdStruct(fd=fd, struct=pshm_fdinfo.parse(vi_buf.peek(pshm_fdinfo.sizeof()))))
+                        result.append(
+                            FdStruct(fd=fd, struct=pshm_fdinfo.parse(await vi_buf.peek.z(pshm_fdinfo.sizeof())))
+                        )
 
             return result
 
-    @property
-    def task_all_info(self):
+    @zyncio.zmethod
+    async def task_all_info(self) -> Container:
         """get a list of process opened file descriptors"""
-        with self._client.safe_malloc(proc_taskallinfo.sizeof()) as pti:
-            if not self._client.symbols.proc_pidinfo(self.pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()):
+        async with self._client.safe_malloc.z(proc_taskallinfo.sizeof()) as pti:
+            if not await self._client.symbols.proc_pidinfo.z(
+                self.pid, PROC_PIDTASKALLINFO, 0, pti, proc_taskallinfo.sizeof()
+            ):
                 raise BadReturnValueError("proc_pidinfo(PROC_PIDTASKALLINFO) failed")
-            return proc_taskallinfo.parse_stream(pti)
+            return await pti.parse.z(proc_taskallinfo)
 
-    @property
-    def task_vm_info(self) -> Container:
+    @zyncio.zmethod
+    async def task_vm_info(self) -> Container:
         """get TASK_VM_INFO via task_info."""
-        with self._client.safe_malloc(task_vm_info_data_t.sizeof()) as vm_info, self._client.safe_calloc(8) as count:
-            count[0] = TASK_VM_INFO_COUNT
-            if self._client.symbols.task_info(self.task_read, TASK_VM_INFO, vm_info, count):
+        async with (
+            self._client.safe_malloc.z(task_vm_info_data_t.sizeof()) as vm_info,
+            self._client.safe_calloc.z(8) as count,
+        ):
+            await count.setindex(0, TASK_VM_INFO_COUNT)
+            if await self._client.symbols.task_info.z(await type(self).task_read(self), TASK_VM_INFO, vm_info, count):
                 raise BadReturnValueError("task_info(TASK_VM_INFO) failed")
-            return task_vm_info_data_t.parse_stream(vm_info)
+            return await vm_info.parse.z(task_vm_info_data_t)
 
-    @property
-    def backtraces(self) -> list[Backtrace]:
+    @zyncio.zmethod
+    async def backtraces(self) -> list[Backtrace]:
         """Collect backtraces for all threads in the process."""
         result = []
-        backtraces = self._client.symbols.objc_getClass("VMUSampler").objc_call(
-            "sampleAllThreadsOfTask:", self.task_read
+        backtraces = await (await self._client.symbols.objc_getClass.z("VMUSampler")).objc_call.z(
+            "sampleAllThreadsOfTask:", await type(self).task_read(self)
         )
-        for i in range(backtraces.objc_call("count")):
-            bt = backtraces.objc_call("objectAtIndex:", i)
-            result.append(Backtrace(bt))
+        for i in range(await backtraces.objc_call.z("count")):
+            bt = await backtraces.objc_call.z("objectAtIndex:", i)
+            result.append(await Backtrace._from_backtrace(bt))
         return result
 
-    @cached_property
-    def vmu_proc_info(self) -> DarwinSymbol:
+    @zyncio.zproperty
+    @cached_async_method
+    async def vmu_proc_info(self) -> DarwinSymbolT_co:
         """Return the VMUProcInfo object for this task."""
-        return (
-            self._client.symbols.objc_getClass("VMUProcInfo")
-            .objc_call("alloc")
-            .objc_call("initWithTask:", self.task_read)
+        VMUProcInfo = await self._client.symbols.objc_getClass.z("VMUProcInfo")
+        return await (await (VMUProcInfo).objc_call.z("alloc")).objc_call.z(
+            "initWithTask:", await type(self).task_read(self)
         )
 
-    @cached_property
-    def vmu_region_identifier(self) -> DarwinSymbol:
+    @zyncio.zproperty
+    @cached_async_method
+    async def vmu_region_identifier(self: "Process[DarwinSymbolT_co]") -> DarwinSymbolT_co:
         """Return the VMUVMRegionIdentifier object for this task."""
-        return (
-            self._client.symbols.objc_getClass("VMUVMRegionIdentifier")
-            .objc_call("alloc")
-            .objc_call("initWithTask:", self.task_read)
+
+        VMUVMRegionIdentifier = await self._client.symbols.objc_getClass.z("VMUVMRegionIdentifier")
+        return await (await (VMUVMRegionIdentifier).objc_call.z("alloc")).objc_call.z(
+            "initWithTask:", await type(self).task_read(self)
         )
 
-    @cached_property
-    def vmu_object_identifier(self) -> DarwinSymbol:
+    @zyncio.zproperty
+    @cached_async_method
+    async def vmu_object_identifier(self) -> DarwinSymbolT_co:
         """Return the VMUObjectIdentifier object for this task."""
-        return (
-            self._client.symbols.objc_getClass("VMUObjectIdentifier")
-            .objc_call("alloc")
-            .objc_call("initWithTask:", self.task_read)
+        VMUObjectIdentifier = await self._client.symbols.objc_getClass.z("VMUObjectIdentifier")
+        return await (await (VMUObjectIdentifier).objc_call.z("alloc")).objc_call.z(
+            "initWithTask:", await type(self).task_read(self)
         )
 
-    @cached_property
-    def symbolicator(self) -> Symbolicator:
+    @zyncio.zproperty
+    @cached_async_method
+    async def symbolicator(self) -> Symbolicator[DarwinSymbolT_co]:
         """Return a symbolicator for this task."""
-        symbolicator = self._client.symbols.CSSymbolicatorCreateWithTask(self.task_read, return_raw=True)
+        symbolicator = await self._client.symbols.CSSymbolicatorCreateWithTask.z(
+            await type(self).task_read(self), return_raw=True
+        )
         return Symbolicator(self._client, self, symbolicator.x0, symbolicator.x1)
 
-    @cached_property
-    def task_read(self) -> int:
+    @zyncio.zproperty
+    @cached_async_method
+    async def task_read(self) -> int:
         """Return the task read port for this process."""
-        self_task_port = self._client.symbols.mach_task_self()
+        self_task_port = await self._client.symbols.mach_task_self.z()
 
-        if self.pid == self._client.pid:
+        if self.pid == await self._client.get_pid.z():
             return self_task_port
 
-        with self._client.safe_malloc(8) as p_task:
-            ret = self._client.symbols.task_read_for_pid(self_task_port, self.pid, p_task)
+        async with self._client.safe_malloc.z(8) as p_task:
+            ret = await self._client.symbols.task_read_for_pid.z(self_task_port, self.pid, p_task)
             if ret:
                 raise BadReturnValueError("task_read_for_pid() failed")
-            return p_task[0].c_int64
+            return (await p_task.getindex(0)).c_int64
 
-    @cached_property
-    def task(self) -> int:
+    @zyncio.zproperty
+    @cached_async_method
+    async def task(self) -> int:
         """Return the full task port for this process."""
-        self_task_port = self._client.symbols.mach_task_self()
+        self_task_port = await self._client.symbols.mach_task_self.z()
 
-        if self.pid == self._client.pid:
+        if self.pid == await self._client.get_pid.z():
             return self_task_port
 
-        with self._client.safe_malloc(8) as p_task:
-            if self._client.symbols.task_for_pid(self_task_port, self.pid, p_task):
+        async with self._client.safe_malloc.z(8) as p_task:
+            if await self._client.symbols.task_for_pid.z(self_task_port, self.pid, p_task):
                 raise BadReturnValueError("task_for_pid() failed")
-            return p_task[0].c_int64
+            return (await p_task.getindex(0)).c_int64
 
-    @cached_property
-    def path(self) -> Optional[str]:
+    @zyncio.zproperty
+    @cached_async_method
+    async def path(self) -> str | None:
         """call proc_pidpath(filename, ...) at remote. review xnu header for more details."""
-        with self._client.safe_malloc(MAXPATHLEN) as path:
-            path_len = self._client.symbols.proc_pidpath(self.pid, path, MAXPATHLEN)
-            if not path_len:
-                return None
-            return path.peek(path_len).decode()
+        async with self._client.safe_malloc.z(MAXPATHLEN) as path:
+            path_len = await self._client.symbols.proc_pidpath.z(self.pid, path, MAXPATHLEN)
+            return (await path.peek.z(path_len)).decode() if path_len else None
 
-    @cached_property
-    def basename(self) -> Optional[str]:
+    @zyncio.zproperty
+    @cached_async_method
+    async def basename(self) -> str | None:
         """Return the basename of the process path."""
-        path = self.path
-        if not path:
-            return None
-        return Path(path).parts[-1]
+        path = await type(self).path(self)
+        return PurePath(path).name if path else None
 
-    @cached_property
-    def name(self) -> str:
+    @cached_async_method
+    async def _get_pbsd(self) -> Container:
+        return (await self.task_all_info.z()).pbsd
+
+    @zyncio.zproperty
+    async def name(self) -> str:
         """Return the process name from task info."""
-        return self.task_all_info.pbsd.pbi_name
+        return (await self._get_pbsd()).pbi_name
 
-    @cached_property
-    def ppid(self) -> int:
+    @zyncio.zproperty
+    async def ppid(self) -> int:
         """Return the parent process id."""
-        return self.task_all_info.pbsd.pbi_ppid
+        return (await self._get_pbsd()).pbi_ppid
 
-    @cached_property
-    def uid(self) -> int:
+    @zyncio.zproperty
+    async def uid(self) -> int:
         """Return the process user id."""
-        return self.task_all_info.pbsd.pbi_uid
+        return (await self._get_pbsd()).pbi_uid
 
-    @cached_property
-    def gid(self) -> int:
+    @zyncio.zproperty
+    async def gid(self) -> int:
         """Return the process group id."""
-        return self.task_all_info.pbsd.pbi_gid
+        return (await self._get_pbsd()).pbi_gid
 
-    @cached_property
-    def ruid(self) -> int:
+    @zyncio.zproperty
+    async def ruid(self) -> int:
         """Return the real user id."""
-        return self.task_all_info.pbsd.pbi_ruid
+        return (await self._get_pbsd()).pbi_ruid
 
-    @cached_property
-    def rgid(self) -> int:
+    @zyncio.zproperty
+    async def rgid(self) -> int:
         """Return the real group id."""
-        return self.task_all_info.pbsd.pbi_rgid
+        return (await self._get_pbsd()).pbi_rgid
 
-    @cached_property
-    def start_time(self) -> datetime:
+    _start_time: datetime | None = None
+
+    @zyncio.zproperty
+    async def start_time(self) -> datetime:
         """Return the process start time."""
-        if self._client.arch != ARCH_ARM64:
-            raise NotImplementedError("implemented only on ARCH_ARM64")
-        val = self.vmu_proc_info.objc_call("startTime", return_raw=True)
-        tv_sec = val.x0
-        tv_nsec = val.x1
-        return datetime.fromtimestamp(tv_sec + (tv_nsec / (10**9)))
+        if self._start_time is None:
+            if self._client.arch != ARCH_ARM64:
+                raise NotImplementedError("implemented only on ARCH_ARM64")
+            val = await (await type(self).vmu_proc_info(self)).objc_call_raw.z("startTime")
+            tv_sec = val.x0
+            tv_nsec = val.x1
+            self._start_time = datetime.fromtimestamp(tv_sec + (tv_nsec / (10**9)))
 
-    @property
-    def parent(self) -> "Process":
+        return self._start_time
+
+    @zyncio.zproperty
+    async def parent(self) -> Self:
         """Return a Process wrapper for the parent pid."""
-        return Process(self._client, self.ppid)
+        return type(self)(self._client, await type(self).ppid(self))
 
-    @property
-    def environ(self) -> list[str]:
+    @zyncio.zproperty
+    async def environ(self) -> list[str]:
         """Return the process environment variables."""
-        return self.vmu_proc_info.objc_call("envVars").py()
+        return await (await (await type(self).vmu_proc_info(self)).objc_call.z("envVars")).py.z(list)
 
-    @property
-    def arguments(self) -> list[str]:
+    @zyncio.zproperty
+    async def arguments(self) -> list[str]:
         """Return the process argument list."""
-        return self.vmu_proc_info.objc_call("arguments").py()
+        return await (await (await type(self).vmu_proc_info(self)).objc_call.z("arguments")).py.z(list)
 
-    @property
-    def raw_procargs2(self) -> bytes:
+    @zyncio.zproperty
+    async def raw_procargs2(self) -> bytes:
         """Return the raw PROCARGS2 sysctl buffer."""
-        return self._client.sysctl.get(CTL.KERN, KERN.PROCARGS2, self.pid)
+        return await self._client.sysctl.get.z(CTL.KERN, KERN.PROCARGS2, self.pid)
 
-    @property
-    def procargs2(self) -> Container:
+    @zyncio.zproperty
+    async def procargs2(self) -> Container:
         """Parse and return the PROCARGS2 buffer."""
-        return procargs2_t.parse(self.raw_procargs2)
+        return procargs2_t.parse(await type(self).raw_procargs2(self))
 
-    @property
-    def regions(self) -> list[Region]:
+    @zyncio.zmethod
+    async def get_regions(self) -> list[Region[DarwinSymbolT_co]]:
         """Return the list of VM regions for the process."""
-        result = []
+        result: list[Region[DarwinSymbolT_co]] = []
 
         # remove the '()' wrapping the list:
         #   (
         #       "item1",
         #       "item2",
         #   )
-        buf = self.vmu_region_identifier.objc_call("regions").cfdesc.split("\n")[1:-1]
+        regions_sym = await (await type(self).vmu_region_identifier(self)).objc_call.z("regions")
+        buf = cast(str, await type(regions_sym).cfdesc(regions_sym)).split("\n")[1:-1]
 
         for line in buf:
             # remove line prefix and suffix and split into words
@@ -996,33 +1085,41 @@ class Process:
 
         return result
 
-    @property
-    def cdhash(self) -> bytes:
+    @zyncio.zproperty
+    async def regions(self) -> list[Region[DarwinSymbolT_co]]:
+        """Return the list of VM regions for the process."""
+        return await self.get_regions.z()
+
+    @zyncio.zproperty
+    async def cdhash(self) -> bytes:
         """Return the code directory hash for the process."""
-        with self._client.safe_malloc(CDHASH_SIZE) as cdhash:
+        async with self._client.safe_malloc.z(CDHASH_SIZE) as cdhash:
             # by reversing online-auth-agent
-            if self._client.symbols.csops(self.pid, 5, cdhash, CDHASH_SIZE) != 0:
+            if await self._client.symbols.csops.z(self.pid, 5, cdhash, CDHASH_SIZE) != 0:
                 raise BadReturnValueError(f"failed to get cdhash for {self.pid}")
-            return cdhash.peek(CDHASH_SIZE)
+            return await cdhash.peek.z(CDHASH_SIZE)
 
-    def get_process_symbol(self, address: int) -> ProcessSymbol:
+    def get_process_symbol(self, address: int) -> ProcessSymbol[DarwinSymbolT_co]:
         """Create a process symbol for the given address."""
-        return ProcessSymbol.create(address, self._client, self)
+        return ProcessSymbol(address, self)
 
-    def vm_allocate(self, size: int) -> ProcessSymbol:
+    @zyncio.zmethod
+    async def vm_allocate(self, size: int) -> ProcessSymbol[DarwinSymbolT_co]:
         """Allocate memory in the target task and return its address."""
-        with self._client.safe_malloc(8) as out_address:
-            if self._client.symbols.vm_allocate(self.task, out_address, size, VM_FLAGS_ANYWHERE):
+        async with self._client.safe_malloc.z(8) as out_address:
+            if await self._client.symbols.vm_allocate.z(
+                await type(self).task(self), out_address, size, VM_FLAGS_ANYWHERE
+            ):
                 raise BadReturnValueError("vm_allocate() failed")
-            return self.get_process_symbol(out_address[0])
+            return self.get_process_symbol(await out_address.getindex(0))
 
-    @path_to_str("output_dir")
-    def dump_app(self, output_dir: str, chunk_size=CHUNK_SIZE) -> None:
+    @zyncio.zmethod
+    async def dump_app(self, output_dir: str | PurePath, chunk_size: int = CHUNK_SIZE) -> None:
         """
         Based on:
         https://github.com/AloneMonkey/frida-ios-dump/blob/master/dump.js
         """
-        for image in self.app_images:
+        for image in await type(self).app_images(self):
             relative_name = image.path.split(APP_SUFFIX, 1)[1]
             output_file = Path(output_dir).expanduser() / relative_name
             output_file.parent.mkdir(exist_ok=True, parents=True)
@@ -1031,12 +1128,12 @@ class Process:
             with open(output_file, "wb") as output_file:
                 macho_in_memory = mach_header_t.parse_stream(image.address)
 
-                with self._client.fs.open(image.path, "r") as fat_file:
+                async with await self._client.fs.open.z(image.path, "r") as fat_file:
                     # locating the correct MachO offset within the FAT image (if FAT)
-                    magic_in_fs = Int32ul.parse_stream(fat_file)
-                    fat_file.seek(0, SEEK_SET)
+                    magic_in_fs = await fat_file.parse.z(Int32ul)
+                    await fat_file.seek.z(0, SEEK_SET)
                     if magic_in_fs in (FAT_CIGAM, FAT_MAGIC):
-                        parsed_fat = fat_header.parse_stream(fat_file)
+                        parsed_fat = await fat_file.parse.z(fat_header)
                         for arch in parsed_fat.archs:
                             if (
                                 arch.cputype == macho_in_memory.cputype
@@ -1045,12 +1142,15 @@ class Process:
                                 # correct MachO offset found
                                 file_offset = arch.offset
                                 break
-                        fat_file.seek(file_offset, SEEK_SET)
+                        else:
+                            raise RuntimeError("Failed to find file offset.")
+
+                        await fat_file.seek.z(file_offset, SEEK_SET)
 
                     # perform actual MachO dump
                     output_file.seek(0, SEEK_SET)
                     while True:
-                        chunk = fat_file.read(chunk_size)
+                        chunk = await fat_file.read.z(chunk_size)
                         if len(chunk) == 0:
                             break
                         output_file.write(chunk)
@@ -1067,6 +1167,8 @@ class Process:
                             crypt_offset = load_command.data.cryptoff
                             crypt_size = load_command.data.cryptsize
                             break
+                    else:
+                        raise RuntimeError("Failed to find LC_ENCRYPTION_INFO or LC_ENCRYPTION_INFO_64 command.")
 
                     if offset_cryptid is not None:
                         output_file.seek(offset_cryptid, SEEK_SET)
@@ -1075,115 +1177,128 @@ class Process:
                         output_file.flush()
                         output_file.write((image.address + crypt_offset).peek(crypt_size))
 
-    def get_mach_port_cross_ref_info(self) -> list[MachPortCrossRefInfo]:
+    @zyncio.zmethod
+    async def get_mach_port_cross_ref_info(self) -> list[MachPortCrossRefInfo]:
         """Get all allocated mach ports and cross-refs to get the recv right owner"""
-        result = []
-        own_ports = []
-        cross_refs_info = {}
-        for port in self._client.processes.get_mach_ports():
+        own_ports: list[MachPortInfo] = []
+        cross_refs_info: dict[int, list[MachPortInfo]] = {}
+        async for port in self._client.processes.get_mach_ports.z():
             if port.pid == self.pid:
                 own_ports.append(port)
             if port.ipc_object not in cross_refs_info:
                 cross_refs_info[port.ipc_object] = []
             cross_refs_info[port.ipc_object].append(port)
 
-        for port in own_ports:
-            for cross_ref_port_info in cross_refs_info[port.ipc_object]:
-                if cross_ref_port_info.has_recv_right:
-                    result.append(
-                        MachPortCrossRefInfo(
-                            name=port.name,
-                            ipc_object=port.ipc_object,
-                            recv_right_pid=cross_ref_port_info.pid,
-                            recv_right_proc_name=cross_ref_port_info.proc_name,
-                        )
-                    )
-        return result
+        return [
+            MachPortCrossRefInfo(
+                name=port.name,
+                ipc_object=port.ipc_object,
+                recv_right_pid=cross_ref_port_info.pid,
+                recv_right_proc_name=cross_ref_port_info.proc_name,
+            )
+            for port in own_ports
+            for cross_ref_port_info in cross_refs_info[port.ipc_object]
+            if cross_ref_port_info.has_recv_right
+        ]
 
-    def get_memgraph_snapshot(self) -> bytes:
+    @zyncio.zmethod
+    async def get_memgraph_snapshot(self) -> bytes:
         """Return a memory graph snapshot as plist bytes."""
         scanner = None
         try:
             # first attempt via new API
-            scanner = self._client.symbols.objc_getClass("VMUProcessObjectGraph").objc_call(
-                "createWithTask:", self.task_read
+            scanner = await (await self._client.symbols.objc_getClass.z("VMUProcessObjectGraph")).objc_call.z(
+                "createWithTask:", await type(self).task_read(self)
             )
-            snapshot_graph = scanner.objc_call("plistRepresentationWithOptions:", 0).py()
+            snapshot_graph = await (await scanner.objc_call.z("plistRepresentationWithOptions:", 0)).py.z(bytes)
         except UnrecognizedSelectorError:
             # if failed, attempt with old API
-            scanner = (
-                self._client.symbols.objc_getClass("VMUTaskMemoryScanner")
-                .objc_call("alloc")
-                .objc_call("initWithTask:", self.task_read)
-            )
-            scanner.objc_call("addRootNodesFromTask")
-            scanner.objc_call("addMallocNodesFromTask")
-            snapshot_graph = (
-                scanner.objc_call("processSnapshotGraph").objc_call("plistRepresentationWithOptions:", 0).py()
-            )
+            scanner = await (
+                await (await self._client.symbols.objc_getClass.z("VMUTaskMemoryScanner")).objc_call.z("alloc")
+            ).objc_call.z("initWithTask:", await type(self).task_read(self))
+            await scanner.objc_call.z("addRootNodesFromTask")
+            await scanner.objc_call.z("addMallocNodesFromTask")
+            snapshot_graph = await (
+                await (await scanner.objc_call.z("processSnapshotGraph")).objc_call.z(
+                    "plistRepresentationWithOptions:", 0
+                )
+            ).py.z(bytes)
         finally:
             if scanner is not None:
                 # free object scanner so process can resume
-                scanner.objc_call("release")
+                await scanner.objc_call.z("release")
         return snapshot_graph
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a debug representation of the process."""
-        return f"<{self.__class__.__name__} PID:{self.pid} PATH:{self.path}>"
+        path = self.path if zyncio.is_sync(self) else getattr(self, "_path", "<not cached yet>")
+
+        return f"<{self.__class__.__name__} PID:{self.pid} PATH:{path}>"
 
 
-class DarwinProcesses(Processes):
+class DarwinProcesses(Processes["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """manage processes"""
 
-    def __init__(self, client: "DarwinClient"):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """Initialize the Darwin process subsystem."""
         super().__init__(client)
-        client.load_framework("Symbolication")
-        self._self_process = Process(self._client, self._client.pid)
+        client.load_framework_lazy("Symbolication")
 
-    def get_self(self) -> Process:
+    _self_process: Process[DarwinSymbolT_co] | None = None
+
+    @zyncio.zmethod
+    async def get_self(self) -> Process[DarwinSymbolT_co]:
         """get self process"""
+        if self._self_process is None:
+            self._self_process = Process(self._client, await self._client.get_pid.z())
+
         return self._self_process
 
-    def get_by_pid(self, pid: int) -> Process:
+    @zyncio.zmethod
+    async def get_by_pid(self, pid: int) -> Process[DarwinSymbolT_co]:
         """get process object by pid"""
-        proc_list = self.list()
+        proc_list = await self.list.z()
         for p in proc_list:
             if p.pid == pid:
                 return p
         raise ArgumentError(f"failed to locate process with pid: {pid}")
 
-    def get_by_basename(self, name: str) -> Process:
+    @zyncio.zmethod
+    async def get_by_basename(self, name: str) -> Process[DarwinSymbolT_co]:
         """get process object by basename"""
-        proc_list = self.list()
+        proc_list = await self.list.z()
         for p in proc_list:
-            if p.basename == name:
+            if await type(p).basename(p) == name:
                 return p
         raise ArgumentError(f"failed to locate process with name: {name}")
 
-    def get_by_name(self, name: str) -> Process:
+    @zyncio.zmethod
+    async def get_by_name(self, name: str) -> Process[DarwinSymbolT_co]:
         """get process object by name"""
-        proc_list = self.list()
+        proc_list = await self.list.z()
         for p in proc_list:
-            if p.name == name:
+            if await type(p).name(p) == name:
                 return p
         raise ArgumentError(f"failed to locate process with name: {name}")
 
-    def grep(self, name: str) -> list[Process]:
+    @zyncio.zmethod
+    async def grep(self, name: str) -> list[Process[DarwinSymbolT_co]]:
         """get process list by basename filter"""
         result = []
-        proc_list = self.list()
+        proc_list = await self.list.z()
         for p in proc_list:
-            if p.basename and name in p.basename:
+            basename = await type(p).basename(p)
+            if basename and name in basename:
                 result.append(p)
         return result
 
-    def get_processes_by_listening_port(self, port: int) -> list[Process]:
+    @zyncio.zmethod
+    async def get_processes_by_listening_port(self, port: int) -> list[Process[DarwinSymbolT_co]]:
         """get a process object listening on the specified port"""
         listening_processes = []
-        for process in self.list():
+        for process in await self.list.z():
             try:
-                fds = process.fds
+                fds = await type(process).fds(process)
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -1194,12 +1309,13 @@ class DarwinProcesses(Processes):
                     listening_processes.append(process)
         return listening_processes
 
-    def lsof(self) -> dict[int, list[Fd]]:
+    @zyncio.zmethod
+    async def lsof(self) -> dict[int, list[Fd]]:
         """get dictionary of pid to its opened fds"""
         result = {}
-        for process in self.list():
+        for process in await self.list.z():
             try:
-                fds = process.fds
+                fds = await type(process).fds(process)
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -1208,14 +1324,14 @@ class DarwinProcesses(Processes):
             result[process.pid] = fds
         return result
 
-    @path_to_str("path")
-    def fuser(self, path: str) -> list[Process]:
+    @zyncio.zmethod
+    async def fuser(self, path: str | PurePath) -> list[Process[DarwinSymbolT_co]]:
         """get a list of all processes have an open hande to the specified path"""
         result = []
-        proc_list = self.list()
+        proc_list = await self.list.z()
         for process in proc_list:
             try:
-                fds = process.fds
+                fds = await type(process).fds(process)
             except BadReturnValueError:
                 # it's possible to get error if new processes have since died or the rpcserver
                 # doesn't have the required permissions to access all the processes
@@ -1227,106 +1343,127 @@ class DarwinProcesses(Processes):
 
         return result
 
-    def list(self) -> list[Process]:
+    @zyncio.zmethod
+    async def list(self) -> list[Process[DarwinSymbolT_co]]:
         """list all currently running processes"""
-        n = self._client.symbols.proc_listallpids(0, 0)
+        n = await self._client.symbols.proc_listallpids.z(0, 0)
         pid_buf_size = pid_t.sizeof() * n
-        with self._client.safe_malloc(pid_buf_size) as pid_buf:
+        async with self._client.safe_malloc.z(pid_buf_size) as pid_buf:
             pid_buf.item_size = pid_t.sizeof()
-            n = self._client.symbols.proc_listallpids(pid_buf, pid_buf_size)
+            n = await self._client.symbols.proc_listallpids.z(pid_buf, pid_buf_size)
 
             result = []
             for i in range(n):
-                pid = int(pid_buf[i])
+                pid = int(await pid_buf.getindex(i))
                 result.append(Process(self._client, pid))
             return result
 
-    def disable_watchdog(self) -> None:
+    @zyncio.zmethod
+    async def disable_watchdog(self) -> None:
         """Continuously kill watchdogd to keep it disabled."""
         while True:
             with contextlib.suppress(ArgumentError):
-                self.get_by_basename("watchdogd").kill(SIGKILL)
-            time.sleep(1)
+                await (await self.get_by_basename.z("watchdogd")).kill.z(SIGKILL)
 
-    def get_mach_ports(self, include_thread_info: bool = False) -> Generator[MachPortInfo, None, None]:
+            await zync_sleep(self._client.__zync_mode__, 1)
+
+    @zyncio.zgeneratormethod
+    async def get_mach_ports(self, include_thread_info: bool = False) -> AsyncGenerator[MachPortInfo]:
         """Enumerate all mach ports (heavily inspired by lsmp)"""
         thread_info = None
-        mach_task_self = self._client.symbols.mach_task_self()
+        mach_task_self = await self._client.symbols.mach_task_self.z()
 
-        p_psets = self._client.symbols.malloc(8)
-        p_pset_count = self._client.symbols.malloc(8)
-        p_pset_priv = self._client.symbols.malloc(8)
-        p_tasks = self._client.symbols.malloc(8)
-        p_task_count = self._client.symbols.malloc(8)
-        p_count = self._client.symbols.malloc(4)
-        ports_info = self._client.symbols.malloc(4 * 2 * EXC_TYPES_COUNT)
-        masks = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
-        behaviors = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
-        flavors = self._client.symbols.malloc(4 * EXC_TYPES_COUNT)
-        p_thread_count = self._client.symbols.malloc(4)
-        p_thread_ports = self._client.symbols.malloc(8)
-        info = self._client.symbols.malloc(200)
-        p_pid = self._client.symbols.malloc(4)
-        th_info = self._client.symbols.malloc(thread_identifier_info.sizeof())
-        p_th_kobject = self._client.symbols.malloc(4)
-        p_th_kotype = self._client.symbols.malloc(4)
-        p_th_info_count = self._client.symbols.malloc(4)
-        p_th_voucher = self._client.symbols.calloc(4, 1)
-        p_table = self._client.symbols.malloc(8)
-        unused = self._client.symbols.malloc(200)
-        proc_name = self._client.symbols.malloc(100)
-        p_kotype = self._client.symbols.malloc(4)
+        malloc = self._client.symbols.malloc.call
+        p_psets = await self._client.symbols.malloc.z(8)
+        p_pset_count = await malloc(8)
+        p_pset_priv = await malloc(8)
+        p_tasks = await malloc(8)
+        p_task_count = await malloc(8)
+        p_count = await malloc(4)
+        ports_info = await malloc(4 * 2 * EXC_TYPES_COUNT)
+        masks = await malloc(4 * EXC_TYPES_COUNT)
+        behaviors = await malloc(4 * EXC_TYPES_COUNT)
+        flavors = await malloc(4 * EXC_TYPES_COUNT)
+        p_thread_count = await malloc(4)
+        p_thread_ports = await malloc(8)
+        info = await malloc(200)
+        p_pid = await malloc(4)
+        th_info = await malloc(thread_identifier_info.sizeof())
+        p_th_kobject = await malloc(4)
+        p_th_kotype = await malloc(4)
+        p_th_info_count = await malloc(4)
+        p_th_voucher = await self._client.symbols.calloc.z(4, 1)
+        p_table = await malloc(8)
+        unused = await malloc(200)
+        proc_name = await malloc(100)
+        p_kotype = await malloc(4)
 
         p_pid.item_size = 4
         p_count.item_size = 4
         p_thread_count.item_size = 4
         p_th_info_count.item_size = 4
         p_th_voucher.item_size = 4
-        p_th_info_count[0] = THREAD_IDENTIFIER_INFO_COUNT
+        await p_th_info_count.setindex(0, THREAD_IDENTIFIER_INFO_COUNT)
         p_kotype.item_size = 4
 
-        if self._client.symbols.getuid() == 0:
+        if await self._client.symbols.getuid.z() == 0:
             # if privileged, get the info for all tasks so we can match ports up
             if (
-                self._client.symbols.host_processor_sets(self._client.symbols.mach_host_self(), p_psets, p_pset_count)
+                await self._client.symbols.host_processor_sets.z(
+                    await self._client.symbols.mach_host_self.z(),
+                    p_psets,
+                    p_pset_count,
+                )
                 != 0
             ):
                 raise BadReturnValueError("host_processor_sets() failed")
-            if p_pset_count[0] != 1:
+            if await p_pset_count.getindex(0) != 1:
                 raise BadReturnValueError("Assertion Failure: pset count greater than one")
 
             # convert the processor-set-name port to a privileged port
             if (
-                self._client.symbols.host_processor_set_priv(
-                    self._client.symbols.mach_host_self(), p_psets[0][0], p_pset_priv
+                await self._client.symbols.host_processor_set_priv.z(
+                    await self._client.symbols.mach_host_self.z(),
+                    await p_psets.getindex(0, 0),
+                    p_pset_priv,
                 )
                 != 0
             ):
                 raise BadReturnValueError("host_processor_set_priv() failed")
 
-            self._client.symbols.mach_port_deallocate(mach_task_self, p_psets[0][0])
-            self._client.symbols.vm_deallocate(mach_task_self, p_psets[0], p_pset_count[0] * mach_port_t.sizeof())
+            await self._client.symbols.mach_port_deallocate.z(mach_task_self, await p_psets.getindex(0, 0))
+            await self._client.symbols.vm_deallocate.z(
+                mach_task_self,
+                await p_psets.getindex(0),
+                await p_pset_count.getindex(0) * mach_port_t.sizeof(),
+            )
 
             # convert the processor-set-priv to a list of task read ports for the processor set
             if (
-                self._client.symbols.processor_set_tasks_with_flavor(
-                    p_pset_priv[0], TASK_FLAVOR_READ, p_tasks, p_task_count
+                await self._client.symbols.processor_set_tasks_with_flavor.z(
+                    await p_pset_priv.getindex(0),
+                    TASK_FLAVOR_READ,
+                    p_tasks,
+                    p_task_count,
                 )
                 != 0
             ):
                 raise BadReturnValueError("processor_set_tasks_with_flavor() failed")
 
-            self._client.symbols.vm_deallocate(mach_task_self, p_pset_priv[0])
+            await self._client.symbols.vm_deallocate.z(mach_task_self, await p_pset_priv.getindex(0))
 
             # swap my current instances port to be last to collect all threads and exception port info
             my_task_position = None
-            task_count = p_task_count[0]
-            tasks = list(struct.unpack(f"<{int(task_count)}I", p_tasks[0].peek(task_count * 4)))
+            task_count = await p_task_count.getindex(0)
+            tasks = list(
+                struct.unpack(f"<{int(task_count)}I", await (await p_tasks.getindex(0)).peek.z(task_count * 4))
+            )
 
             for i in range(task_count):
-                if self._client.symbols.mach_task_is_self(tasks[i]):
+                if await self._client.symbols.mach_task_is_self.z(tasks[i]):
                     my_task_position = i
                     break
+
             if my_task_position is not None:
                 swap_holder = tasks[task_count - 1]
                 tasks[task_count - 1] = tasks[my_task_position]
@@ -1335,18 +1472,22 @@ class DarwinProcesses(Processes):
             logger.warning("should run as root for best output (cross-ref to other tasks' ports)")
             # just the one process
             task_count = 1
-            with self._client.safe_malloc(8) as p_task:
-                ret = self._client.symbols.task_read_for_pid(mach_task_self, self.pid, p_task)
+            async with self._client.safe_malloc.z(8) as p_task:
+                ret = await self._client.symbols.task_read_for_pid.z(
+                    mach_task_self,
+                    (await self.get_self.z()).pid,
+                    p_task,
+                )
                 if ret != 0:
                     raise BadReturnValueError("task_read_for_pid() failed")
-                tasks = [p_task[0]]
+                tasks = [await p_task.getindex(0)]
 
         for task in tasks:
-            self._client.symbols.pid_for_task(task, p_pid)
-            pid = p_pid[0].c_uint32
+            await self._client.symbols.pid_for_task.z(task, p_pid)
+            pid = (await p_pid.getindex(0)).c_uint32
 
             if (
-                self._client.symbols.task_get_exception_ports_info(
+                await self._client.symbols.task_get_exception_ports_info.z(
                     task, EXC_MASK_ALL, masks, p_count, ports_info, behaviors, flavors
                 )
                 != 0
@@ -1355,51 +1496,66 @@ class DarwinProcesses(Processes):
 
             if include_thread_info:
                 # collect threads port as well
-                if self._client.symbols.task_threads(task, p_thread_ports, p_thread_count) != 0:
+                if await self._client.symbols.task_threads.z(task, p_thread_ports, p_thread_count) != 0:
                     raise BadReturnValueError("task_threads() failed")
 
                 # collect the thread information
-                thread_count = p_thread_count[0].c_uint32
-                thread_ports = struct.unpack(f"<{thread_count}I", p_thread_ports[0].peek(4 * thread_count))
+                thread_count = (await p_thread_count.getindex(0)).c_uint32
+                thread_ports = struct.unpack(
+                    f"<{thread_count}I",
+                    await (await p_thread_ports.getindex(0)).peek.z(4 * thread_count),
+                )
                 thread_ids = []
                 for thread_port in thread_ports:
-                    ret = self._client.symbols.thread_get_exception_ports_info(
-                        thread_port, EXC_MASK_ALL, masks, p_count, ports_info, behaviors, flavors
+                    ret = await self._client.symbols.thread_get_exception_ports_info.z(
+                        thread_port,
+                        EXC_MASK_ALL,
+                        masks,
+                        p_count,
+                        ports_info,
+                        behaviors,
+                        flavors,
                     )
                     if ret != 0:
                         raise BadReturnValueError(
                             f"thread_get_exception_ports_info() failed: "
-                            f"{self._client.symbols.mach_error_string(ret).peek_str()}"
+                            f"{await (await self._client.symbols.mach_error_string.z(ret)).peek_str.z()}"
                         )
 
                     if (
-                        self._client.symbols.mach_port_kernel_object(
+                        await self._client.symbols.mach_port_kernel_object.z(
                             mach_task_self, thread_port, p_th_kotype, p_th_kobject
                         )
                         == 0
                     ) and (
-                        self._client.symbols.thread_info(
-                            mach_task_self, thread_port, THREAD_IDENTIFIER_INFO, th_info, p_th_info_count[0]
+                        await self._client.symbols.thread_info.z(
+                            mach_task_self,
+                            thread_port,
+                            THREAD_IDENTIFIER_INFO,
+                            th_info,
+                            await p_th_info_count.getindex(0),
                         )
                         == 0
                     ):
-                        thread_id = thread_identifier_info.parse(
-                            th_info.peek(thread_identifier_info.sizeof())
-                        ).thread_id
+                        thread_id = (await th_info.parse.z(thread_identifier_info)).thread_id
                         thread_ids.append(thread_id)
 
-                    self._client.symbols.mach_port_deallocate(mach_task_self, thread_port)
+                    await self._client.symbols.mach_port_deallocate.z(mach_task_self, thread_port)
                 thread_info = MachPortThreadInfo(thread_ids=thread_ids)
 
-            if self._client.symbols.mach_port_space_info(task, info, p_table, p_count, unused, unused) != 0:
+            if await self._client.symbols.mach_port_space_info.z(task, info, p_table, p_count, unused, unused) != 0:
                 raise BadReturnValueError("mach_port_space_info() failed")
 
-            proc_name_str = proc_name.peek_str() if self._client.symbols.proc_name(pid, proc_name, 100) != 0 else None
+            proc_name_str = (
+                await proc_name.peek_str.z()
+                if await self._client.symbols.proc_name.z(pid, proc_name, 100) != 0
+                else None
+            )
 
-            count = p_count[0].c_uint32
+            count = (await p_count.getindex(0)).c_uint32
             table_struct = Array(count, ipc_info_name_t)
 
-            parsed_table = table_struct.parse(p_table[0].peek(table_struct.sizeof()))
+            parsed_table = await (await p_table.getindex(0)).parse.z(table_struct)
 
             for entry in parsed_table:
                 dnreq = False

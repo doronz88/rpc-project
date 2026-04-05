@@ -1,10 +1,18 @@
 import dataclasses
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from enum import IntEnum, IntFlag
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Generic
+from typing_extensions import Self
 
+import zyncio
+from construct import Container
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core._types import ClientBound
+from rpcclient.core.client import RemoteCallArg
+from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.exceptions import (
     ElementNotFoundError,
     FirstElementNotFoundError,
@@ -12,9 +20,11 @@ from rpcclient.exceptions import (
     RpcAccessibilityTurnedOffError,
     RpcFailedToGetPrimaryAppError,
 )
+from rpcclient.utils import cached_async_method
+
 
 if TYPE_CHECKING:
-    from rpcclient.clients.ios.client import IosClient
+    from rpcclient.clients.ios.client import BaseIosClient
 
 
 class AXDirection(IntEnum):
@@ -117,335 +127,414 @@ class CGRect:
         return f"{{{self.origin}, {self.size}}}"
 
 
-class AXElement(DarwinSymbol):
+class AXElement(AbstractSymbol, ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Wrapper around the device AXElement Objective-C object.
 
     Built from reversed XADInspectorManager methods.
     """
 
+    def __init__(self, value: int, client: "BaseIosClient[DarwinSymbolT_co]") -> None:
+        self._client = client
+        self._sym: DarwinSymbolT_co = client.symbol(value)
+
+    def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
+        return self._client.symbol(value)
+
+    @zyncio.zmethod
+    async def peek(self, count: int, offset: int = 0) -> bytes:
+        return await self._sym.peek.z(count, offset)
+
+    @zyncio.zmethod
+    async def poke(self, buf: bytes, offset: int = 0) -> Any:
+        return await self._sym.poke.z(buf, offset)
+
+    @zyncio.zmethod
+    async def peek_str(self, encoding="utf-8") -> str:
+        """peek string at given address"""
+        return await self._sym.peek_str.z(encoding=encoding)
+
     @property
-    def first_element(self) -> "AXElement":
+    def arch(self) -> object:
+        return self._client.arch
+
+    @property
+    def endianness(self) -> str:
+        return self._client._endianness
+
+    @zyncio.zmethod
+    async def get_dl_info(self) -> Container:
+        return await self._sym.get_dl_info.z()
+
+    @zyncio.zmethod
+    async def objc_call(
+        self, selector: str, *params: RemoteCallArg, va_list_index: int | None = None
+    ) -> DarwinSymbolT_co:
+        """call an objc method on a given object and return a symbol"""
+        return await self._sym.objc_call.z(selector, *params, va_list_index=va_list_index)
+
+    @zyncio.zproperty
+    async def first_element(self) -> Self:
         """Return the first element in the accessibility hierarchy."""
-        result = self._element_for_attribute(3000)
+        result = await self._element_for_attribute(3000)
         if not result:
             raise FirstElementNotFoundError("failed to get first element in hierarchy")
 
-        if result.ui_element.objc_call("boolWithAXAttribute:", 2046):
-            result = result._element_for_attribute(3000)
+        if await (await type(result).ui_element(result)).objc_call.z("boolWithAXAttribute:", 2046):
+            result = await result._element_for_attribute(3000)
+        assert result is not None
         return result
 
-    @property
-    def last_element(self) -> "AXElement":
+    @zyncio.zproperty
+    async def last_element(self) -> Self:
         """Return the last element in the accessibility hierarchy."""
-        result = self._element_for_attribute(3016)
+        result = await self._element_for_attribute(3016)
         if not result:
             raise LastElementNotFoundError("failed to get last element in hierarchy")
 
-        if result.ui_element.objc_call("boolWithAXAttribute:", 2046):
-            result = result._element_for_attribute(3016)
+        if await (await type(result).ui_element(result)).objc_call.z("boolWithAXAttribute:", 2046):
+            result = await result._element_for_attribute(3016)
+
+        assert result is not None
         return result
 
-    @property
-    def identifier(self) -> str:
+    @zyncio.zproperty
+    async def identifier(self) -> str:
         """Return the element identifier."""
-        return self.objc_call("identifier").py(encoding="utf8")
+        return await (await self.objc_call.z("identifier")).py.z(str)
 
-    @property
-    def url(self) -> str:
+    @zyncio.zproperty
+    async def url(self) -> str:
         """Return the element URL."""
-        return self.objc_call("url").py(encoding="utf8")
+        return await (await self.objc_call.z("url")).py.z(str)
 
-    @property
-    def path(self) -> DarwinSymbol:
+    @zyncio.zproperty
+    async def path(self) -> DarwinSymbolT_co:
         """Return the element path object."""
-        return self.objc_call("path")
+        return await self.objc_call.z("path")
 
-    @property
-    def frame(self) -> CGRect:
+    @zyncio.zproperty
+    async def frame(self) -> CGRect:
         """Return the element frame as a CGRect."""
-        result = self.objc_call("frame", return_raw=True)
+        result = await self._sym.objc_call_raw.z("frame")
         return CGRect(origin=CGPoint(x=result.d0, y=result.d1), size=CGSize(width=result.d2, height=result.d3))
 
-    @property
-    def label(self) -> Optional[str]:
+    @zyncio.zproperty
+    async def label(self) -> str | None:
         """Return the visible label text."""
-        return self.objc_call("label").py(encoding="utf8")
+        return await (await self.objc_call.z("label")).py.z(str)
 
-    @property
-    def value(self) -> str:
+    @zyncio.zproperty
+    async def value(self) -> str:
         """Return the element value."""
-        return self.objc_call("value").py(encoding="utf8")
+        return await (await self.objc_call.z("value")).py.z(str)
 
-    @property
-    def bundle_identifier(self) -> str:
+    @zyncio.zproperty
+    async def bundle_identifier(self) -> str:
         """Return the owning app bundle identifier."""
-        return self.objc_call("bundleId").py(encoding="utf8")
+        return await (await self.objc_call.z("bundleId")).py.z(str)
 
-    @property
-    def pid(self) -> int:
+    @zyncio.zproperty
+    async def pid(self) -> int:
         """Return the owning process ID."""
-        return self.objc_call("pid").c_uint16
+        return (await self.objc_call.z("pid")).c_uint16
 
-    @property
-    def process_name(self) -> str:
+    @zyncio.zproperty
+    async def process_name(self) -> str:
         """Return the owning process name."""
-        return self.objc_call("processName").py()
+        return await (await self.objc_call.z("processName")).py.z(str)
 
-    @property
-    def screen_locked(self) -> bool:
+    @zyncio.zproperty
+    async def screen_locked(self) -> bool:
         """Return True if the screen is locked."""
-        return self.objc_call("isScreenLocked") == 1
+        return await self.objc_call.z("isScreenLocked") == 1
 
-    @property
-    def is_accessibility_opaque_element_provider(self) -> bool:
+    @zyncio.zproperty
+    async def is_accessibility_opaque_element_provider(self) -> bool:
         """Return True if the element provides its own accessibility hierarchy."""
-        return self.objc_call("isAccessibilityOpaqueElementProvider") != 0
+        return await self.objc_call.z("isAccessibilityOpaqueElementProvider") != 0
 
-    @property
-    def parent(self) -> Optional["AXElement"]:
+    @zyncio.zproperty
+    async def parent(self) -> Self | None:
         """Return the parent element if available."""
-        tmp = self._element_for_attribute(2066)
+        tmp = await self._element_for_attribute(2066)
         if tmp:
             return tmp
 
-        tmp = self._element_for_attribute(2092)
+        tmp = await self._element_for_attribute(2092)
         if tmp:
-            return tmp.parent
+            return await type(tmp).parent(tmp)
 
         return None
 
-    @property
-    def ui_element(self) -> DarwinSymbol:
+    @zyncio.zproperty
+    async def ui_element(self) -> DarwinSymbolT_co:
         """Return the underlying AXUIElement."""
-        return self.objc_call("uiElement")
+        return await self.objc_call.z("uiElement")
 
-    @property
-    def traits(self) -> AXTraits:
+    @zyncio.zproperty
+    async def traits(self) -> AXTraits:
         """Return the element traits as AXTraits."""
-        return AXTraits(self.objc_call("traits").c_uint64)
+        return AXTraits((await self.objc_call.z("traits")).c_uint64)
 
-    @property
-    def elements(self) -> list["AXElement"]:
+    @zyncio.zproperty
+    async def elements(self) -> list[Self]:
         """Return the list of currently displayed elements."""
         result = []
-        elements = self.objc_call("explorerElements")
-        for i in range(elements.objc_call("count")):
-            result.append(self._client.accessibility.axelement(elements.objc_call("objectAtIndex:", i)))
+        elements = await self.objc_call.z("explorerElements")
+        for i in range(await elements.objc_call.z("count")):
+            result.append(self._client.accessibility.axelement(await elements.objc_call.z("objectAtIndex:", i)))
         return result
 
-    def insert_text(self, text: str) -> None:
+    @zyncio.zmethod
+    async def insert_text(self, text: str) -> None:
         """Insert text into the focused editable element."""
-        self.objc_call("insertText:", self._client.cf(text))
+        await self.objc_call.z("insertText:", await self._client.cf.z(text))
 
-    def delete_text(self) -> None:
+    @zyncio.zmethod
+    async def delete_text(self) -> None:
         """Delete a character from the focused editable element."""
-        self.objc_call("deleteText")
+        await self.objc_call.z("deleteText")
 
-    def highlight(self) -> None:
+    @zyncio.zmethod
+    async def highlight(self) -> None:
         """Draw a frame around the element, replacing any existing frame."""
-        frame = self.frame
-        self._client.accessibility.draw_frame(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)
+        frame = await type(self).frame(self)
+        await self._client.accessibility.draw_frame.z(
+            frame.origin.x, frame.origin.y, frame.size.width, frame.size.height
+        )
 
-    def scroll_to_visible(self) -> None:
+    @zyncio.zmethod
+    async def scroll_to_visible(self) -> None:
         """Scroll until the element becomes fully visible."""
-        self.objc_call("scrollToVisible")
+        await self.objc_call.z("scrollToVisible")
 
-    def press(self) -> None:
+    @zyncio.zmethod
+    async def press(self) -> None:
         """Activate/press the element."""
-        self.objc_call("press")
+        await self.objc_call.z("press")
 
-    def long_press(self) -> None:
+    @zyncio.zmethod
+    async def long_press(self) -> None:
         """Long-press the element."""
-        self.objc_call("longPress")
+        await self.objc_call.z("longPress")
 
-    def __iter__(self) -> Iterator["AXElement"]:
-        current = self.first_element
+    @zyncio.zgeneratormethod
+    async def _iter(self) -> AsyncGenerator[Self]:
+        current = await type(self).first_element(self)
         while current:
             yield current
-            current = current.next()
+            current = await current.next.z()
 
-    def _element_for_attribute(self, axattribute: int, parameter: Optional[Any] = None) -> Optional["AXElement"]:
+    def __iter__(self: "AXElement[DarwinSymbol]") -> "Iterator[AXElement[DarwinSymbol]]":
+        return self._iter()
+
+    def __aiter__(self) -> "AsyncIterator[Self]":
+        return self._iter.z()
+
+    async def _element_for_attribute(self, axattribute: int, parameter: Any | None = None) -> Self | None:
         if parameter is None:
-            result = self.objc_call("elementForAttribute:", axattribute)
+            result = await self.objc_call.z("elementForAttribute:", axattribute)
         else:
-            result = self.objc_call("elementForAttribute:parameter:", axattribute, parameter)
-        return AXElement.create(result, self._client)
+            result = await self.objc_call.z("elementForAttribute:parameter:", axattribute, parameter)
+        return type(self)(result, self._client)
 
-    def _next_opaque(self, direction: AXDirection = AXDirection.Next) -> Optional["AXElement"]:
+    async def _next_opaque(self, direction: AXDirection = AXDirection.Next) -> Self | None:
         element = self
 
-        if not element.is_accessibility_opaque_element_provider:
-            element = self.parent
+        if not await type(element).is_accessibility_opaque_element_provider(element):
+            element = await type(self).parent(self)
 
         if not element:
             return None
 
-        element = element._element_for_attribute(
+        element = await element._element_for_attribute(
             95225,
-            self._client.cf([
+            await self._client.cf.z([
                 direction,
                 0,
-                self._client.symbols.objc_getClass("NSValue").objc_call("valueWithRange:", 0x7FFFFFFF, 0),
+                await (await self._client.symbols.objc_getClass.z("NSValue")).objc_call.z(
+                    "valueWithRange:", 0x7FFFFFFF, 0
+                ),
                 "AXAudit",
             ]),
         )
 
         if element:
-            ui_element = element.ui_element
-            if ui_element and ui_element.objc_call("boolWithAXAttribute:", 2046):
-                return element._next_opaque
+            ui_element = await type(element).ui_element(element)
+            if ui_element and await ui_element.objc_call.z("boolWithAXAttribute:", 2046):
+                return await element._next_opaque()
 
         return element
 
-    def _next_elements_with_count(self, count: int) -> list["AXElement"]:
-        elements = self.objc_call("nextElementsWithCount:", count)
+    async def _next_elements_with_count(self, count: int) -> list[Self]:
+        elements = await self.objc_call.z("nextElementsWithCount:", count)
         result = []
-        for i in range(elements.objc_call("count")):
-            result.append(AXElement.create(elements.objc_call("objectAtIndex:", i), self._client))
+        for i in range(await elements.objc_call.z("count")):
+            result.append(type(self)(await elements.objc_call.z("objectAtIndex:", i), self._client))
         return result
 
-    def _previous_elements_with_count(self, count: int) -> list["AXElement"]:
-        elements = self.objc_call("previousElementsWithCount:", count)
+    async def _previous_elements_with_count(self, count: int) -> list[Self]:
+        elements = await self.objc_call.z("previousElementsWithCount:", count)
         result = []
-        for i in range(elements.objc_call("count")):
-            result.append(AXElement.create(elements.objc_call("objectAtIndex:", i), self._client))
+        for i in range(await elements.objc_call.z("count")):
+            result.append(type(self)(await elements.objc_call.z("objectAtIndex:", i), self._client))
         return result
 
-    def _set_assistive_focus(self, focused: bool) -> None:
-        self.ui_element.objc_call(
+    async def _set_assistive_focus(self, focused: bool) -> None:
+        await (await type(self).ui_element(self)).objc_call.z(
             "setAXAttribute:withObject:synchronous:",
             2018,
-            self._client.cf({"focused": int(focused), "assistiveTech": "AXAudit"}),
+            await self._client.cf.z({"focused": int(focused), "assistiveTech": "AXAudit"}),
             0,
         )
-        parent = self._element_for_attribute(2092)
+        parent = await self._element_for_attribute(2092)
         if parent:
-            parent._set_assistive_focus(focused)
+            await parent._set_assistive_focus(focused)
 
-    def next(self, direction: AXDirection = AXDirection.Next, cyclic: bool = False) -> Optional["AXElement"]:
+    @zyncio.zmethod
+    async def next(
+        self, direction: AXDirection = AXDirection.Next, cyclic: bool = False
+    ) -> "AXElement[DarwinSymbolT_co] | None":
         """
         Return and scroll to the next element in the current view.
 
         This method was created by reversing [XADInspectorManager _nextElementNavigationInDirection:forElement:]
         so we don't really know much about the used consts.
         """
-        next_opaque = self._next_opaque(direction)
+        next_opaque = await self._next_opaque(direction)
 
-        if not self.is_accessibility_opaque_element_provider and next_opaque:
+        if not await type(self).is_accessibility_opaque_element_provider(self) and next_opaque:
             return next_opaque
 
         if direction == AXDirection.Next:
-            next_or_prev_list = self._next_elements_with_count(1)
+            next_or_prev_list = await self._next_elements_with_count(1)
         else:
-            next_or_prev_list = self._previous_elements_with_count(1)
+            next_or_prev_list = await self._previous_elements_with_count(1)
 
         if next_or_prev_list:
             result = next_or_prev_list[0]
-            if result.is_accessibility_opaque_element_provider:
-                focused_element = self._element_for_attribute(95226, self._client.cf("AXAudit"))
+            if await type(result).is_accessibility_opaque_element_provider(result):
+                focused_element = await self._element_for_attribute(95226, self._client.cf.z("AXAudit"))
                 if focused_element:
-                    focused_element._set_assistive_focus(False)
-                result._set_assistive_focus(False)
-                result = result._next_opaque(direction)
+                    await focused_element._set_assistive_focus(False)
+                await result._set_assistive_focus(False)
+                result = await result._next_opaque(direction)
 
-            if result and not result.is_accessibility_opaque_element_provider:
+            if result and not await type(result).is_accessibility_opaque_element_provider(result):
                 return result
 
-        result = self._next_opaque(direction)
+        result = await self._next_opaque(direction)
         if result:
             return result
 
-        if not self.is_accessibility_opaque_element_provider:
-            parent = self.parent
+        if not await type(self).is_accessibility_opaque_element_provider(self):
+            parent = await type(self).parent(self)
             if parent:
-                return parent.next(direction, cyclic=cyclic)
+                return await parent.next.z(direction, cyclic=cyclic)
 
         if cyclic:
+            app = await self._client.accessibility._get_primary_app()
             if direction == AXDirection.Next:
-                return self._client.accessibility.primary_app.first_element
-            return self._client.accessibility.primary_app.last_element
+                return await type(app).first_element(app)
+            return await type(app).last_element(app)
 
         return None
 
-    def compare_label(self, label: str, auto_scroll: bool = True, draw_frame: bool = True) -> bool:
+    @zyncio.zmethod
+    async def compare_label(self, label: str, auto_scroll: bool = True, draw_frame: bool = True) -> bool:
         """
         Compare a label against this element's label.
 
         Optionally, scroll to the element and draw a highlight frame.
         """
         if auto_scroll:
-            self.scroll_to_visible()
+            await self.scroll_to_visible.z()
 
         if draw_frame:
-            self.highlight()
+            await self.highlight.z()
 
-        return self.label == label
+        return await type(self).label(self) == label
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} LABEL:{self.label}>"
+        if zyncio.is_sync(self):
+            return f"<{self.__class__.__name__} LABEL:{self.label}>"
+        return f"<{self.__class__.__name__} (async)>"
 
     def __str__(self) -> str:
-        result = self.label
-        return result if result else "NO LABEL"
+        if zyncio.is_sync(self):
+            result = self.label
+            return result if result else "NO LABEL"
+        return repr(self)
 
 
-class Accessibility:
+class Accessibility(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Accessibility utilities and UI element discovery."""
 
-    def __init__(self, client: "IosClient") -> None:
+    def __init__(self, client: "BaseIosClient[DarwinSymbolT_co]") -> None:
         """Initialize accessibility frameworks and UI client."""
         self._client = client
-        self._client.load_framework("AXRuntime")
-        self._client.load_framework("AccessibilityUI")
-        self._ui_client = (
-            client.symbols.objc_getClass("AXUIClient")
-            .objc_call("alloc")
-            .objc_call(
-                "initWithIdentifier:serviceBundleName:",
-                client.cf("AXAuditAXUIClientIdentifier"),
-                client.cf("AXAuditAXUIService"),
-            )
+        self._client.load_framework_lazy("AXRuntime")
+        self._client.load_framework_lazy("AccessibilityUI")
+
+    @cached_async_method
+    async def _get_ui_client(self) -> DarwinSymbolT_co:
+        return await (
+            await (await self._client.symbols.objc_getClass.z("AXUIClient")).objc_call.z("alloc")
+        ).objc_call.z(
+            "initWithIdentifier:serviceBundleName:",
+            await self._client.cf.z("AXAuditAXUIClientIdentifier"),
+            await self._client.cf.z("AXAuditAXUIService"),
         )
 
-    @property
-    def primary_app(self) -> AXElement:
-        """Return the primary app AXElement."""
-        if not self.enabled:
+    async def _get_primary_app(self) -> AXElement[DarwinSymbolT_co]:
+        if not await type(self).enabled(self):
             raise RpcAccessibilityTurnedOffError()
-        primary_app = self._client.symbols.objc_getClass("AXElement").objc_call("primaryApp")
+        primary_app = await (await self._client.symbols.objc_getClass.z("AXElement")).objc_call.z("primaryApp")
         if primary_app == 0:
             raise RpcFailedToGetPrimaryAppError()
         return self.axelement(primary_app)
 
-    @property
-    def enabled(self) -> bool:
+    @zyncio.zproperty
+    async def primary_app(self) -> AXElement[DarwinSymbolT_co]:
+        """Return the primary app AXElement."""
+        return await self._get_primary_app()
+
+    @zyncio.zproperty
+    async def _enabled(self) -> bool:
         """Return True if accessibility automation is enabled."""
         return bool(
-            self._client.symbols._AXSApplicationAccessibilityEnabled() or self._client.symbols._AXSAutomationEnabled()
+            await self._client.symbols._AXSApplicationAccessibilityEnabled.z()
+            or await self._client.symbols._AXSAutomationEnabled.z()
         )
 
-    @enabled.setter
-    def enabled(self, value: bool) -> None:
+    @_enabled.setter
+    async def enabled(self, value: bool) -> None:
         """Enable or disable accessibility automation."""
-        self._client.symbols._AXSSetAutomationEnabled(int(value))
+        await self._client.symbols._AXSSetAutomationEnabled.z(int(value))
 
-    def hide_frame(self) -> None:
+    @zyncio.zmethod
+    async def hide_frame(self) -> None:
         """Hide the accessibility highlight frame."""
-        self.draw_frame(0, 0, 0, 0)
+        await self.draw_frame.z(0, 0, 0, 0)
 
-    def set_frame_style(self, value: int) -> None:
+    @zyncio.zmethod
+    async def set_frame_style(self, value: int) -> None:
         """Set the highlight frame style."""
-        self._ui_client.objc_call(
-            "sendSynchronousMessage:withIdentifier:error:", self._client.cf({"frameStyle": value}), 2, 0
+        await (await self._get_ui_client()).objc_call.z(
+            "sendSynchronousMessage:withIdentifier:error:", await self._client.cf.z({"frameStyle": value}), 2, 0
         )
 
-    def draw_frame(self, x: float, y: float, width: float, height: float) -> None:
+    @zyncio.zmethod
+    async def draw_frame(self, x: float, y: float, width: float, height: float) -> None:
         """Draw a highlight frame at the given coordinates."""
         rect = {"frame": f" {{{{{x},{y}}}, {{{width},{height}}}}}"}
-        self._ui_client.objc_call("sendSynchronousMessage:withIdentifier:error:", self._client.cf(rect), 1, 0)
+        await (await self._get_ui_client()).objc_call.z(
+            "sendSynchronousMessage:withIdentifier:error:", await self._client.cf.z(rect), 1, 0
+        )
 
-    def wait_for_element_by_label(
+    @zyncio.zmethod
+    async def wait_for_element_by_label(
         self,
         label: str,
         auto_scroll: bool = True,
@@ -458,7 +547,7 @@ class Accessibility:
         start = time.time()
         while time.time() - start < timeout:
             try:
-                return self._get_element_by_label(
+                return await self._get_element_by_label(
                     label,
                     auto_scroll=auto_scroll,
                     draw_frame=draw_frame,
@@ -473,7 +562,7 @@ class Accessibility:
             f'failed to find AXElement by label: "{label}" after waiting for {timeout} seconds for it to load'
         )
 
-    def _get_element_by_label(
+    async def _get_element_by_label(
         self,
         label: str,
         auto_scroll: bool = True,
@@ -482,37 +571,39 @@ class Accessibility:
         displayed_only: bool = False,
     ) -> AXElement:
         """Return an AXElement with the given label."""
+        app = await self._get_primary_app()
         if direction == AXDirection.Next:
-            element = self.primary_app.first_element
-            elements_list = self.primary_app.elements
+            element = await type(app).first_element(app)
+            elements_list = await type(app).elements(app)
         elif direction == AXDirection.Previous:
-            element = self.primary_app.last_element
-            elements_list = reversed(self.primary_app.elements)
+            element = await type(app).last_element(app)
+            elements_list = reversed(await type(app).elements(app))
         else:
             raise TypeError(f"bad value for: {direction}")
 
         if displayed_only:
             for element in elements_list:
-                if element.compare_label(label, auto_scroll=False, draw_frame=draw_frame):
+                if await element.compare_label.z(label, auto_scroll=False, draw_frame=draw_frame):
                     return element
         else:
             while True:
                 if element is None:
                     break
 
-                if element.compare_label(label, auto_scroll=auto_scroll, draw_frame=draw_frame):
+                if await element.compare_label.z(label, auto_scroll=auto_scroll, draw_frame=draw_frame):
                     if draw_frame:
-                        self.hide_frame()
+                        await self.hide_frame.z()
                     return element
 
-                element = element.next(direction=direction)
+                element = await element.next.z(direction=direction)
 
         if draw_frame:
-            self.hide_frame()
+            await self.hide_frame.z()
 
         raise ElementNotFoundError(f'failed to find AXElement by label: "{label}"')
 
-    def press_elements_by_labels(
+    @zyncio.zmethod
+    async def press_elements_by_labels(
         self,
         labels: list[str],
         auto_scroll: bool = True,
@@ -532,18 +623,20 @@ class Accessibility:
         :param displayed_only: Search only displayed elements.
         """
         for label in labels:
-            self.wait_for_element_by_label(
-                label,
-                auto_scroll=auto_scroll,
-                draw_frame=draw_frame,
-                timeout=timeout,
-                direction=direction,
-                displayed_only=displayed_only,
-            ).press()
+            await (
+                await self.wait_for_element_by_label.z(
+                    label,
+                    auto_scroll=auto_scroll,
+                    draw_frame=draw_frame,
+                    timeout=timeout,
+                    direction=direction,
+                    displayed_only=displayed_only,
+                )
+            ).press.z()
 
             if draw_frame:
-                self.hide_frame()
+                await self.hide_frame.z()
 
-    def axelement(self, symbol: DarwinSymbol) -> AXElement:
+    def axelement(self, symbol: int) -> AXElement:
         """Wrap a DarwinSymbol as an AXElement."""
-        return AXElement.create(symbol, self._client)
+        return AXElement(symbol, self._client)

@@ -1,94 +1,93 @@
-from parameter_decorators import path_to_str
+from pathlib import PurePath
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
+from construct import Container
+
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.structs import stat64, statfs64
-from rpcclient.core.subsystems.fs import Fs, RemotePath
+from rpcclient.core.subsystems.fs import Fs
 
 
-def do_stat(client, stat_name, filename: str):
+if TYPE_CHECKING:
+    from rpcclient.clients.darwin.client import BaseDarwinClient
+    from rpcclient.clients.darwin.symbol import BaseDarwinSymbol
+
+
+@zyncio.zfunc
+async def do_stat(
+    zync_mode: zyncio.Mode, client: "BaseDarwinClient[BaseDarwinSymbol]", stat_name: str, filename: str | PurePath
+) -> Container:
     """Return a stat64 struct for a remote path."""
-    with client.safe_malloc(stat64.sizeof()) as buf:
-        err = client.symbols[stat_name](filename, buf)
+    async with client.safe_malloc.z(stat64.sizeof()) as buf:
+        err = await client.symbols[stat_name].call(filename, buf)
         if err != 0:
-            client.raise_errno_exception(f"failed to stat(): {filename}")
-        return stat64.parse_stream(buf)
+            await client.raise_errno_exception.z(f"failed to stat(): {filename}")
+        return await buf.parse.z(stat64)
 
 
-class DarwinRemotePath(RemotePath):
-    def __init__(self, path: str, client) -> None:
-        super().__init__(path, client)
-
-    def stat(self):
-        return do_stat(self._client, "stat64", self._path)
-
-    def lstat(self):
-        return do_stat(self._client, "lstat64", self._path)
-
-
-class DarwinFs(Fs):
-    @path_to_str("path")
-    def stat(self, path: str):
+class DarwinFs(Fs["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+    @zyncio.zmethod
+    async def stat(self, path: str | PurePath) -> Container:
         """Return stat64 info for a remote path."""
-        return do_stat(self._client, "stat64", path)
+        return await do_stat[self._client.__zync_mode__](self._client, "stat64", path)
 
-    @path_to_str("path")
-    def lstat(self, path: str):
+    @zyncio.zmethod
+    async def lstat(self, path: str | PurePath) -> Container:
         """Return lstat64 info for a remote path (does not follow symlinks)."""
-        return do_stat(self._client, "lstat64", path)
+        return await do_stat[self._client.__zync_mode__](self._client, "lstat64", path)
 
-    @path_to_str("path")
-    def setxattr(self, path: str, name: str, value: bytes):
+    @zyncio.zmethod
+    async def setxattr(self, path: str | PurePath, name: str, value: bytes) -> None:
         """set an extended attribute value"""
-        count = self._client.symbols.setxattr(path, name, value, len(value), 0, 0).c_int64
+        count = (await self._client.symbols.setxattr.z(path, name, value, len(value), 0, 0)).c_int64
         if count == -1:
-            self._client.raise_errno_exception(f"failed to setxattr(): {path}")
+            await self._client.raise_errno_exception.z(f"failed to setxattr(): {path}")
 
-    @path_to_str("path")
-    def removexattr(self, path: str, name: str):
+    @zyncio.zmethod
+    async def removexattr(self, path: str | PurePath, name: str) -> None:
         """remove an extended attribute value"""
-        count = self._client.symbols.removexattr(path, name, 0).c_int64
+        count = (await self._client.symbols.removexattr.z(path, name, 0)).c_int64
         if count == -1:
-            self._client.raise_errno_exception(f"failed to removexattr(): {path}")
+            await self._client.raise_errno_exception.z(f"failed to removexattr(): {path}")
 
-    @path_to_str("path")
-    def listxattr(self, path: str) -> list[str]:
+    @zyncio.zmethod
+    async def listxattr(self, path: str | PurePath) -> list[str]:
         """list extended attribute names"""
         max_buf_len = 1024
-        with self._client.safe_malloc(max_buf_len) as xattributes_names:
-            count = self._client.symbols.listxattr(path, xattributes_names, max_buf_len, 0).c_int64
+        async with self._client.safe_malloc.z(max_buf_len) as xattributes_names:
+            count = (await self._client.symbols.listxattr.z(path, xattributes_names, max_buf_len, 0)).c_int64
             if count == -1:
-                self._client.raise_errno_exception(f"failed to listxattr(): {path}")
-            return [s.decode() for s in xattributes_names.peek(count).split(b"\x00")[:-1]]
+                await self._client.raise_errno_exception.z(f"failed to listxattr(): {path}")
+            return [s.decode() for s in (await xattributes_names.peek.z(count)).split(b"\x00")[:-1]]
 
-    @path_to_str("path")
-    def getxattr(self, path: str, name: str) -> bytes:
+    @zyncio.zmethod
+    async def getxattr(self, path: str | PurePath, name: str) -> bytes:
         """get an extended attribute value"""
         max_buf_len = 1024
-        with self._client.safe_malloc(max_buf_len) as value:
-            count = self._client.symbols.getxattr(path, name, value, max_buf_len, 0, 0).c_int64
+        async with self._client.safe_malloc.z(max_buf_len) as value:
+            count = (await self._client.symbols.getxattr.z(path, name, value, max_buf_len, 0, 0)).c_int64
             if count == -1:
-                self._client.raise_errno_exception(f"failed to getxattr(): {path}")
-            return value.peek(count)
+                await self._client.raise_errno_exception.z(f"failed to getxattr(): {path}")
+            return await value.peek.z(count)
 
-    @path_to_str("path")
-    def dictxattr(self, path: str) -> dict[str, bytes]:
+    @zyncio.zmethod
+    async def dictxattr(self, path: str | PurePath) -> dict[str, bytes]:
         """get a dictionary of all extended attributes"""
         result = {}
-        for k in self.listxattr(path):
-            result[k] = self.getxattr(path, k)
+        for k in await self.listxattr.z(path):
+            result[k] = await self.getxattr.z(path, k)
         return result
 
-    @path_to_str("path")
-    def statfs(self, path: str):
-        with self._client.safe_malloc(statfs64.sizeof()) as buf:
-            if self._client.symbols.statfs64(path, buf) != 0:
-                self._client.raise_errno_exception(f"statfs failed for: {path}")
-            return statfs64.parse_stream(buf)
+    @zyncio.zmethod
+    async def statfs(self, path: str | PurePath) -> Container:
+        async with self._client.safe_malloc.z(statfs64.sizeof()) as buf:
+            if await self._client.symbols.statfs64.z(path, buf) != 0:
+                await self._client.raise_errno_exception.z(f"statfs failed for: {path}")
+            return await buf.parse.z(statfs64)
 
-    @path_to_str("path")
-    def chflags(self, path: str, flags: int) -> None:
+    @zyncio.zmethod
+    async def chflags(self, path: str | PurePath, flags: int = 0) -> None:
         """Set BSD file flags on a remote path."""
-        if self._client.symbols.chflags(path, flags) != 0:
-            self._client.raise_errno_exception(f"chflags failed for: {path}")
-
-    def remote_path(self, path: str) -> DarwinRemotePath:
-        return DarwinRemotePath(path, self._client)
+        if (await self._client.symbols.chflags.z(path, flags)) != 0:
+            await self._client.raise_errno_exception.z(f"chflags failed for: {path}")

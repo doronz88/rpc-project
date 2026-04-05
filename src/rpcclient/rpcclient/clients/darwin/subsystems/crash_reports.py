@@ -1,45 +1,53 @@
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic
 
+import zyncio
 from pycrashreport.crash_report import CrashReportBase, get_crash_report_from_buf
 
+from rpcclient.clients.darwin._types import DarwinSymbolT_co
+from rpcclient.core._types import ClientBound
+
+
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import DarwinClient
+    from rpcclient.clients.darwin.client import BaseDarwinClient
 
 
-class CrashReports:
+class CrashReports(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """ " manage crash reports"""
 
-    def __init__(self, client: "DarwinClient", crash_reports_dir):
+    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", crash_reports_dir: str) -> None:
         self._client = client
-        self._crash_reports_dir = crash_reports_dir
+        self._crash_reports_dir: str = crash_reports_dir
 
-    def set_symbolicated(self, enabled: bool = True):
+    @zyncio.zmethod
+    async def set_symbolicated(self, enabled: bool = True) -> None:
         """
         enable/disable crash reports symbolication
         https://github.com/dlevi309/Symbolicator
         """
-        self._client.preferences.cf.set("SymbolicateCrashes", enabled, "com.apple.CrashReporter", "root")
+        await self._client.preferences.cf.set.z("SymbolicateCrashes", enabled, "com.apple.CrashReporter", "root")
 
         # bugfix: at some point, this setting was moved to "com.apple.osanalytics" bundle identifier
-        self._client.preferences.cf.set("SymbolicateCrashes", enabled, "com.apple.osanalytics", "root")
+        await self._client.preferences.cf.set.z("SymbolicateCrashes", enabled, "com.apple.osanalytics", "root")
 
-    def list(self, prefixed="") -> list[CrashReportBase]:
+    @zyncio.zmethod
+    async def list(self, prefixed: str = "") -> list[CrashReportBase]:
         """get a list of all crash reports as CrashReport parsed objects"""
         result = []
-        for root in self._client.roots:
+        for root in await self._client.roots.z():
             root = Path(root) / self._crash_reports_dir
 
-            if not self._client.fs.accessible(root):
+            if not await self._client.fs.accessible.z(root):
                 continue
 
-            for entry in self._client.fs.scandir(root):
-                if entry.is_file() and entry.name.endswith(".ips") and entry.name.startswith(prefixed):
-                    with self._client.fs.open(entry.path, "r") as f:
-                        result.append(get_crash_report_from_buf(f.read().decode(), filename=entry.path))
+            for entry in await self._client.fs.scandir.z(root):
+                if await entry.is_file.z() and entry.name.endswith(".ips") and entry.name.startswith(prefixed):
+                    async with await self._client.fs.open.z(entry.path, "r") as f:
+                        result.append(get_crash_report_from_buf((await f.read.z()).decode(), filename=entry.path))
         return result
 
-    def clear(self, prefixed=""):
+    @zyncio.zmethod
+    async def clear(self, prefixed: str = "") -> None:
         """remove all existing crash reports"""
-        for entry in self.list(prefixed=prefixed):
-            self._client.fs.remove(entry.filename)
+        for entry in await self.list.z(prefixed=prefixed):
+            await self._client.fs.remove.z(entry.filename)
