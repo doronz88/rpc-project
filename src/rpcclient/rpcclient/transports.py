@@ -100,4 +100,4 @@ async def create_local(
 async def create_using_protocol(zync_mode: zyncio.Mode, *, client, path: str) -> SyncRpcBridge | AsyncRpcBridge:
     if not callable(getattr(client, "create_worker", None)):
         raise ValueError("No existing client supports protocol worker creation.")  # noqa: TRY004
-    return await client.create_worker.z(zync_mode, path)
+    return await client.create_worker.z(path)
