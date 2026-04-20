@@ -30,8 +30,6 @@ from typing_extensions import Buffer, Self, assert_never
 
 import zyncio
 from construct import Container
-from xonsh.built_ins import XSH
-from xonsh.main import main as xonsh_main
 
 from rpcclient.clients.darwin.consts import BLOCK_IS_GLOBAL
 from rpcclient.core.capture_fd import CaptureFD
@@ -610,22 +608,6 @@ class BaseCoreClient(Generic[SymbolT_co], zyncio.ZyncBase, abc.ABC):
         self.notifier.notify(ClientEvent.TERMINATED, self.id)
         self._bridge.close()
 
-    def shell(self) -> None:
-        self._logger.disabled = True
-
-        args = ["--rc"]
-        args.append(str((Path(__file__).parent / "xonshrc.py").absolute()))
-
-        XSH.ctx["_client_to_reuse"] = self
-
-        try:
-            logging.getLogger("parso.python.diff").disabled = True
-            logging.getLogger("parso.cache").disabled = True
-            logging.getLogger("asyncio").disabled = True
-            xonsh_main(args)
-        except SystemExit:
-            self._logger.disabled = False
-
     async def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
         try:
             return (await self.rpc_call.z(MsgId.REQ_EXEC, background=background, argv=argv, envp=envp)).pid
@@ -756,6 +738,25 @@ class CoreClient(zyncio.SyncMixin, BaseCoreClient[SymbolT_co]):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
+
+    def shell(self) -> None:
+        from xonsh.built_ins import XSH
+        from xonsh.main import main as xonsh_main
+
+        self._logger.disabled = True
+
+        args = ["--rc"]
+        args.append(str((Path(__file__).parent / "xonshrc.py").absolute()))
+
+        XSH.ctx["_client_to_reuse"] = self
+
+        try:
+            logging.getLogger("parso.python.diff").disabled = True
+            logging.getLogger("parso.cache").disabled = True
+            logging.getLogger("asyncio").disabled = True
+            xonsh_main(args)
+        except SystemExit:
+            self._logger.disabled = False
 
 
 class AsyncCoreClient(zyncio.AsyncMixin, BaseCoreClient[AsyncSymbolT_co]):

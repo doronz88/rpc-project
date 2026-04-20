@@ -25,7 +25,6 @@ from xonsh.cli_utils import Annotated, Arg, ArgParserAlias
 from xonsh.events import events
 from xonsh.tools import print_color
 
-from rpcclient.client_manager import ClientType
 from rpcclient.clients.ios.client import IosClient
 from rpcclient.clients.linux.client import LinuxClient
 from rpcclient.clients.macos.client import MacosClient
@@ -182,7 +181,7 @@ class RpcLsStub(LsStub):
 
 class XonshRc:
     def __init__(self):
-        self.client: ClientType = XSH.ctx.get("_client_to_reuse")
+        self.client: CoreClient = XSH.ctx.get("_client_to_reuse")
         self._commands = {}
         self._orig_aliases = {}
         self._orig_prompt = XSH.env["PROMPT"]
