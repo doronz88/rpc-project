@@ -320,7 +320,7 @@ class AXElement(AbstractSymbol, ClientBound["BaseIosClient[DarwinSymbolT_co]"], 
         await self.objc_call.z("longPress")
 
     @zyncio.zgeneratormethod
-    async def _iter(self) -> AsyncGenerator[Self]:
+    async def _iter(self) -> "AsyncGenerator[AXElement[DarwinSymbolT_co]]":
         current = await type(self).first_element(self)
         while current:
             yield current
@@ -329,7 +329,7 @@ class AXElement(AbstractSymbol, ClientBound["BaseIosClient[DarwinSymbolT_co]"], 
     def __iter__(self: "AXElement[DarwinSymbol]") -> "Iterator[AXElement[DarwinSymbol]]":
         return self._iter()
 
-    def __aiter__(self) -> "AsyncIterator[Self]":
+    def __aiter__(self) -> "AsyncIterator[AXElement[DarwinSymbolT_co]]":
         return self._iter.z()
 
     async def _element_for_attribute(self, axattribute: int, parameter: Any | None = None) -> Self | None:
