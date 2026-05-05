@@ -7,6 +7,7 @@ from rpcclient.clients.darwin.symbol import AsyncDarwinSymbol, DarwinSymbol
 from rpcclient.clients.ios.subsystems.accessibility import Accessibility
 from rpcclient.clients.ios.subsystems.amfi import Amfi
 from rpcclient.clients.ios.subsystems.backlight import Backlight
+from rpcclient.clients.ios.subsystems.installations import Installations
 from rpcclient.clients.ios.subsystems.lockdown import Lockdown
 from rpcclient.clients.ios.subsystems.mobile_gestalt import MobileGestalt
 from rpcclient.clients.ios.subsystems.processes import IosProcesses
@@ -64,6 +65,10 @@ class BaseIosClient(BaseDarwinClient[DarwinSymbolT_co]):
     @subsystem
     def amfi(self) -> Amfi[DarwinSymbolT_co]:
         return Amfi(self)
+
+    @subsystem
+    def installations(self) -> Installations[DarwinSymbolT_co]:
+        return Installations(self)
 
     @zyncio.zmethod
     async def roots(self) -> list[str]:
