@@ -28,7 +28,7 @@ from rpcclient.clients.darwin.consts import (
 )
 from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import BadReturnValueError
-from rpcclient.utils import zync_sleep
+from rpcclient.utils import zync_mode, zync_sleep
 
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ class Hid(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
     async def send_key_press(self, page: int, key_code: int, interval: float | int = 0) -> None:
         await self.send_keyboard_event.z(page, key_code, True)
         if interval:
-            await zync_sleep(self._client.__zync_mode__, interval)
+            await zync_sleep(zync_mode(self), interval)
         await self.send_keyboard_event.z(page, key_code, False)
 
     @zyncio.zmethod
@@ -173,7 +173,7 @@ class Hid(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
     @zyncio.zmethod
     async def send_swipe(self, from_x: float, from_y: float, to_x: float, to_y: float) -> None:
         await self.send_touch_event.z(TouchEventType.TOUCH_DOWN, from_x, from_y)
-        await zync_sleep(self._client.__zync_mode__, TOUCH_EVENT_SLEEP)
+        await zync_sleep(zync_mode(self), TOUCH_EVENT_SLEEP)
         await self.send_touch_event.z(TouchEventType.TOUCH_MOVE, to_x, to_y)
         await self.send_touch_event.z(TouchEventType.TOUCH_UP, to_x, to_y)
 

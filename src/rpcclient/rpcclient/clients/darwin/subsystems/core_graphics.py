@@ -6,7 +6,7 @@ from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import kCGHIDEventTap, kCGNullWindowID, kCGWindowListOptionAll
 from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import BadReturnValueError
-from rpcclient.utils import zync_sleep
+from rpcclient.utils import zync_mode, zync_sleep
 
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ class CoreGraphics(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Da
         """
         await self.send_keyboard_event.z(key_code, True)
         if interval:
-            await zync_sleep(self._client.__zync_mode__, interval)
+            await zync_sleep(zync_mode(self), interval)
         await self.send_keyboard_event.z(key_code, False)
 
     @zyncio.zmethod

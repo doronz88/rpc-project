@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 SIZE_HEADER_STRUCT = struct.Struct("<Q")
 
 
-class RpcSocket(zyncio.ZyncBase, abc.ABC):
+class RpcSocket(abc.ABC):
     """
     Facilitates communication with a remote server using sockets and implements
     specific RPC (Remote Procedure Call) messaging protocols.
@@ -49,13 +49,13 @@ class RpcSocket(zyncio.ZyncBase, abc.ABC):
 
     async def _msg_send(self, message: bytes) -> None:
         buff = SIZE_HEADER_STRUCT.pack(len(message)) + message
-        if self.__zync_mode__ is zyncio.SYNC:
+        if zyncio.is_sync(self):
             self.raw_socket.sendall(buff)
         else:
             await asyncio.get_running_loop().sock_sendall(self.raw_socket, buff)
 
     async def _recv(self, size: int) -> bytes:
-        if self.__zync_mode__ is zyncio.SYNC:
+        if zyncio.is_sync(self):
             return self.raw_socket.recv(size)
         else:
             return await asyncio.get_running_loop().sock_recv(self.raw_socket, size)

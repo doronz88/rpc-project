@@ -7,6 +7,7 @@ from construct import Container
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.structs import stat64, statfs64
 from rpcclient.core.subsystems.fs import Fs
+from rpcclient.utils import zync_mode
 
 
 if TYPE_CHECKING:
@@ -30,12 +31,12 @@ class DarwinFs(Fs["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_c
     @zyncio.zmethod
     async def stat(self, path: str | PurePath) -> Container:
         """Return stat64 info for a remote path."""
-        return await do_stat[self._client.__zync_mode__](self._client, "stat64", path)
+        return await do_stat.call_zync(zync_mode(self._client), self._client, "stat64", path)
 
     @zyncio.zmethod
     async def lstat(self, path: str | PurePath) -> Container:
         """Return lstat64 info for a remote path (does not follow symlinks)."""
-        return await do_stat[self._client.__zync_mode__](self._client, "lstat64", path)
+        return await do_stat.call_zync(zync_mode(self._client), self._client, "lstat64", path)
 
     @zyncio.zmethod
     async def setxattr(self, path: str | PurePath, name: str, value: bytes) -> None:

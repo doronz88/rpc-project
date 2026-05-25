@@ -13,7 +13,7 @@ from rpcclient.event_notifier import EventNotifier
 from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
 from rpcclient.registry import Registry
 from rpcclient.transports import create_local, create_tcp, create_using_protocol
-from rpcclient.utils import prompt_selection
+from rpcclient.utils import prompt_selection, zync_mode
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 ClientT = TypeVar("ClientT", bound=BaseCoreClient)
 
 
-class BaseClientManager(Generic[ClientT], zyncio.ZyncBase, abc.ABC):
+class BaseClientManager(Generic[ClientT], abc.ABC):
     """Manage client lifecycle and dispatch client-related events."""
 
     def __init__(self) -> None:
@@ -57,7 +57,7 @@ class BaseClientManager(Generic[ClientT], zyncio.ZyncBase, abc.ABC):
         if mode == "protocol" and "client" not in kwargs:
             kwargs["client"] = self._select_capable_client()
 
-        rpc_bridge = await transport_factory.run_zync(self.__zync_mode__, **kwargs)
+        rpc_bridge = await transport_factory.call_zync(zync_mode(self), **kwargs)
         server_type = rpc_bridge.platform
         cached = self.get(rpc_bridge.client_id)
         if cached is not None:

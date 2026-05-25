@@ -91,7 +91,7 @@ async def create_local(
     # poll until connectable
     while True:
         try:
-            return await create_tcp.run_zync(zync_mode, hostname="127.0.0.1", port=port)
+            return await create_tcp.call_zync(zync_mode, hostname="127.0.0.1", port=port)
         except FailedToConnectError:
             await zync_sleep(zync_mode, poll_interval)
 

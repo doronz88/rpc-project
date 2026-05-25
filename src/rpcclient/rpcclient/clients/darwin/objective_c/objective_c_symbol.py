@@ -46,9 +46,15 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
     Allowing easier access to its properties, methods and ivars.
     """
 
-    _attrs = frozenset({"__zync_mode__", "_client", "_sym", "class_", "ivars", "methods", "properties"})
-
-    __zync_mode__: None = None  # Prevent RecursionError due to __getattr__
+    _attrs = frozenset({
+        zyncio.ZYNC_MODE_CACHE_ATTR,
+        "_client",
+        "_sym",
+        "class_",
+        "ivars",
+        "methods",
+        "properties",
+    })
 
     def __init__(self, value: int, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
@@ -314,6 +320,9 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
     def __getattr__(
         self: "ObjectiveCSymbol[DarwinSymbol]", item: str
     ) -> "DarwinSymbol | ObjectiveCSymbol[DarwinSymbol] | Any | BoundObjectiveCMethod[DarwinSymbol]":
+        if item in ObjectiveCSymbol._attrs:
+            raise AttributeError(item)
+
         if not isinstance(self._sym, DarwinSymbol):
             raise TypeError(f"arbitrary attribute lookup on {type(self).__name__} is only supported in sync mode")
 

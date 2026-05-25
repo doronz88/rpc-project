@@ -93,7 +93,7 @@ from rpcclient.exceptions import (
     UnrecognizedSelectorError,
 )
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
-from rpcclient.utils import cached_async_method, zync_sleep
+from rpcclient.utils import cached_async_method, zync_mode, zync_sleep
 
 
 if TYPE_CHECKING:
@@ -1365,7 +1365,7 @@ class DarwinProcesses(Processes["BaseDarwinClient[DarwinSymbolT_co]"], Generic[D
             with contextlib.suppress(ArgumentError):
                 await (await self.get_by_basename.z("watchdogd")).kill.z(SIGKILL)
 
-            await zync_sleep(self._client.__zync_mode__, 1)
+            await zync_sleep(zync_mode(self), 1)
 
     @zyncio.zgeneratormethod
     async def get_mach_ports(self, include_thread_info: bool = False) -> AsyncGenerator[MachPortInfo]:

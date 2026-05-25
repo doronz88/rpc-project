@@ -15,12 +15,12 @@ SymbolT_co = TypeVar("SymbolT_co", bound="BaseSymbol", covariant=True)
 class ClientBound(Generic[ClientT_co]):
     _client: ClientT_co
 
-    def __zync_proxy__(self: "ClientBound[BaseCoreClient[SymbolT_co]]") -> SymbolT_co:
+    def __zync_delegate__(self: "ClientBound[BaseCoreClient[SymbolT_co]]") -> SymbolT_co:
         return self._client.null
 
 
 class SymbolBound(Generic[SymbolT_co]):
     _symbol: SymbolT_co
 
-    def __zync_proxy__(self: "SymbolBound[SymbolT_co]") -> SymbolT_co:
+    def __zync_delegate__(self: "SymbolBound[SymbolT_co]") -> SymbolT_co:
         return self._symbol
