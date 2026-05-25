@@ -288,7 +288,7 @@ class AbstractSymbol(int, abc.ABC):
         return hex(self)
 
 
-class BaseSymbol(AbstractSymbol, zyncio.ZyncBase):
+class BaseSymbol(AbstractSymbol):
     """wrapper for a remote symbol object"""
 
     @readonly

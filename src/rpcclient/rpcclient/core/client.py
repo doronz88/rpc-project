@@ -181,7 +181,7 @@ def null_pointer_guard(
 RemoteCallArg: TypeAlias = LazySymbol | float | str | int | bytes | Enum | PurePath
 
 
-class BaseCoreClient(Generic[SymbolT_co], zyncio.ZyncBase, abc.ABC):
+class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
     """Main client interface to access the remote rpcserver"""
 
     DEFAULT_ARGV: ClassVar[list[str]] = ["/bin/sh"]

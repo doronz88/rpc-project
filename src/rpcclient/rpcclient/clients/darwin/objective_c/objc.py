@@ -72,7 +72,7 @@ class Method(Generic[DarwinSymbolT_co]):
             args_types=list(map(decode_type, data["args_types"])),
         )
 
-    def __zync_proxy__(self) -> DarwinSymbolT_co:
+    def __zync_delegate__(self) -> DarwinSymbolT_co:
         return self.client.null
 
     @zyncio.zmethod

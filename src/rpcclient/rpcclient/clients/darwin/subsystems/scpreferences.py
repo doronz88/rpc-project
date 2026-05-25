@@ -150,6 +150,9 @@ class Plist(UserDict, Generic[DarwinSymbolT_co]):
     def __zync_proxy__(self) -> SCPreference[DarwinSymbolT_co]:
         return self._preference
 
+    def __zync_delegate__(self) -> SCPreference[DarwinSymbolT_co]:
+        return self._preference
+
     @staticmethod
     async def create(preference: SCPreference[DarwinSymbolT_co]) -> "Plist[DarwinSymbolT_co]":
         return Plist(preference, _dict=await preference.get_dict.z())

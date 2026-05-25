@@ -22,7 +22,7 @@ AsyncSymbolT_co = TypeVar("AsyncSymbolT_co", bound=AsyncSymbol, covariant=True)
 class SymbolsJar(ClientBound["BaseCoreClient[SymbolT_co]"], Generic[SymbolT_co]):
     __slots__ = ("_client", "_dict")
 
-    __zync_mode__: None = None  # Prevent RecursionError due to __getattr__
+    __zync_mode__: None = None  # Compatibility with zyncio < 0.17
 
     def __init__(self, client: "BaseCoreClient[SymbolT_co]") -> None:
         self._client = client
@@ -61,7 +61,18 @@ class SymbolsJar(ClientBound["BaseCoreClient[SymbolT_co]"], Generic[SymbolT_co])
 
         return self._dict[key]
 
-    __getattr__ = __getitem__
+    @overload
+    def __getattr__(self: "SymbolsJar[SyncSymbolT_co]", key: str) -> SyncSymbolT_co: ...
+    @overload
+    def __getattr__(
+        self: "SymbolsJar[AsyncSymbolT_co]", key: str
+    ) -> "AsyncSymbolT_co | LazySymbol[AsyncSymbolT_co]": ...
+    @overload
+    def __getattr__(self, key: str) -> "SymbolT_co | LazySymbol[SymbolT_co]": ...
+    def __getattr__(self, key: str) -> "BaseSymbol | LazySymbol[BaseSymbol]":
+        if key == zyncio.ZYNC_MODE_CACHE_ATTR:
+            raise AttributeError(key)
+        return self.__getitem__(key)
 
     def __setitem__(self, key: str, value: int) -> None:
         if key in self.__slots__:

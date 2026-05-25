@@ -55,7 +55,7 @@ dependencies = [
     "requests",
     "protobuf",
     "inquirer3",
-    "zyncio~=0.15.0",
+    "zyncio~=0.17.1",
 ]
 
 [project.optional-dependencies]
