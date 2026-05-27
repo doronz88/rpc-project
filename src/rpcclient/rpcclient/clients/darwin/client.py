@@ -39,7 +39,7 @@ from rpcclient.clients.darwin.symbol import AsyncDarwinSymbol, BaseDarwinSymbol,
 from rpcclient.core.client import AsyncCoreClient, BaseCoreClient, CoreClient, RemoteCallArg
 from rpcclient.core.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.core.subsystems.decorator import subsystem
-from rpcclient.core.symbol import BaseSymbol
+from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.core.symbols_jar import LazySymbol
 from rpcclient.exceptions import CfSerializationError, MissingLibraryError
 from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
@@ -231,7 +231,7 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         return result
 
     @zyncio.zmethod
-    async def decode_cf(self, symbol: BaseSymbol) -> CfSerializable:
+    async def decode_cf(self, symbol: AbstractSymbol) -> CfSerializable:
         if await self.symbols.CFGetTypeID.z(symbol) == self._CFNullTypeID:
             return None
 

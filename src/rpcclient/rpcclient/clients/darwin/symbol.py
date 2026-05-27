@@ -1,12 +1,12 @@
-from typing import TYPE_CHECKING, Any
-from typing_extensions import Self
+import abc
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import zyncio
 from osstatus.cache import ErrorCode, get_possible_error_codes
 
 from rpcclient.clients.darwin.common import CfSerializable, CfSerializableAny, CfSerializableT
 from rpcclient.core.client import RemoteCallArg
-from rpcclient.core.symbol import AsyncSymbol, BaseSymbol, Symbol
+from rpcclient.core.symbol import RETVAL_BIT_COUNT, AbstractSymbol, AsyncSymbol, BaseSymbol, Symbol
 from rpcclient.exceptions import UnrecognizedSelectorError
 from rpcclient.utils import assert_cast, readonly
 
@@ -17,25 +17,28 @@ if TYPE_CHECKING:
     from rpcclient.clients.darwin.subsystems.processes import Region
 
 
-class BaseDarwinSymbol(BaseSymbol):
-    @readonly
-    def _client(self) -> "BaseDarwinClient[Self]": ...
+DarwinSymbolT_co = TypeVar("DarwinSymbolT_co", bound="BaseDarwinSymbol[Any]", covariant=True)
+BaseDarwinSymbolT = TypeVar("BaseDarwinSymbolT", bound="BaseDarwinSymbol[Any]")
 
-    def __init__(self, value: int, client: "BaseDarwinClient[Self]") -> None:
-        super().__init__(value, client)
+
+class AbstractDarwinSymbol(AbstractSymbol, Generic[DarwinSymbolT_co]):
+    @property
+    @abc.abstractmethod
+    def _darwin_client(self) -> "BaseDarwinClient[DarwinSymbolT_co]": ...
 
     async def _objc_call(self, selector: str, *params, **kwargs) -> Any:
         """call an objc method on a given object"""
-        sel = await self._client.symbols.sel_getUid.z(selector)
-        if not await self._client.symbols.objc_msgSend.z(
-            self, await self._client.symbols.sel_getUid.z("respondsToSelector:"), sel
-        ):
+        client = self._darwin_client
+        sel = await client.symbols.sel_getUid.z(selector)
+        if not await client.symbols.objc_msgSend.z(self, await client.symbols.sel_getUid.z("respondsToSelector:"), sel):
             raise UnrecognizedSelectorError(f"unrecognized selector '{selector}' sent to class")
 
-        return await self._client.symbols.objc_msgSend.z(self, sel, *params, **kwargs)
+        return await client.symbols.objc_msgSend.z(self, sel, *params, **kwargs)
 
     @zyncio.zmethod
-    async def objc_call(self, selector: str, *params: RemoteCallArg, va_list_index: int | None = None) -> Self:
+    async def objc_call(
+        self, selector: str, *params: RemoteCallArg, va_list_index: int | None = None
+    ) -> DarwinSymbolT_co:
         """call an objc method on a given object and return a symbol"""
         return await self._objc_call(selector, *params, va_list_index=va_list_index)
 
@@ -52,12 +55,13 @@ class BaseDarwinSymbol(BaseSymbol):
 
         :param typ: Ensure that the returned Python object is of the given type.
         """
-        return assert_cast(typ, await self._client.decode_cf.z(self) if self != 0 else None)
+        return assert_cast(typ, await self._darwin_client.decode_cf.z(self) if self != 0 else None)
 
     @zyncio.zproperty
     async def region(self) -> "Region | None":
         """get corresponding region"""
-        proc = await self._client.processes.get_by_pid.z(await self._client.get_pid.z())
+        client = self._darwin_client
+        proc = await client.processes.get_by_pid.z(await client.get_pid.z())
         for region in await proc.get_regions.z():
             if (self >= region.start) and (self <= region.end):
                 return region
@@ -69,7 +73,7 @@ class BaseDarwinSymbol(BaseSymbol):
         """
         if self == 0:
             return assert_cast(typ, None)
-        return await (await self._client.symbols.CFCopyDescription.z(self)).py.z(typ)
+        return await (await self._darwin_client.symbols.CFCopyDescription.z(self)).py.z(typ)
 
     @zyncio.zproperty
     async def cfdesc(self) -> CfSerializable:
@@ -80,12 +84,12 @@ class BaseDarwinSymbol(BaseSymbol):
         return await self.get_cfdesc()
 
     @property
-    def objc_symbol(self) -> "ObjectiveCSymbol[Self]":
+    def objc_symbol(self) -> "ObjectiveCSymbol[DarwinSymbolT_co]":
         """
         Get an ObjectiveC symbol of the same address
         :return: Object representing the ObjectiveC symbol
         """
-        return self._client.objc_symbol(self)
+        return self._darwin_client.objc_symbol(self)
 
     @property
     def osstatus(self) -> list[ErrorCode] | None:
@@ -93,14 +97,30 @@ class BaseDarwinSymbol(BaseSymbol):
         return get_possible_error_codes(self)
 
     @property
-    def stripped_value(self) -> Self:
+    def stripped_value(self) -> DarwinSymbolT_co:
         """Remove PAC upper bits"""
-        return self._client.symbol(self & 0xFFFFFFFFF)
+        return self._darwin_client.symbol(self & 0xFFFFFFFFF)
 
 
-class DarwinSymbol(BaseDarwinSymbol, Symbol):
+class BaseDarwinSymbol(AbstractDarwinSymbol[BaseDarwinSymbolT], BaseSymbol, Generic[BaseDarwinSymbolT]):
+    @readonly
+    def _client(self) -> "BaseDarwinClient[BaseDarwinSymbolT]": ...
+
+    def __init__(self, value: int, client: "BaseDarwinClient[BaseDarwinSymbolT]") -> None:
+        self.retval_bit_count: int = RETVAL_BIT_COUNT
+        self.is_retval_signed: bool = True
+        self.item_size: int = 8
+        BaseDarwinSymbol._client.set(self, client)
+        self._offset: int = 0
+
+    @property
+    def _darwin_client(self) -> "BaseDarwinClient[BaseDarwinSymbolT]":
+        return self._client
+
+
+class DarwinSymbol(BaseDarwinSymbol["DarwinSymbol"], Symbol):
     pass
 
 
-class AsyncDarwinSymbol(BaseDarwinSymbol, AsyncSymbol):
+class AsyncDarwinSymbol(BaseDarwinSymbol["AsyncDarwinSymbol"], AsyncSymbol):
     pass

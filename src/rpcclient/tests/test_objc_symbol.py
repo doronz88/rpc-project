@@ -3,7 +3,7 @@ import pytest
 from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.clients.darwin.consts import NSStringEncoding
 from rpcclient.clients.darwin.objective_c.objective_c_class import BoundObjectiveCMethod
-from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol, DarwinSymbol
 
 
 pytestmark = pytest.mark.darwin
@@ -27,6 +27,14 @@ def test_calling_property(client: DarwinClient) -> None:
     description = d.objc_symbol.description
     assert not isinstance(description, BoundObjectiveCMethod)
     assert description.py() == "{\n    key = value;\n}"
+
+
+def test_objc_symbol_has_darwin_symbol_api(client: DarwinClient) -> None:
+    NSString = client.objc_get_class("NSString")
+    ascii_encoding = NSStringEncoding.NSASCIIStringEncoding
+    str1 = NSString.stringWithCString_encoding_("Taylor Swift", ascii_encoding).objc_symbol
+    assert isinstance(str1, AbstractDarwinSymbol)
+    assert str1.py() == "Taylor Swift"
 
 
 def test_set_implementation(client: DarwinClient) -> None:

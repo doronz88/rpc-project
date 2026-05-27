@@ -33,6 +33,7 @@ class Bluetooth(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darwi
                 await self._client.setenv.z(self._ENV_QUEUE_SET, "1")
             self._bluetooth_manager = await bluetooth_manager_class.objc_call.z("sharedInstance")
 
+        assert self._bluetooth_manager is not None
         return self._bluetooth_manager
 
     @zyncio.zmethod
