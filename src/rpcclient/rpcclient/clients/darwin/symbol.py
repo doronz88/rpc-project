@@ -6,7 +6,7 @@ from osstatus.cache import ErrorCode, get_possible_error_codes
 
 from rpcclient.clients.darwin.common import CfSerializable, CfSerializableAny, CfSerializableT
 from rpcclient.core.client import RemoteCallArg
-from rpcclient.core.symbol import AsyncSymbol, BaseSymbol, Symbol
+from rpcclient.core.symbol import AbstractSymbol, AsyncSymbol, BaseSymbol, Symbol
 from rpcclient.exceptions import UnrecognizedSelectorError
 from rpcclient.utils import assert_cast, readonly
 
@@ -17,12 +17,9 @@ if TYPE_CHECKING:
     from rpcclient.clients.darwin.subsystems.processes import Region
 
 
-class BaseDarwinSymbol(BaseSymbol):
+class AbstractDarwinSymbol(AbstractSymbol):
     @readonly
-    def _client(self) -> "BaseDarwinClient[Self]": ...
-
-    def __init__(self, value: int, client: "BaseDarwinClient[Self]") -> None:
-        super().__init__(value, client)
+    def _client(self) -> "BaseDarwinClient[BaseDarwinSymbol]": ...
 
     async def _objc_call(self, selector: str, *params, **kwargs) -> Any:
         """call an objc method on a given object"""
@@ -80,17 +77,25 @@ class BaseDarwinSymbol(BaseSymbol):
         return await self.get_cfdesc()
 
     @property
+    def osstatus(self) -> list[ErrorCode] | None:
+        """Get possible translation to given error code by querying osstatus"""
+        return get_possible_error_codes(self)
+
+
+class BaseDarwinSymbol(BaseSymbol, AbstractDarwinSymbol):
+    @readonly
+    def _client(self) -> "BaseDarwinClient[Self]": ...
+
+    def __init__(self, value: int, client: "BaseDarwinClient[Self]") -> None:
+        super().__init__(value, client)
+
+    @property
     def objc_symbol(self) -> "ObjectiveCSymbol[Self]":
         """
         Get an ObjectiveC symbol of the same address
         :return: Object representing the ObjectiveC symbol
         """
         return self._client.objc_symbol(self)
-
-    @property
-    def osstatus(self) -> list[ErrorCode] | None:
-        """Get possible translation to given error code by querying osstatus"""
-        return get_possible_error_codes(self)
 
     @property
     def stripped_value(self) -> Self:

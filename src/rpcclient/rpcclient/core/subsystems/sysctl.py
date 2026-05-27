@@ -162,12 +162,12 @@ class Sysctl(ClientBound[ClientT_co]):
         return struct.unpack("<I", await self.get_by_name.z(name))[0]
 
     @zyncio.zmethod
-    async def set_int_by_name(self, name: str, value: int):
+    async def set_int_by_name(self, name: str, value: int) -> None:
         """equivalent of: sysctl <name> -w value"""
         await self.set_by_name.z(name, struct.pack("<I", value))
 
     @zyncio.zmethod
-    async def set_str_by_name(self, name: str, value: str):
+    async def set_str_by_name(self, name: str, value: str) -> None:
         """equivalent of: sysctl <name> -w value"""
         await self.set_by_name.z(name, value.encode() + b"\x00")
 

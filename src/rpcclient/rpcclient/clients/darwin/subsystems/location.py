@@ -43,7 +43,7 @@ class Location(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darwin
     @zyncio.zproperty
     async def _location_services_enabled(self) -> bool:
         """opt-in status for location services"""
-        return bool((await self._get_location_manager()).objc_call.z("locationServicesEnabled"))
+        return bool(await (await self._get_location_manager()).objc_call.z("locationServicesEnabled"))
 
     @_location_services_enabled.setter
     async def location_services_enabled(self, value: bool) -> None:
