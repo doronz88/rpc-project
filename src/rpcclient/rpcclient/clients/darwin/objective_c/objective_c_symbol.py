@@ -2,7 +2,7 @@ from collections.abc import Coroutine
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, overload
+from typing import TYPE_CHECKING, Any, Generic, cast, overload
 
 import zyncio
 from construct import Container
@@ -15,9 +15,7 @@ from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.clients.darwin.objective_c.objc import Method
 from rpcclient.clients.darwin.objective_c.objective_c_class import BoundObjectiveCMethod, Class
 from rpcclient.clients.darwin.symbol import BaseDarwinSymbol, DarwinSymbol
-from rpcclient.core._types import ClientBound
 from rpcclient.core.client import RemoteCallArg
-from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
 
@@ -40,7 +38,7 @@ class Ivar(Generic[DarwinSymbolT_co]):
     offset: int
 
 
-class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class ObjectiveCSymbol(BaseDarwinSymbol, Generic[DarwinSymbolT_co]):
     """
     Wrapper object for an objective-c symbol.
     Allowing easier access to its properties, methods and ivars.
@@ -50,10 +48,14 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         zyncio.ZYNC_MODE_CACHE_ATTR,
         "_client",
         "_sym",
+        "_offset",
         "class_",
         "ivars",
+        "is_retval_signed",
+        "item_size",
         "methods",
         "properties",
+        "retval_bit_count",
     })
 
     def __init__(self, value: int, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
@@ -64,7 +66,7 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         :return: ObjectiveCSymbol object.
         :rtype: ObjectiveCSymbol
         """
-        self._client = client
+        super().__init__(value, cast(Any, client))
         self._sym: DarwinSymbolT_co = client.symbol(value)
         self.ivars: list[Ivar[DarwinSymbolT_co]] = []
         self.methods: list[Method[DarwinSymbolT_co]] = []
@@ -73,6 +75,9 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
 
         if zyncio.is_sync(self):
             self.reload()
+
+    def __zync_delegate__(self) -> DarwinSymbolT_co:
+        return self._sym
 
     def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
         """
@@ -84,7 +89,8 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         :return: BaseDarwinSymbol object.
         :rtype: BaseDarwinSymbol
         """
-        return self._client.symbol(value)
+        client = cast("BaseDarwinClient[DarwinSymbolT_co]", self._client)
+        return client.symbol(value)
 
     @zyncio.zmethod
     async def peek(self, count: int, offset: int = 0) -> bytes:
@@ -116,20 +122,21 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         """
         Reload object's in-memory layout.
         """
-        object_data = await self._client.showobject.z(self)
+        client = cast("BaseDarwinClient[DarwinSymbolT_co]", self._client)
+        object_data = await client.showobject.z(self)
 
         ivars_list = [
-            Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"], value=self._client.symbol(ivar["value"]))
+            Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"], value=client.symbol(ivar["value"]))
             for ivar in object_data["ivars"]
         ]
-        methods_list = [objc.Method.from_data(method, self._client) for method in object_data["methods"]]
+        methods_list = [objc.Method.from_data(method, client) for method in object_data["methods"]]
         properties_list = [
             objc.Property(name=prop["name"], attributes=objc.convert_encoded_property_attributes(prop["attributes"]))
             for prop in object_data["properties"]
         ]
 
-        class_object = self._client.symbol(object_data["class_address"])
-        class_wrapper = Class(self._client, class_object, lazy=True)
+        class_object = client.symbol(object_data["class_address"])
+        class_wrapper = Class(client, class_object, lazy=True)
         await class_wrapper.reload.z()
 
         self.ivars = ivars_list
@@ -173,6 +180,10 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
             if method.name == name:
                 return method
         raise AttributeError(f'Method "{name}" does not exist')
+
+    @property
+    def objc_symbol(self) -> "ObjectiveCSymbol[DarwinSymbolT_co]":
+        return self
 
     async def set_ivar(self: "ObjectiveCSymbol[DarwinSymbolT]", name: str, value: DarwinSymbolT) -> None:
         try:
@@ -240,7 +251,8 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
     @property
     def symbols_jar(self) -> SymbolsJar[DarwinSymbolT_co]:
         """Get a BaseSymbolsJar object for quick operations on all methods"""
-        jar = SymbolsJar(self._client)
+        client = cast("BaseDarwinClient[DarwinSymbolT_co]", self._client)
+        jar = SymbolsJar(client)
 
         for m in self.methods:
             jar[m.name] = m.address
