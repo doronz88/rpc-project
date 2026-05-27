@@ -14,12 +14,11 @@ from rpcclient.clients.darwin._types import AsyncDarwinSymbolT_co, DarwinSymbolT
 from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.clients.darwin.objective_c.objc import Method
 from rpcclient.clients.darwin.objective_c.objective_c_class import BoundObjectiveCMethod, Class
-from rpcclient.clients.darwin.symbol import BaseDarwinSymbol, DarwinSymbol
-from rpcclient.core._types import ClientBound
+from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol, BaseDarwinSymbol, DarwinSymbol
 from rpcclient.core.client import RemoteCallArg
-from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
+from rpcclient.utils import readonly
 
 
 if TYPE_CHECKING:
@@ -40,7 +39,7 @@ class Ivar(Generic[DarwinSymbolT_co]):
     offset: int
 
 
-class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     """
     Wrapper object for an objective-c symbol.
     Allowing easier access to its properties, methods and ivars.
@@ -56,6 +55,9 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         "properties",
     })
 
+    @readonly
+    def _client(self) -> "BaseDarwinClient[DarwinSymbolT_co]": ...
+
     def __init__(self, value: int, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
         """
         Create an ObjectiveCSymbol object.
@@ -64,7 +66,7 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
         :return: ObjectiveCSymbol object.
         :rtype: ObjectiveCSymbol
         """
-        self._client = client
+        __class__._client.set(self, client)
         self._sym: DarwinSymbolT_co = client.symbol(value)
         self.ivars: list[Ivar[DarwinSymbolT_co]] = []
         self.methods: list[Method[DarwinSymbolT_co]] = []
@@ -73,6 +75,9 @@ class ObjectiveCSymbol(AbstractSymbol, ClientBound["BaseDarwinClient[DarwinSymbo
 
         if zyncio.is_sync(self):
             self.reload()
+
+    def __zync_delegate__(self) -> DarwinSymbolT_co:
+        return self._sym
 
     def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
         """

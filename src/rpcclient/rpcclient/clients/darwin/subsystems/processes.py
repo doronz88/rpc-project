@@ -880,7 +880,7 @@ class Process(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinS
 
     @zyncio.zproperty
     @cached_async_method
-    async def vmu_region_identifier(self: "Process[DarwinSymbolT_co]") -> DarwinSymbolT_co:
+    async def vmu_region_identifier(self) -> DarwinSymbolT_co:
         """Return the VMUVMRegionIdentifier object for this task."""
 
         VMUVMRegionIdentifier = await self._client.symbols.objc_getClass.z("VMUVMRegionIdentifier")
