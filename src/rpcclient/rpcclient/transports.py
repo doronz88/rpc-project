@@ -20,6 +20,20 @@ PROJECT_URL = "https://api.github.com/repos/doronz88/rpc-project/releases/latest
 BINARY_NAME = "rpcserver_macosx"
 
 
+def _has_process_exited(process: subprocess.Popen) -> bool:
+    return process.poll() is not None
+
+
+def _terminate_process(process: subprocess.Popen) -> None:
+    if _has_process_exited(process):
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+
+
 @zyncio.zfunc
 async def create_tcp(
     zync_mode: zyncio.Mode,
@@ -85,15 +99,24 @@ async def create_local(
     srv.close()
 
     # spawn
-    subprocess.Popen([f"./{binary_name}", "-p", str(port)], cwd=os.getcwd())
+    process = subprocess.Popen([f"./{binary_name}", "-p", str(port)], cwd=os.getcwd())
     logger.info("rpcserver launched on port %d", port)
 
     # poll until connectable
-    while True:
-        try:
-            return await create_tcp.call_zync(zync_mode, hostname="127.0.0.1", port=port)
-        except FailedToConnectError:
-            await zync_sleep(zync_mode, poll_interval)
+    try:
+        while True:
+            if _has_process_exited(process):
+                raise FailedToConnectError()
+            try:
+                bridge = await create_tcp.call_zync(zync_mode, hostname="127.0.0.1", port=port)
+                bridge.set_local_process(process)
+            except FailedToConnectError:
+                await zync_sleep(zync_mode, poll_interval)
+            else:
+                return bridge
+    except Exception:
+        _terminate_process(process)
+        raise
 
 
 @zyncio.zfunc

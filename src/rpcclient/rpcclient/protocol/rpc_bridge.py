@@ -1,6 +1,7 @@
 import abc
 import logging
 import socket
+import subprocess
 from typing import Any, Generic, TypeVar, final
 from typing_extensions import Self
 
@@ -17,6 +18,10 @@ logger = logging.getLogger(__name__)
 BASIC_MESSAGES = RpcMessageRegistry(modules=["rpcclient.protos.rpc_api_pb2"])
 
 
+def _has_process_exited(process: subprocess.Popen) -> bool:
+    return process.poll() is not None
+
+
 RpcSocketT = TypeVar("RpcSocketT", SyncRpcSocket, AsyncRpcSocket)
 
 
@@ -31,6 +36,7 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
         sysname: str,
         messages: RpcMessageRegistry | None = None,
         owns_socket: bool = True,
+        local_process: subprocess.Popen | None = None,
     ) -> None:
         self.messages: RpcMessageRegistry = messages or BASIC_MESSAGES.clone()
         self.sock: RpcSocketT = sock
@@ -39,6 +45,7 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
         self.arch: int = arch
         self.sysname: str = sysname
         self._owns_socket: bool = owns_socket
+        self._local_process: subprocess.Popen | None = local_process
 
     @classmethod
     @abc.abstractmethod
@@ -79,7 +86,24 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
     def close(self) -> None:
         if not self._owns_socket:
             raise RuntimeError("socket is owned by another client")
-        self.sock.raw_socket.close()
+        try:
+            self.sock.raw_socket.close()
+        finally:
+            self._terminate_local_process()
+
+    def set_local_process(self, process: subprocess.Popen) -> None:
+        self._local_process = process
+
+    def _terminate_local_process(self) -> None:
+        process = self._local_process
+        self._local_process = None
+        if process is None or _has_process_exited(process):
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
 
     def clone(self) -> Self:
         return type(self)(

@@ -604,9 +604,11 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
 
     @zyncio.zmethod
     async def close(self) -> None:
-        await self.rpc_call.z(MsgId.REQ_CLOSE_CLIENT)
-        self.notifier.notify(ClientEvent.TERMINATED, self.id)
-        self._bridge.close()
+        try:
+            await self.rpc_call.z(MsgId.REQ_CLOSE_CLIENT)
+        finally:
+            self.notifier.notify(ClientEvent.TERMINATED, self.id)
+            self._bridge.close()
 
     async def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
         try:
