@@ -99,6 +99,16 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         """Remove all clients."""
         self._clients.clear()
 
+    @zyncio.zmethod
+    async def close_all(self) -> None:
+        """Close all clients and remove them from the registry."""
+        for client in list(self.clients.values()):
+            try:
+                await client.close.z()
+            except Exception:
+                logger.exception("Failed to close client %s", client.id)
+        self.clear()
+
     def get(self, cid: int) -> ClientT | None:
         """Return the client for ID, or None."""
         return self._clients.get(cid)

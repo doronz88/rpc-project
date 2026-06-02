@@ -158,8 +158,10 @@ class Console:
         if (startup_files is not None) and (len(startup_files) > 0):
             click.secho(f"Detected Startup files to be run: {startup_files}", bold=True)
 
-        IPython.start_ipython(config=ipython_config, user_ns=namespace)
-        self.mgr.clear()
+        try:
+            IPython.start_ipython(config=ipython_config, user_ns=namespace)
+        finally:
+            self.mgr.close_all()
 
     def switch(self, cid: int | None = None) -> None:
         """Switch the active console context by client ID (or interactively pick one)."""

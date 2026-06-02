@@ -8,7 +8,7 @@ from typing_extensions import Self
 
 import zyncio
 from construct import Container
-from IPython import get_ipython  # pyright: ignore[reportPrivateImportUsage]
+from IPython.core.getipython import get_ipython
 from tqdm import tqdm
 
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
