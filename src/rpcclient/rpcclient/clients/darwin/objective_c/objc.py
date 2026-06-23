@@ -86,7 +86,6 @@ class Method(Generic[DarwinSymbolT_co]):
     def __str__(self) -> str:
         if ":" in self.name:
             args_names = self.name.split(":")
-            print(args_names, self.args_types[2:])
             name = " ".join(["{}:({})".format(*arg) for arg in zip(args_names, self.args_types[2:], strict=False)])
         else:
             name = self.name
