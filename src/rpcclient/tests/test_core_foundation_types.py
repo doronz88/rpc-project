@@ -25,5 +25,5 @@ pytestmark = pytest.mark.darwin
         [{"key": "value"}, [1, 2]],
     ],
 )
-def test_serialization(client: DarwinClient, data: CfSerializable) -> None:
-    assert client.cf(data).py() == data
+async def test_serialization(client: DarwinClient, data: CfSerializable) -> None:
+    assert await (await client.cf(data)).py() == data

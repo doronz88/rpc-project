@@ -1,8 +1,10 @@
 from typing import TypeAlias
 
-from rpcclient.core.client import AsyncCoreClient, CoreClient
-from rpcclient.core.symbol import AsyncSymbol, Symbol
+from rpcclient.core.client import CoreClient
+from rpcclient.core.symbol import Symbol
 
 
-SyncClient: TypeAlias = CoreClient[Symbol]
-AsyncClient: TypeAlias = AsyncCoreClient[AsyncSymbol]
+Client: TypeAlias = CoreClient[Symbol]
+# Back-compat aliases (the sync/async split no longer exists).
+SyncClient: TypeAlias = Client
+AsyncClient: TypeAlias = Client

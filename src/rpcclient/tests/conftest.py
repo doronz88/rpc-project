@@ -1,49 +1,43 @@
-from collections.abc import AsyncGenerator, Generator
+import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import suppress
 from uuid import uuid4
 
-import pytest
 import pytest_asyncio
 
-from rpcclient.client_manager import AsyncClientManager, ClientManager
-from rpcclient.clients.darwin.client import BaseDarwinClient, DarwinClient
-from rpcclient.clients.ios.client import BaseIosClient
+from rpcclient.client_manager import ClientManager
+from rpcclient.clients.darwin.client import DarwinClient
+from rpcclient.clients.ios.client import IosClient
 from rpcclient.core.subsystems.fs import RemotePath
 from rpcclient.exceptions import BadReturnValueError
 from rpcclient.protos.rpc_pb2 import ARCH_ARM64
-from tests._types import AsyncClient, SyncClient
+from tests._types import Client
 
 
-@pytest.fixture
-def client() -> Generator[SyncClient]:
-    with ClientManager().create(hostname="127.0.0.1") as c:
+@pytest_asyncio.fixture
+async def client() -> AsyncGenerator[Client]:
+    async with await ClientManager().create(hostname="127.0.0.1") as c:
         yield c
 
 
 @pytest_asyncio.fixture
-async def async_client() -> AsyncGenerator[AsyncClient]:
-    async with await AsyncClientManager().create(hostname="127.0.0.1") as c:
-        yield c
-
-
-@pytest.fixture
-def darwin_client() -> Generator[DarwinClient]:
-    with ClientManager().create(hostname="127.0.0.1") as c:
+async def darwin_client() -> AsyncGenerator[DarwinClient]:
+    async with await ClientManager().create(hostname="127.0.0.1") as c:
         assert isinstance(c, DarwinClient)
         yield c
 
 
-@pytest.fixture
-def tmp_path(client: SyncClient) -> Generator[RemotePath[SyncClient]]:
+@pytest_asyncio.fixture
+async def tmp_path(client: Client) -> AsyncGenerator[RemotePath[Client]]:
     tmp_path = "/tmp"
     with suppress(BadReturnValueError):
-        tmp_path = client.fs.readlink(tmp_path)
+        tmp_path = await client.fs.readlink(tmp_path)
     filename = client.fs.remote_path(tmp_path) / uuid4().hex
-    client.fs.mkdir(filename, mode=0o777)
+    await client.fs.mkdir(filename, mode=0o777)
     try:
         yield filename
     finally:
-        client.fs.remove(filename, recursive=True)
+        await client.fs.remove(filename, recursive=True)
 
 
 def pytest_addoption(parser) -> None:
@@ -62,17 +56,21 @@ def pytest_configure(config) -> None:
     config.addinivalue_line("markers", "arm: marks tests that require arm architecture to run")
 
 
+async def _probe_platform() -> tuple[bool, bool, bool]:
+    async with await ClientManager().create(hostname="127.0.0.1") as c:
+        return isinstance(c, DarwinClient), isinstance(c, IosClient), c.arch == ARCH_ARM64
+
+
 def pytest_collection_modifyitems(config, items) -> None:
+    import pytest
+
     skip_local_only = pytest.mark.skip(reason="remove --ci option to run")
     skip_not_darwin = pytest.mark.skip(reason="Darwin system is required for this test")
     skip_not_ios = pytest.mark.skip(reason="Ios system is required for this test")
     skip_not_arm = pytest.mark.skip(reason="Arm arch is required for this test")
     skip_not_local_machine = pytest.mark.skip(reason="Local machine is required for this test")
 
-    with ClientManager().create(hostname="127.0.0.1") as c:
-        is_darwin = isinstance(c, BaseDarwinClient)
-        is_ios = isinstance(c, BaseIosClient)
-        is_arm = c.arch == ARCH_ARM64
+    is_darwin, is_ios, is_arm = asyncio.run(_probe_platform())
 
     for item in items:
         if "local_only" in item.keywords and config.getoption("--ci"):

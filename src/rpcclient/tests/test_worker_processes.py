@@ -5,10 +5,10 @@ from rpcclient.clients.darwin.client import DarwinClient
 
 
 @pytest.mark.darwin
-def test_new_process_per_client(client: DarwinClient) -> None:
-    with ClientManager().create(hostname="127.0.0.1") as client2:
+async def test_new_process_per_client(client: DarwinClient) -> None:
+    async with await ClientManager().create(hostname="127.0.0.1") as client2:
         assert isinstance(client2, DarwinClient)
-        assert client.pid != client2.pid
-        client_process = client.processes.get_by_pid(client.pid)
-        client2_process = client2.processes.get_by_pid(client2.pid)
-        assert client_process.ppid == client2_process.ppid
+        assert await client.get_pid() != await client2.get_pid()
+        client_process = await client.processes.get_by_pid(await client.get_pid())
+        client2_process = await client2.processes.get_by_pid(await client2.get_pid())
+        assert await client_process.ppid() == await client2_process.ppid()

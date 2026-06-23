@@ -9,45 +9,47 @@ from rpcclient.clients.darwin.symbol import DarwinSymbol
 pytestmark = pytest.mark.darwin
 
 
-def test_method_by_method_name(client: DarwinClient) -> None:
-    NSString = client.objc_get_class("NSString")
+async def test_method_by_method_name(client: DarwinClient) -> None:
+    NSString = await client.objc_get_class("NSString")
     ascii_encoding = NSStringEncoding.NSASCIIStringEncoding
-    str1 = NSString.stringWithCString_encoding_("Taylor Swift", ascii_encoding).objc_symbol
-    assert str1.cStringUsingEncoding_(ascii_encoding).peek_str() == "Taylor Swift"
-    assert str1.length == len("Taylor Swift")
-    assert str1.lowercaseString().objc_symbol.cStringUsingEncoding_(ascii_encoding).peek_str() == "taylor swift"
-    assert str1.uppercaseString().objc_symbol.cStringUsingEncoding_(ascii_encoding).peek_str() == "TAYLOR SWIFT"
+    str1 = (await NSString.stringWithCString_encoding_("Taylor Swift", ascii_encoding)).objc_symbol
+    assert await (await str1.objc_call("cStringUsingEncoding:", ascii_encoding)).peek_str() == "Taylor Swift"
+    assert await str1.get("length") == len("Taylor Swift")
+    lowercase = (await str1.objc_call("lowercaseString")).objc_symbol
+    assert await (await lowercase.objc_call("cStringUsingEncoding:", ascii_encoding)).peek_str() == "taylor swift"
+    uppercase = (await str1.objc_call("uppercaseString")).objc_symbol
+    assert await (await uppercase.objc_call("cStringUsingEncoding:", ascii_encoding)).peek_str() == "TAYLOR SWIFT"
 
 
-def test_calling_property(client: DarwinClient) -> None:
-    d = client.symbols.objc_getClass("NSMutableDictionary").objc_call("new")
+async def test_calling_property(client: DarwinClient) -> None:
+    d = await (await client.symbols.objc_getClass("NSMutableDictionary")).objc_call("new")
     # call method
-    d.objc_call("setObject:forKey:", client.cf("value"), client.cf("key"))
+    await d.objc_call("setObject:forKey:", await client.cf("value"), await client.cf("key"))
     # call property
-    description = d.objc_symbol.description
+    description = await d.objc_symbol.get("description")
     assert not isinstance(description, BoundObjectiveCMethod)
-    assert description.py() == "{\n    key = value;\n}"
+    assert await description.py() == "{\n    key = value;\n}"
 
 
-def test_set_implementation(client: DarwinClient) -> None:
-    pid = client.symbols.getpid()
+async def test_set_implementation(client: DarwinClient) -> None:
+    pid = await client.symbols.getpid()
 
-    isValidJSONObject_ = client.objc_get_class("NSJSONSerialization").get_method("isValidJSONObject:")
+    isValidJSONObject_ = (await client.objc_get_class("NSJSONSerialization")).get_method("isValidJSONObject:")
     assert isValidJSONObject_ is not None
-    isValidJSONObject_.set_implementation(client.symbols.getpid)
-    assert client.objc_get_class("NSJSONSerialization").isValidJSONObject_() == pid
+    await isValidJSONObject_.set_implementation(await client.symbols.getpid.resolve())
+    assert await (await client.objc_get_class("NSJSONSerialization")).isValidJSONObject_() == pid
 
 
 @pytest.mark.parametrize("value", [True, False])
-def test_always_return(client: DarwinClient, value: bool) -> None:
-    isValidJSONObject_ = client.objc_get_class("NSJSONSerialization").get_method("isValidJSONObject:")
+async def test_always_return(client: DarwinClient, value: bool) -> None:
+    isValidJSONObject_ = (await client.objc_get_class("NSJSONSerialization")).get_method("isValidJSONObject:")
     assert isValidJSONObject_ is not None
-    isValidJSONObject_.always_return(value)
-    assert client.objc_get_class("NSJSONSerialization").isValidJSONObject_() == value
+    await isValidJSONObject_.always_return(value)
+    assert await (await client.objc_get_class("NSJSONSerialization")).isValidJSONObject_() == value
 
 
-def test_ivar_symbol(client: DarwinClient) -> None:
-    NSString = client.objc_get_class("NSString")
+async def test_ivar_symbol(client: DarwinClient) -> None:
+    NSString = await client.objc_get_class("NSString")
     ascii_encoding = NSStringEncoding.NSASCIIStringEncoding
-    str1 = NSString.stringWithCString_encoding_("Taylor Swift", ascii_encoding).objc_symbol
-    assert isinstance(str1.isa, DarwinSymbol)
+    str1 = (await NSString.stringWithCString_encoding_("Taylor Swift", ascii_encoding)).objc_symbol
+    assert isinstance(await str1.get("isa"), DarwinSymbol)
