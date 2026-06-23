@@ -31,6 +31,7 @@ from rpcclient.clients.macos.client import MacosClient
 from rpcclient.core.client import CoreClient
 from rpcclient.core.structs.consts import SIGTERM
 from rpcclient.exceptions import RpcClientException
+from rpcclient.utils import run_in_loop
 
 
 def _default_json_encoder(obj):
@@ -56,54 +57,66 @@ def _pretty_json(buf, colored=True, default=_default_json_encoder):
 
 def element_completer(xsh, action, completer, alias, command):
     client = XSH.env["rpc"]
-    result = []
-    if not client.accessibility.enabled:
+
+    async def _run():
+        result = []
+        if not await client.accessibility.get_enabled():
+            return result
+
+        async for f in await client.accessibility.primary_app():
+            result.append(f'"{await f.label}"')
+
         return result
 
-    for f in client.accessibility.primary_app:
-        result.append(f'"{f.label}"')
-
-    return result
+    return run_in_loop(_run())
 
 
 def path_completer(xsh, action, completer, alias, command):
     client = XSH.env["rpc"]
-    pwd = client.fs.pwd()
-    is_absolute = command.prefix.startswith("/")
-    dirpath = Path(pwd) / command.prefix
-    if not client.fs.accessible(dirpath):
-        dirpath = dirpath.parent
-    result = []
-    for f in client.fs.scandir(dirpath):
-        completion_option = str(dirpath / f.name) if is_absolute else str((dirpath / f.name).relative_to(pwd))
-        try:
-            if f.is_dir():
-                result.append(f"{completion_option}/")
-            else:
-                result.append(completion_option)
-        except RpcClientException:
-            result.append(completion_option)
 
-    return result
+    async def _run():
+        pwd = await client.fs.pwd()
+        is_absolute = command.prefix.startswith("/")
+        dirpath = Path(pwd) / command.prefix
+        if not await client.fs.accessible(dirpath):
+            dirpath = dirpath.parent
+        result = []
+        for f in await client.fs.scandir(dirpath):
+            completion_option = str(dirpath / f.name) if is_absolute else str((dirpath / f.name).relative_to(pwd))
+            try:
+                if await f.is_dir():
+                    result.append(f"{completion_option}/")
+                else:
+                    result.append(completion_option)
+            except RpcClientException:
+                result.append(completion_option)
+
+        return result
+
+    return run_in_loop(_run())
 
 
 def dir_completer(xsh, action, completer, alias, command):
     client = XSH.env["rpc"]
-    pwd = client.fs.pwd()
-    is_absolute = command.prefix.startswith("/")
-    dirpath = Path(pwd) / command.prefix
-    if not client.fs.accessible(dirpath):
-        dirpath = dirpath.parent
-    result = []
-    for f in client.fs.scandir(dirpath):
-        completion_option = str(dirpath / f.name) if is_absolute else str((dirpath / f.name).relative_to(pwd))
-        try:
-            if f.is_dir():
-                result.append(f"{completion_option}/")
-        except RpcClientException:
-            result.append(completion_option)
 
-    return result
+    async def _run():
+        pwd = await client.fs.pwd()
+        is_absolute = command.prefix.startswith("/")
+        dirpath = Path(pwd) / command.prefix
+        if not await client.fs.accessible(dirpath):
+            dirpath = dirpath.parent
+        result = []
+        for f in await client.fs.scandir(dirpath):
+            completion_option = str(dirpath / f.name) if is_absolute else str((dirpath / f.name).relative_to(pwd))
+            try:
+                if await f.is_dir():
+                    result.append(f"{completion_option}/")
+            except RpcClientException:
+                result.append(completion_option)
+
+        return result
+
+    return run_in_loop(_run())
 
 
 class RpcLsStub(LsStub):
@@ -125,24 +138,27 @@ class RpcLsStub(LsStub):
     def stat(self, path, dir_fd=None, follow_symlinks=True):
         path = Path(path)
 
-        for parent, entries in self._paths_entries.items():
-            try:
-                Path(path).relative_to(parent)
-            except ValueError:
-                # if not relative then use stat()
-                if follow_symlinks:
-                    return self._client.fs.stat(path)
-                return self._client.fs.lstat(path)
+        async def _run():
+            for parent, entries in self._paths_entries.items():
+                try:
+                    Path(path).relative_to(parent)
+                except ValueError:
+                    # if not relative then use stat()
+                    if follow_symlinks:
+                        return await self._client.fs.stat(path)
+                    return await self._client.fs.lstat(path)
 
-            # otherwise, search for a cached entry
-            for e in entries:
-                if e.name == path.parts[-1]:
-                    return e.stat(follow_symlinks=follow_symlinks)
+                # otherwise, search for a cached entry
+                for e in entries:
+                    if e.name == path.parts[-1]:
+                        return await e.stat(follow_symlinks=follow_symlinks)
 
-        return self._client.fs.lstat(path)
+            return await self._client.fs.lstat(path)
+
+        return run_in_loop(_run())
 
     def readlink(self, path, dir_fd=None):
-        return self._client.fs.readlink(path)
+        return run_in_loop(self._client.fs.readlink(path))
 
     def isabs(self, path):
         return posixpath.isabs(path)
@@ -160,17 +176,17 @@ class RpcLsStub(LsStub):
         return str(st_uid)
 
     def now(self):
-        return self._client.time.now()
+        return run_in_loop(self._client.time.now())
 
     def listdir(self, path="."):
-        self._paths_entries[path] = self._client.fs.scandir(path)
+        self._paths_entries[path] = run_in_loop(self._client.fs.scandir(path))
         return [e.name for e in self._paths_entries[path]]
 
     def system(self):
         return "Darwin"
 
     def getenv(self, key, default=None):
-        return self._client.getenv(key)
+        return run_in_loop(self._client.getenv(key))
 
     def get_tty_width(self):
         return os.get_terminal_size().columns
@@ -216,7 +232,7 @@ class XonshRc:
         XSH.aliases[name] = handler
 
     def _rpc_disconnect(self, args, stdin, stdout, stderr):
-        self.client.close()
+        run_in_loop(self.client.close())
         for k, v in self._orig_aliases.items():
             XSH.aliases[k] = v
 
@@ -252,7 +268,7 @@ class XonshRc:
         # -- processes
         self._register_rpc_command("run", self._rpc_run)
         self._register_rpc_command("run-async", self._rpc_run_async)
-        if self.client.fs.accessible("/bin/ps"):
+        if run_in_loop(self.client.fs.accessible("/bin/ps")):
             XSH.aliases["ps"] = "run ps"
         else:
             self._register_arg_parse_alias("ps", self._rpc_ps)
@@ -294,7 +310,8 @@ class XonshRc:
         self._register_arg_parse_alias("rpc-file", self._rpc_file)
 
         XSH.env["PROMPT"] = (
-            f"[{{BOLD_GREEN}}{self.client.uname.nodename}{{RESET}} {{BOLD_YELLOW}}{{rpc_cwd}}{{RESET}}]{{prompt_end}} "
+            f"[{{BOLD_GREEN}}{run_in_loop(self.client.uname()).nodename}{{RESET}} "
+            f"{{BOLD_YELLOW}}{{rpc_cwd}}{{RESET}}]{{prompt_end}} "
         )
         XSH.env["PROMPT_FIELDS"]["rpc_cwd"] = self._rpc_cwd
         XSH.env["PROMPT_FIELDS"]["prompt_end"] = self._prompt
@@ -305,13 +322,13 @@ class XonshRc:
         return "{BOLD_RED}${RESET}"
 
     def _rpc_cwd(self) -> str:
-        return self.client.fs.pwd()
+        return run_in_loop(self.client.fs.pwd())
 
     def _rpc_xattr_get_dict(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         view file xattributes
         """
-        return _pretty_json(self.client.fs.dictxattr(filename))
+        return _pretty_json(run_in_loop(self.client.fs.dictxattr(filename)))
 
     def _rpc_vim(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
@@ -325,38 +342,42 @@ class XonshRc:
         """
         view file entitlements
         """
-        return _pretty_json(self.client.lief.get_entitlements(filename))
+        return _pretty_json(run_in_loop(self.client.lief.get_entitlements(filename)))
 
     def _rpc_list_elements(self):
         """
         list all labels in current main application')
         """
-        for element in self.client.accessibility.primary_app:
-            print_color(
-                f"🏷  "
-                f"{{BOLD_WHITE}}Label:{{RESET}} {element.label} "
-                f"{{BOLD_WHITE}}Value:{{RESET}} {element.value} "
-                f"{{RESET}}",
-                file=sys.stdout,
-            )
+
+        async def _run():
+            async for element in await self.client.accessibility.primary_app():
+                print_color(
+                    f"🏷  "
+                    f"{{BOLD_WHITE}}Label:{{RESET}} {await element.label} "
+                    f"{{BOLD_WHITE}}Value:{{RESET}} {await element.value} "
+                    f"{{RESET}}",
+                    file=sys.stdout,
+                )
+
+        run_in_loop(_run())
 
     def _rpc_press_elements(self, label: Annotated[list[str], Arg(nargs="+", completer=element_completer)]):
         """
         press labels list by given order
         """
-        self.client.accessibility.press_elements_by_labels(label)
+        run_in_loop(self.client.accessibility.press_elements_by_labels(label))
 
     def _rpc_enable_accessibility(self):
         """
         enable accessibility features
         """
-        self.client.accessibility.enabled = True
+        run_in_loop(self.client.accessibility.set_enabled(True))
 
     def _rpc_disable_accessibility(self):
         """
         disable accessibility features
         """
-        self.client.accessibility.enabled = False
+        run_in_loop(self.client.accessibility.set_enabled(False))
 
     def _rpc_press_keys(
         self,
@@ -378,32 +399,36 @@ class XonshRc:
             "voldown": self.client.hid.send_volume_down_button_press,
             "mute": self.client.hid.send_mute_button_press,
         }
-        for k in key:
-            keys_map[k]()
+
+        async def _run():
+            for k in key:
+                await keys_map[k]()
+
+        run_in_loop(_run())
 
     def _rpc_swipe_up(self):
         """
         swipe up
         """
-        self.client.hid.send_swipe_up()
+        run_in_loop(self.client.hid.send_swipe_up())
 
     def _rpc_swipe_down(self):
         """
         swipe down
         """
-        self.client.hid.send_swipe_down()
+        run_in_loop(self.client.hid.send_swipe_down())
 
     def _rpc_swipe_left(self):
         """
         swipe left
         """
-        self.client.hid.send_swipe_left()
+        run_in_loop(self.client.hid.send_swipe_left())
 
     def _rpc_swipe_right(self):
         """
         swipe right
         """
-        self.client.hid.send_swipe_right()
+        run_in_loop(self.client.hid.send_swipe_right())
 
     def _rpc_run(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(prog="run", description="execute a program")
@@ -411,14 +436,14 @@ class XonshRc:
         args = parser.parse_args(args)
         if not stdin:
             stdin = sys.stdin
-        result = self.client.spawn(args.arg, raw_tty=True, stdin=stdin, stdout=stdout)
+        result = run_in_loop(self.client.spawn(args.arg, raw_tty=True, stdin=stdin, stdout=stdout))
         return result.error
 
     def _rpc_run_async(self, args, stdin, stdout, stderr):
         parser = ArgumentParser(prog="run-async", description="execute a program in background")
         parser.add_argument("arg", nargs="+")
         args = parser.parse_args(args)
-        print(self.client.spawn(args.arg, raw_tty=False, background=True), file=stdout, flush=True)
+        print(run_in_loop(self.client.spawn(args.arg, raw_tty=False, background=True)), file=stdout, flush=True)
 
     def _rpc_kill(self, pid: int, signal_number: Annotated[int, Arg(nargs="?", default=SIGTERM)]):
         """
@@ -426,20 +451,28 @@ class XonshRc:
         """
         signal_number = int(signal_number)
         pid = int(pid)
-        self.client.processes.kill(pid, signal_number)
+        run_in_loop(self.client.processes.kill(pid, signal_number))
 
     def _rpc_killall(self, expression: str, signal_number: Annotated[int, Arg(nargs="?", default=SIGTERM)]):
         """
         killall processes with given basename given as a "contain" expression
         """
         signal_number = int(signal_number)
-        for p in self.client.processes.grep(expression):
-            p.kill(signal_number)
+
+        async def _run():
+            for p in await self.client.processes.grep(expression):
+                await p.kill(signal_number)
+
+        run_in_loop(_run())
 
     def _rpc_ps(self):
         """list processes"""
-        for p in self.client.processes.list():
-            print_color(f"{p.pid:5} {p.path}", file=sys.stdout, flush=True)
+
+        async def _run():
+            for p in await self.client.processes.list():
+                print_color(f"{p.pid:5} {await p.path}", file=sys.stdout, flush=True)
+
+        run_in_loop(_run())
 
     def _rpc_ls(self, args, stdin, stdout, stderr):
         """list files"""
@@ -466,27 +499,27 @@ class XonshRc:
             create a symlink instead of a hard link
         """
         if symlink:
-            self.client.fs.symlink(src, dst)
+            run_in_loop(self.client.fs.symlink(src, dst))
         else:
-            self.client.fs.link(src, dst)
+            run_in_loop(self.client.fs.link(src, dst))
 
     def _rpc_touch(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         create an empty file
         """
-        self.client.fs.write_file(filename, b"")
+        run_in_loop(self.client.fs.write_file(filename, b""))
 
     def _rpc_pwd(self):
         """
         get current working directory
         """
-        return self.client.fs.pwd()
+        return run_in_loop(self.client.fs.pwd())
 
     def _rpc_cd(self, path: Annotated[str, Arg(completer=dir_completer)]):
         """
         change directory
         """
-        self.client.fs.chdir(path)
+        run_in_loop(self.client.fs.chdir(path))
 
     def _rpc_rm(
         self, path: Annotated[list[str], Arg(nargs="+", completer=path_completer)], recursive=False, force=False
@@ -501,8 +534,12 @@ class XonshRc:
         force : -f, --force
             ignore errors
         """
-        for p in path:
-            self.client.fs.remove(p, recursive=recursive, force=force)
+
+        async def _run():
+            for p in path:
+                await self.client.fs.remove(p, recursive=recursive, force=force)
+
+        run_in_loop(_run())
 
     def _rpc_mv(
         self, src: Annotated[str, Arg(completer=path_completer)], dst: Annotated[str, Arg(completer=path_completer)]
@@ -510,7 +547,7 @@ class XonshRc:
         """
         move a file
         """
-        self.client.fs.rename(src, dst)
+        run_in_loop(self.client.fs.rename(src, dst))
 
     def _rpc_cp(
         self, src: Annotated[str, Arg(completer=path_completer)], dst: Annotated[str, Arg(completer=path_completer)]
@@ -518,7 +555,11 @@ class XonshRc:
         """
         copy a file
         """
-        self.client.fs.write_file(dst, self.client.fs.read_file(src))
+
+        async def _run():
+            await self.client.fs.write_file(dst, await self.client.fs.read_file(src))
+
+        run_in_loop(_run())
 
     def _rpc_mkdir(
         self,
@@ -534,16 +575,21 @@ class XonshRc:
         parents : -p, --parents
             Create intermediate directories as required.
         """
-        self.client.fs.mkdir(filename, mode=int(mode, 8), parents=parents)
+        run_in_loop(self.client.fs.mkdir(filename, mode=int(mode, 8), parents=parents))
 
     def _rpc_cat(self, filename: Annotated[list[str], Arg(nargs="+", completer=path_completer)]):
         """
         read a list of files
         """
-        buf = b""
-        for current in filename:
-            with self.client.fs.open(current, "r") as f:
-                buf += f.read()
+
+        async def _run():
+            buf = b""
+            for current in filename:
+                async with await self.client.fs.open(current, "r") as f:
+                    buf += await f.read()
+            return buf
+
+        buf = run_in_loop(_run())
         buf += b"\n"
         try:
             return buf.decode()
@@ -608,7 +654,7 @@ class XonshRc:
         recursive : -R, --recursive
             remove recursively
         """
-        self.client.fs.chmod(filename, int(mode, 8), recursive=recursive)
+        run_in_loop(self.client.fs.chmod(filename, int(mode, 8), recursive=recursive))
 
     def _rpc_chown(self, uid: int, gid: int, filename: Annotated[str, Arg(completer=path_completer)], recursive=False):
         """
@@ -621,29 +667,41 @@ class XonshRc:
         """
         uid = int(uid)
         gid = int(gid)
-        self.client.fs.chown(filename, uid, gid, recursive=recursive)
+        run_in_loop(self.client.fs.chown(filename, uid, gid, recursive=recursive))
 
     def _rpc_find(self, filename: Annotated[str, Arg(completer=path_completer)], depth=True):
         """find file recursively"""
-        for f in self.client.fs.find(filename, topdown=not depth):
-            print_color(f, file=sys.stdout, flush=True)
+
+        async def _run():
+            async for f in self.client.fs.find(filename, topdown=not depth):
+                print_color(f, file=sys.stdout, flush=True)
+
+        run_in_loop(_run())
 
     def _rpc_plshow(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
         parse and show plist
         """
-        with self.client.fs.open(filename, "r") as f:
-            return _pretty_json(plistlib.loads(f.read()))
+
+        async def _run():
+            async with await self.client.fs.open(filename, "r") as f:
+                return await f.read()
+
+        return _pretty_json(plistlib.loads(run_in_loop(_run())))
 
     def _rpc_record(self, filename: Annotated[str, Arg(completer=path_completer)], duration: int):
         """
         start recording for specified duration
         """
         duration = int(duration)
-        with self.client.media.get_recorder(filename) as r:
-            r.record()
-            time.sleep(duration)
-            r.stop()
+
+        async def _run():
+            async with await self.client.media.get_recorder(filename) as r:
+                await r.record()
+                time.sleep(duration)
+                await r.stop()
+
+        run_in_loop(_run())
 
     def _rpc_play(
         self, filename: Annotated[str, Arg(completer=path_completer)], duration: Annotated[int, Arg(nargs="?")] = None
@@ -651,14 +709,19 @@ class XonshRc:
         """
         play file
         """
-        with self.client.media.get_player(filename) as r:
-            r.play()
-            if duration:
-                duration = int(duration)
-                time.sleep(duration)
-            else:
-                while r.playing:
-                    time.sleep(0.1)
+
+        async def _run():
+            nonlocal duration
+            async with await self.client.media.get_player(filename) as r:
+                await r.play()
+                if duration:
+                    duration = int(duration)
+                    time.sleep(duration)
+                else:
+                    while await r.playing:
+                        time.sleep(0.1)
+
+        run_in_loop(_run())
 
     def _rpc_open(self, filename: Annotated[str, Arg(completer=path_completer)]):
         """
@@ -677,21 +740,25 @@ class XonshRc:
         get/set date
         """
         if not new_date:
-            return self.client.time.now()
-        self.client.time.set_current(datetime.fromisoformat(new_date))
+            return run_in_loop(self.client.time.now())
+        run_in_loop(self.client.time.set_current(datetime.fromisoformat(new_date)))
 
     def _rpc_which(self, filename: str):
         """traverse $PATH to find the first matching executable"""
-        for p in self.client.getenv("PATH").split(":"):
-            abs_filename = (Path(p) / filename).absolute()
-            if self.client.fs.accessible((Path(p) / filename).absolute()):
-                return abs_filename
+
+        async def _run():
+            for p in (await self.client.getenv("PATH")).split(":"):
+                abs_filename = (Path(p) / filename).absolute()
+                if await self.client.fs.accessible((Path(p) / filename).absolute()):
+                    return abs_filename
+
+        return run_in_loop(_run())
 
     def _rpc_env(self):
         """
         view all environment variables
         """
-        return "\n".join(self.client.environ)
+        return "\n".join(run_in_loop(self.client.environ()))
 
     def _rpc_file(self, filename: str):
         """
@@ -714,7 +781,7 @@ class XonshRc:
     def _remote_file(self, remote):
         with tempfile.TemporaryDirectory() as local_dir:
             local = Path(local_dir) / Path(remote).parts[-1]
-            if self.client.fs.accessible(remote):
+            if run_in_loop(self.client.fs.accessible(remote)):
                 self._pull(remote, local.absolute())
             try:
                 yield local.absolute()
@@ -730,13 +797,13 @@ class XonshRc:
         return posixpath.join(self._rpc_pwd(), filename)
 
     def _listdir(self, path: str) -> list[str]:
-        return self.client.fs.listdir(path)
+        return run_in_loop(self.client.fs.listdir(path))
 
     def _pull(self, remote_filename, local_filename, recursive: bool = False, force: bool = False):
-        self.client.fs.pull(remote_filename, local_filename, recursive, force)
+        run_in_loop(self.client.fs.pull(remote_filename, local_filename, recursive, force))
 
     def _push(self, local_filename, remote_filename, recursive: bool = False, force: bool = False):
-        self.client.fs.push(local_filename, remote_filename, recursive, force)
+        run_in_loop(self.client.fs.push(local_filename, remote_filename, recursive, force))
 
 
 # actual RC contents
@@ -754,16 +821,16 @@ XSH.env["rpc"] = rc.client
 def custom_keybindings(bindings, **kw):
     @bindings.add(Keys.ControlHome)
     def press_home(event):
-        XSH.env["rpc"].hid.send_home_button_press()
+        run_in_loop(XSH.env["rpc"].hid.send_home_button_press())
 
     @bindings.add(Keys.ControlEnd)
     def press_power(event):
-        XSH.env["rpc"].hid.send_power_button_press()
+        run_in_loop(XSH.env["rpc"].hid.send_power_button_press())
 
     @bindings.add(Keys.ControlShiftUp)
     def press_volume_up(event):
-        XSH.env["rpc"].hid.send_volume_down_button_press()
+        run_in_loop(XSH.env["rpc"].hid.send_volume_down_button_press())
 
     @bindings.add(Keys.ControlShiftDown)
     def press_volume_down(event):
-        XSH.env["rpc"].hid.send_volume_up_button_press()
+        run_in_loop(XSH.env["rpc"].hid.send_volume_up_button_press())

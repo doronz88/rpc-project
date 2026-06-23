@@ -4,9 +4,10 @@ import click
 import coloredlogs
 
 from rpcclient.client_manager import ClientManager
-from rpcclient.clients.darwin.client import BaseDarwinClient
+from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.console.console import Console, disable_loggers
 from rpcclient.transports import DEFAULT_PORT
+from rpcclient.utils import run_in_loop
 
 
 coloredlogs.install(level=logging.DEBUG)
@@ -27,9 +28,17 @@ startup_files_option = click.option(
 def rpclocal(startup_files: tuple[str]) -> None:
     """connect to a local machine"""
     manager = ClientManager()
-    client = manager.create(mode="local")
 
-    Console(manager).interactive(switch_cid=client.id, startup_files=startup_files)
+    async def _connect() -> int:
+        client = await manager.create(mode="local")
+        # Prime caches so the prompt can render progname/pid synchronously.
+        await client.get_progname()
+        await client.get_pid()
+        return client.id
+
+    cid = run_in_loop(_connect())
+
+    Console(manager).interactive(switch_cid=cid, startup_files=startup_files)
 
 
 @click.command()
@@ -50,13 +59,20 @@ def rpcclient(
     manager = ClientManager()
     cid = None
     if hostname:
-        client = manager.create(hostname=hostname, port=port)
-        cid = client.id
-        if isinstance(client, BaseDarwinClient):
-            if rebind_symbols:
-                client.rebind_symbols()
-            if load_all_libraries:
-                client.load_all_libraries()
+
+        async def _connect() -> int:
+            client = await manager.create(hostname=hostname, port=port)
+            if isinstance(client, DarwinClient):
+                if rebind_symbols:
+                    await client.rebind_symbols()
+                if load_all_libraries:
+                    await client.load_all_libraries()
+            # Prime caches so the prompt can render progname/pid synchronously.
+            await client.get_progname()
+            await client.get_pid()
+            return client.id
+
+        cid = run_in_loop(_connect())
 
     Console(manager).interactive(switch_cid=cid, startup_files=startup_files)
 
