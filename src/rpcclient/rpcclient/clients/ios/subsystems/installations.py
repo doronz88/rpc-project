@@ -6,8 +6,6 @@ import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic
 
-import zyncio
-
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.core._types import ClientBound
 from rpcclient.exceptions import BadReturnValueError
@@ -15,14 +13,14 @@ from rpcclient.utils import assert_cast
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.ios.client import BaseIosClient
+    from rpcclient.clients.ios.client import IosClient
 
 
 MOBILE_UID = 501
 MOBILE_GID = 501
 
 
-class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Installations(ClientBound["IosClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """iOS application installation helpers.
 
     This subsystem handles install flows that are not covered by the public
@@ -31,11 +29,10 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
     LaunchServices calls on the target device.
     """
 
-    def __init__(self, client: "BaseIosClient[DarwinSymbolT_co]") -> None:
+    def __init__(self, client: "IosClient[DarwinSymbolT_co]") -> None:
         """Bind the subsystem to an iOS client instance."""
         self._client = client
 
-    @zyncio.zmethod
     async def install_ipa(self, local_ipa: str | os.PathLike[str]) -> str:
         """Install an IPA's app bundle.
 
@@ -88,27 +85,27 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
             try:
                 # Create the remote staging directory and recursively upload the
                 # extracted .app bundle into it.
-                await self._client.fs.mkdir.z(remote_stage, parents=True, exist_ok=True)
-                await self._client.fs.push.z(str(local_app), remote_stage, recursive=True, force=True)
-                if not await self._client.fs.accessible.z(remote_app_stage, 0):
+                await self._client.fs.mkdir(remote_stage, parents=True, exist_ok=True)
+                await self._client.fs.push(str(local_app), remote_stage, recursive=True, force=True)
+                if not await self._client.fs.accessible(remote_app_stage, 0):
                     raise RuntimeError(f"Failed to stage app bundle at {remote_app_stage}")
 
                 # Load the private frameworks that provide container management
                 # and LaunchServices registration classes.
-                await self._client.load_framework.z("MobileContainerManager")
-                await self._client.load_framework.z("CoreServices")
+                await self._client.load_framework("MobileContainerManager")
+                await self._client.load_framework("CoreServices")
 
                 # Resolve the Objective-C classes used for container allocation
                 # and app registration.
-                MCMAppContainer = await self._client.symbols.objc_getClass.z("MCMAppContainer")
-                MCMAppDataContainer = await self._client.symbols.objc_getClass.z("MCMAppDataContainer")
-                LSApplicationWorkspace = await self._client.symbols.objc_getClass.z("LSApplicationWorkspace")
+                MCMAppContainer = await self._client.symbols.objc_getClass("MCMAppContainer")
+                MCMAppDataContainer = await self._client.symbols.objc_getClass("MCMAppDataContainer")
+                LSApplicationWorkspace = await self._client.symbols.objc_getClass("LSApplicationWorkspace")
 
                 # Create or fetch the application container for this bundle ID.
                 # The resulting URL is where the .app bundle should live.
-                app_container = await MCMAppContainer.objc_call.z(
+                app_container = await MCMAppContainer.objc_call(
                     "containerWithIdentifier:createIfNecessary:existed:error:",
-                    await self._client.cf.z(bundle_id),
+                    await self._client.cf(bundle_id),
                     True,
                     0,
                     0,
@@ -118,27 +115,27 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
 
                 app_container_dir = assert_cast(
                     str,
-                    await (await (await app_container.objc_call.z("url")).objc_call.z("path")).py.z(),
+                    await (await (await app_container.objc_call("url")).objc_call("path")).py(),
                 )
-                await self._client.fs.mkdir.z(app_container_dir, parents=True, exist_ok=True)
+                await self._client.fs.mkdir(app_container_dir, parents=True, exist_ok=True)
                 final_app_path = f"{app_container_dir}/{app_name}"
 
                 # Replace any existing app bundle at the target path before the
                 # staged bundle is moved into its final location.
-                if await self._client.fs.accessible.z(final_app_path, 0):
-                    await self._client.fs.remove.z(final_app_path, recursive=True, force=True)
+                if await self._client.fs.accessible(final_app_path, 0):
+                    await self._client.fs.remove(final_app_path, recursive=True, force=True)
 
                 # Move the staged bundle into the app container and normalize
                 # ownership and mode bits for iOS user-installed apps.
-                await self._client.fs.rename.z(remote_app_stage, final_app_path)
-                await self._client.fs.chown.z(final_app_path, MOBILE_UID, MOBILE_GID, recursive=True)
-                await self._client.fs.chmod.z(final_app_path, 0o755, recursive=True)
+                await self._client.fs.rename(remote_app_stage, final_app_path)
+                await self._client.fs.chown(final_app_path, MOBILE_UID, MOBILE_GID, recursive=True)
+                await self._client.fs.chmod(final_app_path, 0o755, recursive=True)
 
                 # Create or fetch the application data container. If this works,
                 # the registration dictionary will point HOME and TMPDIR into it.
-                data_container = await MCMAppDataContainer.objc_call.z(
+                data_container = await MCMAppDataContainer.objc_call(
                     "containerWithIdentifier:createIfNecessary:existed:error:",
-                    await self._client.cf.z(bundle_id),
+                    await self._client.cf(bundle_id),
                     True,
                     0,
                     0,
@@ -148,7 +145,7 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
                 if data_container:
                     data_container_dir = assert_cast(
                         str,
-                        await (await (await data_container.objc_call.z("url")).objc_call.z("path")).py.z(),
+                        await (await (await data_container.objc_call("url")).objc_call("path")).py(),
                     )
 
                 # Build the LaunchServices registration dictionary. These keys
@@ -186,8 +183,8 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
 
                 # Ask LaunchServices to register the app. A false return means
                 # the app bundle exists on disk but was not made launchable.
-                workspace = await LSApplicationWorkspace.objc_call.z("defaultWorkspace")
-                ok = await workspace.objc_call.z("registerApplicationDictionary:", await self._client.cf.z(reg))
+                workspace = await LSApplicationWorkspace.objc_call("defaultWorkspace")
+                ok = await workspace.objc_call("registerApplicationDictionary:", await self._client.cf(reg))
                 if not ok:
                     raise BadReturnValueError("LaunchServices registration failed")
 
@@ -196,5 +193,5 @@ class Installations(ClientBound["BaseIosClient[DarwinSymbolT_co]"], Generic[Darw
                 # Always remove the temporary staging directory. Failures during
                 # cleanup are suppressed, so the original installation error is kept.
                 with contextlib.suppress(Exception):
-                    if await self._client.fs.accessible.z(remote_stage, 0):
-                        await self._client.fs.remove.z(remote_stage, recursive=True, force=True)
+                    if await self._client.fs.accessible(remote_stage, 0):
+                        await self._client.fs.remove(remote_stage, recursive=True, force=True)

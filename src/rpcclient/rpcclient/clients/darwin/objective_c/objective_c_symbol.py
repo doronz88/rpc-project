@@ -1,20 +1,17 @@
-from collections.abc import Coroutine
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, overload
+from typing import TYPE_CHECKING, Any, Generic
 
-import zyncio
 from construct import Container
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
 from pygments.lexers import ObjectiveCLexer
 
-from rpcclient.clients.darwin._types import AsyncDarwinSymbolT_co, DarwinSymbolT, DarwinSymbolT_co, SyncDarwinSymbolT_co
+from rpcclient.clients.darwin._types import DarwinSymbolT, DarwinSymbolT_co
 from rpcclient.clients.darwin.objective_c import objc
 from rpcclient.clients.darwin.objective_c.objc import Method
 from rpcclient.clients.darwin.objective_c.objective_c_class import BoundObjectiveCMethod, Class
-from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol, BaseDarwinSymbol, DarwinSymbol
+from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol
 from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
@@ -22,7 +19,7 @@ from rpcclient.utils import readonly
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class SettingIvarError(RpcClientException):
@@ -46,7 +43,6 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     """
 
     _attrs = frozenset({
-        zyncio.ZYNC_MODE_CACHE_ATTR,
         "_client",
         "_sym",
         "class_",
@@ -56,9 +52,9 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     })
 
     @readonly
-    def _client(self) -> "BaseDarwinClient[DarwinSymbolT_co]": ...
+    def _client(self) -> "DarwinClient[DarwinSymbolT_co]": ...
 
-    def __init__(self, value: int, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
+    def __init__(self, value: int, client: "DarwinClient[DarwinSymbolT_co]") -> None:
         """
         Create an ObjectiveCSymbol object.
         :param value: Symbol address.
@@ -73,36 +69,27 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
         self.properties: list[objc.Property] = []
         self.class_: Class[DarwinSymbolT_co] | None = None
 
-        if zyncio.is_sync(self):
-            self.reload()
-
-    def __zync_delegate__(self) -> DarwinSymbolT_co:
-        return self._sym
-
     def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
         """
-        Returns the gives value as as a BaseDarwinSymbol.
+        Returns the gives value as as a DarwinSymbol.
         This static behvaior is needed, as no value can definitely be a valid objc object.
         Because treating a value as an objc address may lead to a segmentation fault, it is safer to treat it as a more general symbol.
 
         :param value: Symbol address
-        :return: BaseDarwinSymbol object.
-        :rtype: BaseDarwinSymbol
+        :return: DarwinSymbol object.
+        :rtype: DarwinSymbol
         """
         return self._client.symbol(value)
 
-    @zyncio.zmethod
     async def peek(self, count: int, offset: int = 0) -> bytes:
-        return await self._sym.peek.z(count, offset)
+        return await self._sym.peek(count, offset)
 
-    @zyncio.zmethod
     async def poke(self, buf: bytes, offset: int = 0) -> Any:
-        return await self._sym.poke.z(buf, offset)
+        return await self._sym.poke(buf, offset)
 
-    @zyncio.zmethod
     async def peek_str(self, encoding="utf-8") -> str:
         """peek string at given address"""
-        return await self._sym.peek_str.z(encoding=encoding)
+        return await self._sym.peek_str(encoding=encoding)
 
     @property
     def arch(self) -> object:
@@ -112,16 +99,14 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     def endianness(self) -> str:
         return self._client._endianness
 
-    @zyncio.zmethod
     async def get_dl_info(self) -> Container:
-        return await self._sym.get_dl_info.z()
+        return await self._sym.get_dl_info()
 
-    @zyncio.zmethod
     async def reload(self) -> None:
         """
         Reload object's in-memory layout.
         """
-        object_data = await self._client.showobject.z(self)
+        object_data = await self._client.showobject(self)
 
         ivars_list = [
             Ivar(name=ivar["name"], type_=ivar["type"], offset=ivar["offset"], value=self._client.symbol(ivar["value"]))
@@ -135,21 +120,23 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
 
         class_object = self._client.symbol(object_data["class_address"])
         class_wrapper = Class(self._client, class_object, lazy=True)
-        await class_wrapper.reload.z()
+        await class_wrapper.reload()
 
         self.ivars = ivars_list
         self.methods = methods_list
         self.properties = properties_list
         self.class_ = class_wrapper
 
-    def show(self, dump_to: str | None = None, recursive: bool = False) -> None:
+    async def show(self, dump_to: str | None = None, recursive: bool = False) -> None:
         """
         Print to terminal the highlighted class description.
         :param dump_to: directory to dump.
         :param recursive: Show methods of super classes.
         """
         if self.class_ is None:
-            raise ValueError("Must call reload() before calling show() in async mode.")
+            await self.reload()
+
+        assert self.class_ is not None
 
         formatted = self._to_str(recursive)
         print(highlight(formatted, ObjectiveCLexer(), TerminalTrueColorFormatter(style="native")))
@@ -158,7 +145,6 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
             return
         (Path(dump_to) / f"{self.class_.name}.m").expanduser().write_text(formatted)
 
-    @zyncio.zmethod
     async def objc_call(self, selector: str, *params, **kwargs) -> Any:
         """
         Make objc_call() from self return ObjectiveCSymbol when it's an objc symbol.
@@ -166,7 +152,7 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
         :param params: Additional parameters.
         :return: ObjectiveCSymbol when return type is an objc symbol.
         """
-        symbol = await self._sym.objc_call.z(selector, *params, **kwargs)
+        symbol = await self._sym.objc_call(selector, *params, **kwargs)
         try:
             is_objc_type = self.get_method(selector).return_type == "id"
         except AttributeError:
@@ -269,25 +255,24 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
         result.update(list(super().__dir__()))
         return list(result)
 
-    @zyncio.zmethod
     async def get(
         self, name: str
     ) -> "ObjectiveCSymbol[DarwinSymbolT_co] | DarwinSymbolT_co | Any | BoundObjectiveCMethod[DarwinSymbolT_co]":
         if self.class_ is None:
-            await self.reload.z()
+            await self.reload()
             assert self.class_ is not None
 
         # Ivars
         for ivar in self.ivars:
             if ivar.name == name:
-                if await self._client.is_objc_type.z(ivar.value):
+                if await self._client.is_objc_type(ivar.value):
                     return ivar.value.objc_symbol
                 return ivar.value
 
         # Properties
         for prop in self.properties:
             if prop.name == name:
-                return await self.objc_call.z(name)
+                return await self.objc_call(name)
 
         # Methods
         for method in self.methods:
@@ -307,67 +292,6 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
 
         raise AttributeError(f"{self.class_.name!r} has no attribute {name!r}")
 
-    @overload
-    def __getitem__(self: "ObjectiveCSymbol[DarwinSymbol]", item: int) -> DarwinSymbol: ...
-    @overload
-    def __getitem__(
-        self: "ObjectiveCSymbol[DarwinSymbol]", item: str
-    ) -> "DarwinSymbol | ObjectiveCSymbol[DarwinSymbol] | Any | BoundObjectiveCMethod[DarwinSymbol]": ...
-    def __getitem__(self: "ObjectiveCSymbol[DarwinSymbol]", item: int | str) -> object:
-        if not isinstance(self._sym, DarwinSymbol):
-            raise TypeError(f"indexing on {type(self).__name__} is only supported in sync mode")
-
-        if isinstance(item, int):
-            return self._sym[item]
-
-        return self.get(item)
-
-    def __getattr__(
-        self: "ObjectiveCSymbol[DarwinSymbol]", item: str
-    ) -> "DarwinSymbol | ObjectiveCSymbol[DarwinSymbol] | Any | BoundObjectiveCMethod[DarwinSymbol]":
-        if item in ObjectiveCSymbol._attrs:
-            raise AttributeError(item)
-
-        if not isinstance(self._sym, DarwinSymbol):
-            raise TypeError(f"arbitrary attribute lookup on {type(self).__name__} is only supported in sync mode")
-
-        if self.class_ is None:
-            self.reload()
-            assert self.class_ is not None
-        return self[self.class_.sanitize_name(item)]
-
-    @overload
-    def __setitem__(self: "ObjectiveCSymbol[DarwinSymbolT]", key: str, value: DarwinSymbolT) -> None: ...
-    @overload
-    def __setitem__(self: "ObjectiveCSymbol[DarwinSymbol]", key: int | str, value: DarwinSymbol) -> None: ...
-    def __setitem__(self: "ObjectiveCSymbol[DarwinSymbolT]", key: int | str, value: DarwinSymbolT) -> None:
-        if not isinstance(self._sym, DarwinSymbol):
-            raise TypeError(f"indexing on {type(self).__name__} is only supported in sync mode")
-
-        if isinstance(key, int):
-            self._sym[key] = value
-        else:
-            with suppress(SettingIvarError):
-                zyncio.run_sync(self.set_ivar(key, value))
-
-    def __setattr__(self: "ObjectiveCSymbol[DarwinSymbol]", key: str, value: DarwinSymbol) -> None:
-        if key in self._attrs:
-            return object.__setattr__(self, key, value)
-
-        if self.class_ is None:
-            self.reload()
-            assert self.class_ is not None
-
-        if not isinstance(self._sym, DarwinSymbol):
-            raise TypeError(f"setting Ivars on {type(self).__name__} via __setattr__ is only supported in sync mode")
-
-        with suppress(AttributeError):
-            key = self.class_.sanitize_name(key)
-        try:
-            zyncio.run_sync(self.set_ivar(key, value))
-        except SettingIvarError:
-            super().__setattr__(key, value)
-
     def __str__(self):
         return self._to_str(False)
 
@@ -378,13 +302,5 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     async def call(self, *args: RemoteCallArg) -> DarwinSymbolT_co:
         return await self._sym.call(*args)
 
-    @overload
-    def __call__(self: "ObjectiveCSymbol[SyncDarwinSymbolT_co]", *args: RemoteCallArg) -> SyncDarwinSymbolT_co: ...
-    @overload
-    async def __call__(
-        self: "ObjectiveCSymbol[AsyncDarwinSymbolT_co]", *args: RemoteCallArg
-    ) -> AsyncDarwinSymbolT_co: ...
-    def __call__(self, *args: RemoteCallArg) -> BaseDarwinSymbol | Coroutine[Any, Any, BaseDarwinSymbol]:
-        if zyncio.is_sync(self):
-            return zyncio.run_sync(self.call(*args))
-        return self.call(*args)
+    async def __call__(self, *args: RemoteCallArg) -> DarwinSymbolT_co:
+        return await self.call(*args)

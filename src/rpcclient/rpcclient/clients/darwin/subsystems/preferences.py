@@ -7,13 +7,13 @@ from rpcclient.core._types import ClientBound
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
-class Preferences(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Preferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Preferences utils"""
 
-    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
+    def __init__(self, client: "DarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """

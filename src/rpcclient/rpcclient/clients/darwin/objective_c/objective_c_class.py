@@ -1,9 +1,7 @@
 from collections import namedtuple
-from collections.abc import Coroutine
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, Literal, overload
 
-import zyncio
 from pygments import highlight
 from pygments.formatters import TerminalTrueColorFormatter
 from pygments.lexers import ObjectiveCLexer
@@ -17,22 +15,21 @@ from rpcclient.exceptions import GettingObjectiveCClassError
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient
+    from rpcclient.clients.darwin.client import DarwinClient
     from rpcclient.clients.darwin.objective_c.objective_c_symbol import ObjectiveCSymbol
-    from rpcclient.clients.darwin.symbol import AsyncDarwinSymbol, DarwinSymbol
 
 
 Ivar = namedtuple("Ivar", "name type_ offset")
 
 
-class Class(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Class(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Wrapper for ObjectiveC Class object.
     """
 
     def __init__(
         self,
-        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        client: "DarwinClient[DarwinSymbolT_co]",
         class_object: int = 0,
         class_data: dict | None = None,
         lazy: bool = False,
@@ -51,24 +48,23 @@ class Class(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
         self.super = None
         if not lazy:
             if class_data is None:
-                if not zyncio.is_sync(self):
-                    raise TypeError("non-lazy initialization is not supported on async clients")
-                self.reload()
-            else:
-                self._load_class_data(class_data)
+                raise TypeError(
+                    "non-lazy initialization without class_data is not supported; use lazy=True and await reload()"
+                )
+            self._load_class_data(class_data)
 
     @staticmethod
-    async def from_class_name(client: "BaseDarwinClient[DarwinSymbolT]", class_name: str) -> "Class[DarwinSymbolT]":
+    async def from_class_name(client: "DarwinClient[DarwinSymbolT]", class_name: str) -> "Class[DarwinSymbolT]":
         """
         Create ObjectiveC Class from given class name.
         :param rpcclient.darwin.client.DarwinClient client: Darwin client.
         :param class_name: Class name.
         """
-        class_object = await client.symbols.objc_getClass.z(class_name)
+        class_object = await client.symbols.objc_getClass(class_name)
         if not class_object:
             raise GettingObjectiveCClassError()
         class_symbol = Class(client, class_object, lazy=True)
-        await class_symbol.reload.z()
+        await class_symbol.reload()
         if class_symbol.name != class_name:
             raise GettingObjectiveCClassError()
         return class_symbol
@@ -81,18 +77,17 @@ class Class(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
         name = "_" + name[1:].replace("_", ":") if name.startswith("_") else name.replace("_", ":")
         return name
 
-    @zyncio.zmethod
     async def reload(self) -> None:
         """
         Reload class object data.
         Should be used whenever the class layout changes (for example, during method swizzling)
         """
-        objc_class = self._class_object if self._class_object else await self._client.symbols.objc_getClass.z(self.name)
-        class_description = await self._client.showclass.z(objc_class)
+        objc_class = self._class_object if self._class_object else await self._client.symbols.objc_getClass(self.name)
+        class_description = await self._client.showclass(objc_class)
 
         self.super = Class(self._client, class_description["super"], lazy=True) if class_description["super"] else None
         if self.super is not None:
-            await self.super.reload.z()
+            await self.super.reload()
         self.name = class_description["name"]
         self.protocols = class_description["protocols"]
         self.ivars = [
@@ -116,14 +111,13 @@ class Class(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
             return
         (Path(dump_to) / f"{self.name}.m").expanduser().write_text(formatted)
 
-    @zyncio.zmethod
     async def objc_call(self, sel: str, *args, **kwargs) -> DarwinSymbolT_co:
         """
         Invoke a selector on the given class object.
         :param sel: Selector name.
         :return: whatever the selector returned as a symbol.
         """
-        return await self._class_object.objc_call.z(sel, *args, **kwargs)
+        return await self._class_object.objc_call(sel, *args, **kwargs)
 
     def get_method(self, name: str) -> objc.Method[DarwinSymbolT_co] | None:
         """
@@ -163,17 +157,16 @@ class Class(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
 
         return jar
 
-    @zyncio.zproperty
     async def bundle_path(self) -> Path:
         return Path(
             str(
                 await (
                     await (
-                        await (await self._client.symbols.objc_getClass.z("NSBundle")).objc_call.z(
+                        await (await self._client.symbols.objc_getClass("NSBundle")).objc_call(
                             "bundleForClass:", self._class_object
                         )
-                    ).objc_call.z("bundlePath")
-                ).py.z()
+                    ).objc_call("bundlePath")
+                ).py()
             )
         )
 
@@ -253,76 +246,27 @@ class BoundObjectiveCMethod(Generic[DarwinSymbolT_co]):
         self.sel: str = sel
 
     @overload
-    def __call__(
-        self: "BoundObjectiveCMethod[DarwinSymbol]",
-        *args: RemoteCallArg,
-        return_float64: Literal[False] = False,
-        return_float32: Literal[False] = False,
-        return_raw: Literal[False] = False,
-        va_list_index: int | None = None,
-    ) -> "DarwinSymbol": ...
-    @overload
-    def __call__(
-        self: "BoundObjectiveCMethod[DarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_float64: Literal[True],
-        va_list_index: int | None = None,
-    ) -> float: ...
-    @overload
-    def __call__(
-        self: "BoundObjectiveCMethod[DarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_float32: Literal[True],
-        va_list_index: int | None = None,
-    ) -> float: ...
-    @overload
-    def __call__(
-        self: "BoundObjectiveCMethod[DarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_raw: Literal[True],
-        va_list_index: int | None = None,
-    ) -> Any: ...
-    @overload
-    def __call__(
-        self: "BoundObjectiveCMethod[DarwinSymbol]", *args: "RemoteCallArg", **kwargs
-    ) -> "float | DarwinSymbol | Any": ...
-    @overload
     async def __call__(
-        self: "BoundObjectiveCMethod[AsyncDarwinSymbol]",
+        self,
         *args: "RemoteCallArg",
         return_float64: Literal[False] = False,
         return_float32: Literal[False] = False,
         return_raw: Literal[False] = False,
         va_list_index: int | None = None,
-    ) -> "AsyncDarwinSymbol": ...
+    ) -> DarwinSymbolT_co: ...
     @overload
     async def __call__(
-        self: "BoundObjectiveCMethod[AsyncDarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_float64: Literal[True],
-        va_list_index: int | None = None,
+        self, *args: "RemoteCallArg", return_float64: Literal[True], va_list_index: int | None = None
     ) -> float: ...
     @overload
     async def __call__(
-        self: "BoundObjectiveCMethod[AsyncDarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_float32: Literal[True],
-        va_list_index: int | None = None,
+        self, *args: "RemoteCallArg", return_float32: Literal[True], va_list_index: int | None = None
     ) -> float: ...
     @overload
     async def __call__(
-        self: "BoundObjectiveCMethod[AsyncDarwinSymbol]",
-        *args: "RemoteCallArg",
-        return_raw: Literal[True],
-        va_list_index: int | None = None,
+        self, *args: "RemoteCallArg", return_raw: Literal[True], va_list_index: int | None = None
     ) -> Any: ...
     @overload
-    async def __call__(
-        self: "BoundObjectiveCMethod[AsyncDarwinSymbol]", *args: "RemoteCallArg", **kwargs
-    ) -> "float | AsyncDarwinSymbol | Any": ...
-    def __call__(
-        self, *args: "RemoteCallArg", **kwargs
-    ) -> "float | DarwinSymbol | Any | Coroutine[Any, Any, float | AsyncDarwinSymbol | Any]":
-        if zyncio.is_sync(self.target):
-            return self.target.objc_call(self.sel, *args, **kwargs)
-        return self.target.objc_call.z(self.sel, *args, **kwargs)
+    async def __call__(self, *args: "RemoteCallArg", **kwargs) -> "float | DarwinSymbolT_co | Any": ...
+    async def __call__(self, *args: "RemoteCallArg", **kwargs) -> "float | DarwinSymbolT_co | Any":
+        return await self.target.objc_call(self.sel, *args, **kwargs)

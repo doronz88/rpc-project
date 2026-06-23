@@ -1,12 +1,9 @@
-import asyncio
-import time
 from collections.abc import Callable, Coroutine
 from functools import wraps
 from typing import Any, TypeVar, cast
 
 import click
 import inquirer3
-import zyncio
 from inquirer3.themes import GreenPassion
 
 
@@ -74,17 +71,3 @@ def cached_async_method(func: AsyncMethodT) -> AsyncMethodT:
 def assert_cast(typ: type[T] | tuple[type[T], ...], obj: object) -> T:
     assert isinstance(obj, typ)
     return obj
-
-
-def zync_mode(obj: object) -> zyncio.Mode:
-    mode = zyncio.get_mode(obj)
-    if mode is None:
-        raise TypeError(f"{type(obj).__name__} has no zyncio mode")
-    return mode
-
-
-async def zync_sleep(mode: zyncio.Mode, seconds: float) -> None:
-    if mode is zyncio.SYNC:
-        time.sleep(seconds)
-    else:
-        await asyncio.sleep(seconds)

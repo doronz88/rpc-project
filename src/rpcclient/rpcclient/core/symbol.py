@@ -2,12 +2,11 @@ import abc
 import ctypes
 import os
 import struct
-from collections.abc import Generator
+from collections.abc import Coroutine, Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast, final, overload
 from typing_extensions import Self
 
-import zyncio
 from capstone import CS_ARCH_ARM64, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs, CsInsn
 
 from rpcclient.core.structs.generic import Dl_info
@@ -18,50 +17,14 @@ from rpcclient.utils import readonly
 if TYPE_CHECKING:
     from construct import Construct, Container, ParsedType
 
-    from rpcclient.core.client import BaseCoreClient, RemoteCallArg
+    from rpcclient.core.client import CoreClient, RemoteCallArg
 
 
 ADDRESS_SIZE_TO_STRUCT_FORMAT = {1: "B", 2: "H", 4: "I", 8: "Q"}
 RETVAL_BIT_COUNT = 64
 
 
-SymbolT_co = TypeVar("SymbolT_co", bound="BaseSymbol", covariant=True)
-
-
-# `call` is defined here for type checking reasons.
-# If it was defined in `BaseSymbol`, type checkers would
-# assume that returned symbols are always `BaseSymbol`, even
-# when called on a subclass (i.e. `AsyncSymbol(...).call()` would
-# be assumed to be of type `BaseSymbol` instead of `AsyncSymbol`).
-@overload
-async def call(
-    self: SymbolT_co,
-    *args: "RemoteCallArg",
-    return_float64: Literal[False] = False,
-    return_float32: Literal[False] = False,
-    return_raw: Literal[False] = False,
-    va_list_index: int | None = None,
-) -> SymbolT_co: ...
-@overload
-async def call(
-    self: "BaseSymbol", *args: "RemoteCallArg", return_float64: Literal[True], va_list_index: int | None = None
-) -> float: ...
-@overload
-async def call(
-    self: "BaseSymbol", *args: "RemoteCallArg", return_float32: Literal[True], va_list_index: int | None = None
-) -> float: ...
-@overload
-async def call(
-    self: "BaseSymbol", *args: "RemoteCallArg", return_raw: Literal[True], va_list_index: int | None = None
-) -> Any: ...
-@overload
-async def call(self: SymbolT_co, *args: "RemoteCallArg", **kwargs) -> float | SymbolT_co | Any: ...
-async def call(self: SymbolT_co, *args: "RemoteCallArg", **kwargs) -> float | SymbolT_co | Any:
-    """Call this symbol as a function pointer."""
-    return await self._client.call.z(self, args, **kwargs)
-
-
-call.__qualname__ = "BaseSymbol.call"
+SymbolT_co = TypeVar("SymbolT_co", bound="Symbol", covariant=True)
 
 
 class AbstractSymbol(int, abc.ABC):
@@ -100,15 +63,12 @@ class AbstractSymbol(int, abc.ABC):
         finally:
             self.item_size = save_item_size
 
-    @zyncio.zmethod
     @abc.abstractmethod
     async def peek(self, count: int, offset: int = 0) -> bytes: ...
 
-    @zyncio.zmethod
     @abc.abstractmethod
     async def poke(self, buf: bytes, offset: int = 0) -> Any: ...
 
-    @zyncio.zmethod
     @abc.abstractmethod
     async def peek_str(self, encoding="utf-8") -> str:
         """peek string at given address"""
@@ -126,17 +86,15 @@ class AbstractSymbol(int, abc.ABC):
         else:
             raise OSError("Unsupported whence")
 
-    @zyncio.zmethod
     async def read(self, count: int) -> bytes:
         """Construct compliance."""
-        val = await (self + self._offset).peek.z(count)
+        val = await (self + self._offset).peek(count)
         self._offset += count
         return val
 
-    @zyncio.zmethod
     async def write(self, buf: bytes) -> None:
         """Construct compliance."""
-        val = await (self + self._offset).poke.z(buf)
+        val = await (self + self._offset).poke(buf)
         self._offset += len(buf)
         return val
 
@@ -148,7 +106,6 @@ class AbstractSymbol(int, abc.ABC):
     @abc.abstractmethod
     def arch(self) -> object: ...
 
-    @zyncio.zmethod
     async def disass(self, size=40) -> list[CsInsn]:
         """peek disassembled lines of 'size' bytes"""
         cs = (
@@ -158,7 +115,7 @@ class AbstractSymbol(int, abc.ABC):
             else Cs(CS_ARCH_X86, CS_MODE_LITTLE_ENDIAN | CS_MODE_64)
         )
 
-        return list(cs.disasm(await self.peek.z(size), self))
+        return list(cs.disasm(await self.peek(size), self))
 
     @property
     def c_int64(self) -> int:
@@ -195,21 +152,17 @@ class AbstractSymbol(int, abc.ABC):
         """cast to c_bool"""
         return ctypes.c_bool(self).value
 
-    @zyncio.zmethod
     @abc.abstractmethod
     async def get_dl_info(self) -> "Container": ...
 
-    @zyncio.zproperty
     async def dl_info(self) -> "Container":
-        return await self.get_dl_info.z()
+        return await self.get_dl_info()
 
-    @zyncio.zproperty
     async def name(self) -> str:
-        return (await (self).get_dl_info.z()).dli_sname
+        return (await self.get_dl_info()).dli_sname
 
-    @zyncio.zproperty
     async def filename(self) -> str:
-        return (await (self).get_dl_info.z()).dli_fname
+        return (await self.get_dl_info()).dli_fname
 
     @property
     @abc.abstractmethod
@@ -218,7 +171,7 @@ class AbstractSymbol(int, abc.ABC):
     async def getindex(self, index: int, *indices: int) -> Self:
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         new_symbol = self._symbol_from_value(
-            struct.unpack(self.endianness + fmt, await self.peek.z(self.item_size, offset=index * self.item_size))[0]
+            struct.unpack(self.endianness + fmt, await self.peek(self.item_size, offset=index * self.item_size))[0]
         )
         if indices:
             return await new_symbol.getindex(*indices)
@@ -227,11 +180,19 @@ class AbstractSymbol(int, abc.ABC):
     async def setindex(self, index: int, value) -> None:
         fmt = ADDRESS_SIZE_TO_STRUCT_FORMAT[self.item_size]
         value = struct.pack(self.endianness + fmt, int(value))
-        await self.poke.z(value, offset=index * self.item_size)
+        await self.poke(value, offset=index * self.item_size)
 
-    @zyncio.zmethod
+    def __getitem__(self, item: int) -> Coroutine[Any, Any, Self]:
+        """Read a remote item: ``await sym[i]`` (awaitable alias for ``getindex``)."""
+        return self.getindex(item)
+
+    def __setitem__(self, item: int, value) -> None:
+        raise TypeError(
+            "item assignment can't be awaited; use `await sym.setindex(index, value)` instead of `sym[index] = value`"
+        )
+
     async def parse(self, struct: "Construct[ParsedType, Any]") -> "ParsedType":
-        return struct.parse(await self.peek.z(struct.sizeof()))
+        return struct.parse(await self.peek(struct.sizeof()))
 
     def __add__(self, other) -> Self:
         try:
@@ -288,13 +249,13 @@ class AbstractSymbol(int, abc.ABC):
         return hex(self)
 
 
-class BaseSymbol(AbstractSymbol):
+class Symbol(AbstractSymbol):
     """wrapper for a remote symbol object"""
 
     @readonly
-    def _client(self) -> "BaseCoreClient[Self]": ...
+    def _client(self) -> "CoreClient[Self]": ...
 
-    def __init__(self, value: int, client: "BaseCoreClient[Self]") -> None:
+    def __init__(self, value: int, client: "CoreClient[Self]") -> None:
         """
         Create a Symbol object.
         :param value: Symbol address.
@@ -319,34 +280,30 @@ class BaseSymbol(AbstractSymbol):
         :return: Symbol object.
         :rtype: Symbol
         """
-        return type(self)(value, cast("BaseCoreClient", self._client))
+        return type(self)(value, cast("CoreClient", self._client))
 
-    @zyncio.zmethod
     async def peek(self, count: int, offset: int = 0) -> bytes:
-        return await self._client.peek.z(self + offset, count)
+        return await self._client.peek(self + offset, count)
 
-    @zyncio.zmethod
     async def poke(self, buf: bytes, offset: int = 0) -> Any:
-        return await self._client.poke.z(self + offset, buf)
+        return await self._client.poke(self + offset, buf)
 
-    @zyncio.zmethod
     async def peek_str(self, encoding="utf-8") -> str:
         """peek string at given address"""
-        str_len = await self._client.symbols.strlen.z(self)
-        return (await self.peek.z(str_len)).decode(encoding)
+        str_len = await self._client.symbols.strlen(self)
+        return (await self.peek(str_len)).decode(encoding)
 
     @property
     def arch(self) -> object:
         return self._client.arch
 
-    @zyncio.zmethod
     async def get_dl_info(self) -> "Container":
         dl_info = Dl_info(self._client)
         sizeof = dl_info.sizeof()
-        async with self._client.safe_malloc.z(sizeof) as info:
-            if await self._client.symbols.dladdr.z(self, info) == 0:
-                await self._client.raise_errno_exception.z(f"failed to extract info for: {self}")
-            return dl_info.parse(await info.read.z(sizeof))
+        async with self._client.safe_malloc(sizeof) as info:
+            if await self._client.symbols.dladdr(self, info) == 0:
+                await self._client.raise_errno_exception(f"failed to extract info for: {self}")
+            return dl_info.parse(await info.read(sizeof))
 
     @property
     def endianness(self) -> str:
@@ -359,22 +316,31 @@ class BaseSymbol(AbstractSymbol):
         """
         return self
 
-    call = call
-    """Always-async version of __call__, for writing zyncio interfaces."""
+    @overload
+    async def call(
+        self,
+        *args: "RemoteCallArg",
+        return_float64: Literal[False] = False,
+        return_float32: Literal[False] = False,
+        return_raw: Literal[False] = False,
+        va_list_index: int | None = None,
+    ) -> Self: ...
+    @overload
+    async def call(
+        self, *args: "RemoteCallArg", return_float64: Literal[True], va_list_index: int | None = None
+    ) -> float: ...
+    @overload
+    async def call(
+        self, *args: "RemoteCallArg", return_float32: Literal[True], va_list_index: int | None = None
+    ) -> float: ...
+    @overload
+    async def call(
+        self, *args: "RemoteCallArg", return_raw: Literal[True], va_list_index: int | None = None
+    ) -> Any: ...
+    @overload
+    async def call(self, *args: "RemoteCallArg", **kwargs) -> "float | Self | Any": ...
+    async def call(self, *args: "RemoteCallArg", **kwargs) -> "float | Self | Any":
+        """Call this symbol as a function pointer."""
+        return await self._client.call(self, args, **kwargs)
 
-    z = call
-    """Alias for `call`, for parity with other zyncio-callables."""
-
-
-class Symbol(zyncio.SyncMixin, BaseSymbol):
-    __call__ = zyncio.make_sync(call)
-
-    def __getitem__(self, item: int) -> Self:
-        return zyncio.run_sync(self.getindex(item))
-
-    def __setitem__(self, item: int, value) -> None:
-        zyncio.run_sync(self.setindex(item, value))
-
-
-class AsyncSymbol(zyncio.AsyncMixin, BaseSymbol):
     __call__ = call

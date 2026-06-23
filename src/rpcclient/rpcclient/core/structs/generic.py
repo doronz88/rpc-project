@@ -27,10 +27,10 @@ from rpcclient.core.structs.consts import AF_INET, AF_INET6, AF_UNIX
 
 
 if TYPE_CHECKING:
-    from rpcclient.core.client import BaseCoreClient
-    from rpcclient.core.symbols_jar import BaseSymbol
+    from rpcclient.core.client import CoreClient
+    from rpcclient.core.symbols_jar import Symbol
 
-SymbolT_co = TypeVar("SymbolT_co", bound="BaseSymbol", covariant=True)
+SymbolT_co = TypeVar("SymbolT_co", bound="Symbol", covariant=True)
 
 UNIX_PATH_MAX = 104
 
@@ -102,18 +102,18 @@ class SymbolFormatField(FormatField, Generic[SymbolT_co]):
 
     if TYPE_CHECKING:
 
-        def __new__(cls, client: "BaseCoreClient[SymbolT_co]") -> Self: ...
+        def __new__(cls, client: "CoreClient[SymbolT_co]") -> Self: ...
 
-    def __init__(self, client: "BaseCoreClient[SymbolT_co]") -> None:
+    def __init__(self, client: "CoreClient[SymbolT_co]") -> None:
         super().__init__("<", "Q")  # pyright: ignore[reportCallIssue]
-        self._client: BaseCoreClient[SymbolT_co] = client
+        self._client: CoreClient[SymbolT_co] = client
 
     def _parse(self, stream, context, path) -> SymbolT_co:
         return self._client.symbol(FormatField._parse(self, stream, context, path))
 
 
-async def parse_hostent(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
-    hostent = await ptr.parse.z(
+async def parse_hostent(client: "CoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
+    hostent = await ptr.parse(
         Struct(
             "h_name" / SymbolFormatField(client),
             "h_aliases" / SymbolFormatField(client),
@@ -122,12 +122,12 @@ async def parse_hostent(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -
             "h_addr_list" / SymbolFormatField(client),
         )
     )
-    hostent["h_name"] = await hostent.h_name.peek_str.z("utf-8")
+    hostent["h_name"] = await hostent.h_name.peek_str("utf-8")
     return hostent
 
 
-async def parse_ifaddrs(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
-    ifaddrs = await ptr.parse.z(
+async def parse_ifaddrs(client: "CoreClient[SymbolT_co]", ptr: SymbolT_co) -> Container:
+    ifaddrs = await ptr.parse(
         Struct(
             "ifa_next" / SymbolFormatField(client),
             "ifa_name" / SymbolFormatField(client),
@@ -144,7 +144,7 @@ async def parse_ifaddrs(client: "BaseCoreClient[SymbolT_co]", ptr: SymbolT_co) -
         ifaddrs["ifa_next"] = await parse_ifaddrs(client, ifaddrs.ifa_next)
 
     if ifaddrs.ifa_name != 0:
-        ifaddrs["ifa_name"] = await ifaddrs.ifa_name.peek_str.z("utf-8")
+        ifaddrs["ifa_name"] = await ifaddrs.ifa_name.peek_str("utf-8")
 
     return ifaddrs
 

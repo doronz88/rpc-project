@@ -1,13 +1,9 @@
-import abc
 import asyncio
 import logging
 import socket
 import struct
-import threading
 from collections.abc import AsyncGenerator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
-
-import zyncio
+from contextlib import asynccontextmanager
 
 from rpcclient.exceptions import ServerDiedError
 from rpcclient.protos.rpc_pb2 import Handshake, ProtocolConstants, RpcMessage, RpcPtyMessage
@@ -19,7 +15,7 @@ logger = logging.getLogger(__name__)
 SIZE_HEADER_STRUCT = struct.Struct("<Q")
 
 
-class RpcSocket(abc.ABC):
+class RpcSocket:
     """
     Facilitates communication with a remote server using sockets and implements
     specific RPC (Remote Procedure Call) messaging protocols.
@@ -35,9 +31,12 @@ class RpcSocket(abc.ABC):
 
     def __init__(self, sock: socket.socket) -> None:
         self.raw_socket: socket.socket = sock
+        self._protocol_lock: asyncio.Lock = asyncio.Lock()
 
-    @abc.abstractmethod
-    def _acquire_protocol_lock(self) -> AbstractAsyncContextManager[None]: ...
+    @asynccontextmanager
+    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
+        async with self._protocol_lock:
+            yield
 
     async def _msg_recv(self) -> bytes:
         try:
@@ -49,16 +48,10 @@ class RpcSocket(abc.ABC):
 
     async def _msg_send(self, message: bytes) -> None:
         buff = SIZE_HEADER_STRUCT.pack(len(message)) + message
-        if zyncio.is_sync(self):
-            self.raw_socket.sendall(buff)
-        else:
-            await asyncio.get_running_loop().sock_sendall(self.raw_socket, buff)
+        await asyncio.get_running_loop().sock_sendall(self.raw_socket, buff)
 
     async def _recv(self, size: int) -> bytes:
-        if zyncio.is_sync(self):
-            return self.raw_socket.recv(size)
-        else:
-            return await asyncio.get_running_loop().sock_recv(self.raw_socket, size)
+        return await asyncio.get_running_loop().sock_recv(self.raw_socket, size)
 
     async def _recvall(self, size: int) -> bytes:
         buf = b""
@@ -74,54 +67,27 @@ class RpcSocket(abc.ABC):
             buf += chunk
         return buf
 
-    @zyncio.zmethod
     async def rpc_handshake_recv(self) -> Handshake:
         rpc_handshake = Handshake()
         rpc_handshake.ParseFromString(await self._msg_recv())
         return rpc_handshake
 
-    @zyncio.zmethod
     async def rpc_msg_recv(self) -> RpcMessage:
         rpc_msg = RpcMessage()
         rpc_msg.ParseFromString(await self._msg_recv())
         return rpc_msg
 
-    @zyncio.zmethod
     async def rpc_msg_recv_pty(self) -> RpcPtyMessage:
         rpc_msg = RpcPtyMessage()
         rpc_msg.ParseFromString(await self._msg_recv())
         return rpc_msg
 
-    @zyncio.zmethod
     async def rpc_msg_send(self, msg: RpcMessage) -> None:
         msg.magic = ProtocolConstants.MESSAGE_MAGIC
         rpc_msg = msg.SerializeToString()
         await self._msg_send(rpc_msg)
 
-    @zyncio.zmethod
     async def rpc_msg_send_recv(self, msg: RpcMessage) -> RpcMessage:
         async with self._acquire_protocol_lock():
-            await self.rpc_msg_send.z(msg)
-            return await self.rpc_msg_recv.z()
-
-
-class SyncRpcSocket(zyncio.SyncMixin, RpcSocket):
-    def __init__(self, sock: socket.socket) -> None:
-        self._protocol_lock: threading.Lock = threading.Lock()
-        super().__init__(sock)
-
-    @asynccontextmanager
-    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
-        with self._protocol_lock:
-            yield
-
-
-class AsyncRpcSocket(zyncio.AsyncMixin, RpcSocket):
-    def __init__(self, sock: socket.socket) -> None:
-        self._protocol_lock: asyncio.Lock = asyncio.Lock()
-        super().__init__(sock)
-
-    @asynccontextmanager
-    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
-        async with self._protocol_lock:
-            yield
+            await self.rpc_msg_send(msg)
+            return await self.rpc_msg_recv()
