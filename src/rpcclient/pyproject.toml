@@ -55,6 +55,7 @@ dependencies = [
     "requests",
     "protobuf",
     "inquirer3",
+    "ipython-smart-await>=0.1.0",
 ]
 
 [project.optional-dependencies]

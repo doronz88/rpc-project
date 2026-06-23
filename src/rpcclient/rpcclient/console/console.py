@@ -145,6 +145,7 @@ class Console:
         ipython_config.BaseIPythonApplication.profile = "rpcclient"
         ipython_config.TerminalInteractiveShell.prompts_class = "rpcclient.console.prompt.RpcPrompt"
         ipython_config.InteractiveShellApp.extensions = [
+            "smart_await",
             "rpcclient.console.extensions.events",
             "rpcclient.console.extensions.keybindings",
         ]
