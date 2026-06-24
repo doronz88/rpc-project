@@ -1,3 +1,4 @@
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic
@@ -15,7 +16,7 @@ from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol
 from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
-from rpcclient.utils import readonly
+from rpcclient.utils import readonly, run_in_loop
 
 
 if TYPE_CHECKING:
@@ -239,10 +240,21 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
         return jar
 
     def __dir__(self):
+        # Completions need the class loaded; load it synchronously on the shared loop the first
+        # time (cached via `class_`). Guarded so introspection never raises (e.g. if the loop is
+        # already running, or the object isn't a real ObjC instance).
+        if self.class_ is None:
+            with suppress(Exception):
+                run_in_loop(self.reload())
+
         result = set()
 
         for ivar in self.ivars:
             result.add(ivar.name)
+
+        # Properties (e.g. `length`) are resolved by `get`/`__getattr__`, so surface them too.
+        for prop in self.properties:
+            result.add(prop.name)
 
         for method in self.methods:
             result.add(method.name.replace(":", "_"))
