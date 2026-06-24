@@ -1,47 +1,45 @@
-import abc
 import logging
-from typing import Generic, TypeVar
+from collections.abc import Awaitable, Callable
 
-import zyncio
-
-from rpcclient.clients.ios.client import AsyncIosClient, IosClient
-from rpcclient.clients.linux.client import AsyncLinuxClient, LinuxClient
-from rpcclient.clients.macos.client import AsyncMacosClient, MacosClient
-from rpcclient.core.client import AsyncCoreClient, BaseCoreClient, ClientEvent, CoreClient
-from rpcclient.core.symbol import AsyncSymbol, Symbol
+from rpcclient.clients.ios.client import IosClient
+from rpcclient.clients.linux.client import LinuxClient
+from rpcclient.clients.macos.client import MacosClient
+from rpcclient.core.client import ClientEvent, CoreClient
+from rpcclient.core.symbol import Symbol
 from rpcclient.event_notifier import EventNotifier
-from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
+from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.registry import Registry
 from rpcclient.transports import create_local, create_tcp, create_using_protocol
-from rpcclient.utils import prompt_selection, zync_mode
+from rpcclient.utils import prompt_selection
 
 
 logger = logging.getLogger(__name__)
 
-ClientT = TypeVar("ClientT", bound=BaseCoreClient)
+ClientType = CoreClient[Symbol]
 
 
-class BaseClientManager(Generic[ClientT], abc.ABC):
+class ClientManager:
     """Manage client lifecycle and dispatch client-related events."""
 
     def __init__(self) -> None:
         """Initialize registries, notifier, and register default factories/transports."""
         self.notifier: EventNotifier = EventNotifier()
-        self.client_factory: Registry[str, type[ClientT]] = self._init_client_factory_registry()
+        self.client_factory: Registry[str, type[ClientType]] = Registry[str, type[ClientType]]({
+            "ios": IosClient,
+            "osx": MacosClient,
+            "linux": LinuxClient,
+            "core": CoreClient,
+        })
 
-        self.transport_factory: Registry[str, zyncio.zfunc[..., SyncRpcBridge | AsyncRpcBridge]] = Registry({
+        self.transport_factory: Registry[str, Callable[..., Awaitable[RpcBridge]]] = Registry({
             "tcp": create_tcp,
             "local": create_local,
             "protocol": create_using_protocol,
         })
 
-        self._clients: Registry[int, ClientT] = Registry(notifier=self.notifier)
+        self._clients: Registry[int, ClientType] = Registry(notifier=self.notifier)
 
-    @abc.abstractmethod
-    def _init_client_factory_registry(self) -> Registry[str, type[ClientT]]: ...
-
-    @zyncio.zmethod
-    async def create(self, mode: str = "tcp", internal: bool = False, **kwargs) -> ClientT:
+    async def create(self, mode: str = "tcp", internal: bool = False, **kwargs) -> ClientType:
         """
         Create a client via transport `mode`, resolve platform, store, and emit CREATED.
 
@@ -57,7 +55,7 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         if mode == "protocol" and "client" not in kwargs:
             kwargs["client"] = self._select_capable_client()
 
-        rpc_bridge = await transport_factory.call_zync(zync_mode(self), **kwargs)
+        rpc_bridge = await transport_factory(**kwargs)
         server_type = rpc_bridge.platform
         cached = self.get(rpc_bridge.client_id)
         if cached is not None:
@@ -67,7 +65,7 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         if client_factory is None:
             raise ValueError(f"Unknown client mode: {server_type}")
 
-        client: ClientT = await client_factory.create.z(bridge=rpc_bridge)
+        client: ClientType = await client_factory.create(bridge=rpc_bridge)
         client.notifier.register(ClientEvent.TERMINATED, self._on_client_terminated)
         client.notifier.register(ClientEvent.CREATED, self._on_client_created)
         self.add(client, internal=internal)
@@ -83,7 +81,7 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         else:
             return prompt_selection(capable, "Select a client client ID")
 
-    def add(self, client: ClientT, internal: bool = False) -> None:
+    def add(self, client: ClientType, internal: bool = False) -> None:
         """
         Add a client to the registry; emit REGISTERED if successful.
 
@@ -99,22 +97,21 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         """Remove all clients."""
         self._clients.clear()
 
-    @zyncio.zmethod
     async def close_all(self) -> None:
         """Close all clients and remove them from the registry."""
         for client in list(self.clients.values()):
             try:
-                await client.close.z()
+                await client.close()
             except Exception:
                 logger.exception("Failed to close client %s", client.id)
         self.clear()
 
-    def get(self, cid: int) -> ClientT | None:
+    def get(self, cid: int) -> ClientType | None:
         """Return the client for ID, or None."""
         return self._clients.get(cid)
 
     @property
-    def clients(self) -> dict[int, ClientT]:
+    def clients(self) -> dict[int, ClientType]:
         return dict(self._clients.items())
 
     # ---------------------------------------------------------------------------
@@ -125,26 +122,6 @@ class BaseClientManager(Generic[ClientT], abc.ABC):
         """Internal: remove a client when it terminates."""
         self.remove(cid)
 
-    def _on_client_created(self, client: ClientT) -> None:
+    def _on_client_created(self, client: ClientType) -> None:
         """Internal: Add a client when if created by another client."""
         self.add(client)
-
-
-class ClientManager(zyncio.SyncMixin, BaseClientManager[CoreClient[Symbol]]):
-    def _init_client_factory_registry(self) -> Registry[str, type[CoreClient]]:
-        return Registry[str, type[CoreClient]]({
-            "ios": IosClient,
-            "osx": MacosClient,
-            "linux": LinuxClient,
-            "core": CoreClient,
-        })
-
-
-class AsyncClientManager(zyncio.AsyncMixin, BaseClientManager[AsyncCoreClient[AsyncSymbol]]):
-    def _init_client_factory_registry(self) -> Registry[str, type[AsyncCoreClient]]:
-        return Registry[str, type[AsyncCoreClient]]({
-            "ios": AsyncIosClient,
-            "osx": AsyncMacosClient,
-            "linux": AsyncLinuxClient,
-            "core": AsyncCoreClient,
-        })

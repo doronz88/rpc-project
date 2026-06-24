@@ -6,7 +6,7 @@ from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.subsystems.decorator import SubsystemNotAvailable, subsystem
 from rpcclient.exceptions import ArgumentError
-from tests._types import AsyncClient, SyncClient
+from tests._types import Client
 
 
 def _get_subsystems(client) -> list[str]:
@@ -18,36 +18,24 @@ def _get_subsystems(client) -> list[str]:
     return sorted(names)
 
 
-def test_peek(client: SyncClient) -> None:
-    with client.safe_malloc(0x100) as peekable:
-        client.peek(peekable, 0x100)
+async def test_peek(client: Client) -> None:
+    async with client.safe_malloc(0x100) as peekable:
+        await client.peek(peekable, 0x100)
 
 
-def test_poke(client: SyncClient) -> None:
-    with client.safe_malloc(0x100) as peekable:
-        client.poke(peekable, b"a" * 0x100)
-
-
-@pytest.mark.asyncio
-async def test_peek_async(async_client: AsyncClient) -> None:
-    async with async_client.safe_malloc(0x100) as peekable:
-        await async_client.peek(peekable, 0x100)
-
-
-@pytest.mark.asyncio
-async def test_poke_async(async_client: AsyncClient) -> None:
-    async with async_client.safe_malloc(0x100) as peekable:
-        await async_client.poke(peekable, b"a" * 0x100)
+async def test_poke(client: Client) -> None:
+    async with client.safe_malloc(0x100) as peekable:
+        await client.poke(peekable, b"a" * 0x100)
 
 
 @pytest.mark.parametrize(
     "params", [([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])]
 )
-def test_16args(client: SyncClient, params: list[int]) -> None:
-    with client.safe_malloc(0x100) as peekable:
-        client.symbols.test_16args(peekable, *params)
+async def test_16args(client: Client, params: list[int]) -> None:
+    async with client.safe_malloc(0x100) as peekable:
+        await client.symbols.test_16args(peekable, *params)
         for i in range(len(params)):
-            assert peekable[i] == params[i]
+            assert await peekable.getindex(i) == params[i]
 
 
 @pytest.mark.parametrize(
@@ -62,57 +50,57 @@ def test_16args(client: SyncClient, params: list[int]) -> None:
     ],
 )
 @pytest.mark.arm
-def test_va_list_call(client: SyncClient, va_list_index: int, params: Iterable[RemoteCallArg], expected: str) -> None:
-    with client.safe_malloc(0x100) as peekable:
-        client.symbols.sprintf(peekable, *params, va_list_index=va_list_index)
-        assert expected == peekable.peek_str()
+async def test_va_list_call(client: Client, va_list_index: int, params: Iterable[RemoteCallArg], expected: str) -> None:
+    async with client.safe_malloc(0x100) as peekable:
+        await client.symbols.sprintf(peekable, *params, va_list_index=va_list_index)
+        assert expected == await peekable.peek_str()
 
 
 @pytest.mark.arm
-def test_floating_point_call(client: SyncClient) -> None:
-    assert client.symbols.sqrt(16.0, return_float64=True) == 4.0
+async def test_floating_point_call(client: Client) -> None:
+    assert await client.symbols.sqrt(16.0, return_float64=True) == 4.0
 
 
-def test_peek_invalid_address(client: SyncClient) -> None:
+async def test_peek_invalid_address(client: Client) -> None:
     # Server config: -DSAFE_WRITE raises ArgumentError for invalid address; else, ConnectionError.
     with pytest.raises((ArgumentError, ConnectionError)):
-        client.peek(0, 0x10)
+        await client.peek(0, 0x10)
 
 
-def test_poke_invalid_address(client: SyncClient) -> None:
+async def test_poke_invalid_address(client: Client) -> None:
     # Server config: -DSAFE_WRITE raises ArgumentError for invalid address; else, ConnectionError.
     with pytest.raises((ArgumentError, ConnectionError)):
-        client.poke(0, b"a")
+        await client.poke(0, b"a")
 
 
 @pytest.mark.darwin
-def test_get_dummy_block(client: DarwinClient) -> None:
-    client.cf([1, 2, 3]).objc_call("enumerateObjectsUsingBlock:", client.get_dummy_block())
+async def test_get_dummy_block(client: DarwinClient) -> None:
+    await (await client.cf([1, 2, 3])).objc_call("enumerateObjectsUsingBlock:", await client.get_dummy_block())
 
 
-def test_listdir(client: SyncClient) -> None:
-    entries = client.listdir("/")
+async def test_listdir(client: Client) -> None:
+    entries = await client.listdir("/")
     assert entries[0].d_name == "."
     assert entries[1].d_name == ".."
 
 
-def test_calloc(client: SyncClient) -> None:
-    with client.safe_calloc(0x100) as zeros:
-        assert client.peek(zeros, 0x100) == b"\x00" * 0x100
+async def test_calloc(client: Client) -> None:
+    async with client.safe_calloc(0x100) as zeros:
+        assert await client.peek(zeros, 0x100) == b"\x00" * 0x100
 
 
-def test_env_get_set(client: SyncClient) -> None:
-    client.setenv("TEST", "test")
-    assert client.getenv("TEST") == "test"
+async def test_env_get_set(client: Client) -> None:
+    await client.setenv("TEST", "test")
+    assert await client.getenv("TEST") == "test"
 
 
-def test_environ(client: SyncClient) -> None:
-    assert len(client.environ) > 0
-    for e in client.environ:
+async def test_environ(client: Client) -> None:
+    assert len(await client.environ()) > 0
+    for e in await client.environ():
         assert "=" in e
 
 
-def test_all_subsystems_initialize(client: SyncClient) -> None:
+async def test_all_subsystems_initialize(client: Client) -> None:
     """Ensure each @subsystem property is initialized and not SubsystemNotAvailable."""
     subsystem_names = _get_subsystems(client)
     failures: dict[str, str] = {}

@@ -4,7 +4,6 @@ from pathlib import PurePath
 from typing import TYPE_CHECKING, Generic
 
 import lief
-import zyncio
 
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import kSecCodeMagicEntitlement
@@ -13,14 +12,13 @@ from rpcclient.exceptions import NoEntitlementsError
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient  # noqa: F401
+    from rpcclient.clients.darwin.client import DarwinClient  # noqa: F401
 
 
-class DarwinLief(Lief["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
-    @zyncio.zmethod
+class DarwinLief(Lief["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     async def get_entitlements(self, path: str | PurePath) -> dict:
-        async with await self._client.fs.open.z(path, "r") as f:
-            buf = await f.read.z()
+        async with await self._client.fs.open(path, "r") as f:
+            buf = await f.read()
 
         parsed = lief.parse(buf)
 

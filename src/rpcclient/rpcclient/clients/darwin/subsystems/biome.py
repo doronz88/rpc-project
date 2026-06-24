@@ -3,8 +3,6 @@ from datetime import datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Generic
 
-import zyncio
-
 from rpcclient.clients.darwin._types import DarwinSymbolT, DarwinSymbolT_co
 from rpcclient.core._types import ClientBound
 from rpcclient.core.allocated import Allocated
@@ -13,7 +11,7 @@ from rpcclient.exceptions import SymbolAbsentError
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient, LazyObjectiveCClassSymbol
+    from rpcclient.clients.darwin.client import DarwinClient, LazyObjectiveCClassSymbol
 
 
 BIOME_PATHS = [
@@ -24,7 +22,7 @@ BIOME_PATHS = [
 ]
 
 
-class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Biome(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Biome interface for interacting with BiomeStreams.
 
@@ -38,9 +36,9 @@ class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
 
     def __init__(
         self,
-        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        client: "DarwinClient[DarwinSymbolT_co]",
         biome_paths: list[str] | None = None,
-        fs: "Fs[BaseDarwinClient[DarwinSymbolT_co]] | None" = None,
+        fs: "Fs[DarwinClient[DarwinSymbolT_co]] | None" = None,
     ) -> None:
         self._client = client
         self.fs = fs if fs is not None else client.fs
@@ -54,7 +52,6 @@ class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
             "BMStoreConfig"
         )
 
-    @zyncio.zmethod
     async def get_streams(self) -> set[str]:
         """
         Scan all configured Biome paths for accessible streams.
@@ -66,12 +63,11 @@ class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
         return {
             stream
             for biome_path in self.biome_paths
-            if await self.fs.accessible.z(biome_path)
-            for stream in await self.fs.listdir.z(biome_path)
+            if await self.fs.accessible(biome_path)
+            for stream in await self.fs.listdir(biome_path)
             if not stream.startswith("_DKEvent")
         }
 
-    @zyncio.zproperty
     async def streams(self) -> set[str]:
         """
         Scan all configured Biome paths for accessible streams.
@@ -80,9 +76,8 @@ class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
 
         :return: Stream identifiers discovered under the configured paths.
         """
-        return await self.get_streams.z()
+        return await self.get_streams()
 
-    @zyncio.zmethod
     async def resolve_stream_path(self, stream: str) -> RemotePath | None:
         """
         Resolve a stream name to its first accessible `RemotePath`.
@@ -93,7 +88,7 @@ class Biome(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
         """
         for biome_path in self.biome_paths:
             remote_path = self.fs.remote_path(f"{biome_path}/{stream}")
-            if await self.fs.accessible.z(remote_path):
+            if await self.fs.accessible(remote_path):
                 return remote_path
         return None
 
@@ -132,7 +127,7 @@ class BiomeEvent(Generic[DarwinSymbolT_co]):
         :param raw_event: Raw Objective-C event object.
         :param stream: Stream identifier.
         """
-        data = json.loads(await (await raw_event.objc_call.z("json")).py.z(str))
+        data = json.loads(await (await raw_event.objc_call("json")).py(str))
         return BiomeEvent(raw_event, data, stream)
 
     @cached_property
@@ -154,7 +149,7 @@ class BiomeEvent(Generic[DarwinSymbolT_co]):
         return f"<BiomeEvent from stream '{self.stream}'>"
 
 
-class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class BiomeLibrary(Allocated["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Access to Biome streams and events.
 
@@ -168,17 +163,17 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
     :param Biome biome: Parent `Biome` instance.
     """
 
-    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", biome: Biome[DarwinSymbolT_co]) -> None:
+    def __init__(self, client: "DarwinClient[DarwinSymbolT_co]", biome: Biome[DarwinSymbolT_co]) -> None:
         Allocated.__init__(self)
         self._client = client
         self.biome: Biome[DarwinSymbolT_co] = biome
         self._event_classes = {}
 
     async def _allocate(self) -> None:
-        self._tmp_dir = await self.biome.fs.remote_temp_dir.z()
+        self._tmp_dir = await self.biome.fs.remote_temp_dir()
 
-        self._store_config = await (await self.biome.BMStoreConfig_cls.objc_call.z("alloc")).objc_call.z(
-            "initWithStoreBasePath:segmentSize:", await self._client.cf.z(str(self.tmp_dir)), 0x80000
+        self._store_config = await (await self.biome.BMStoreConfig_cls.objc_call("alloc")).objc_call(
+            "initWithStoreBasePath:segmentSize:", await self._client.cf(str(self.tmp_dir)), 0x80000
         )
 
         try:
@@ -195,14 +190,14 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
         Called by `Allocated` during cleanup.
         """
         if self._store_config is not None:
-            await self.store_config.objc_call.z("release")
+            await self.store_config.objc_call("release")
         if self._tmp_dir is not None:
-            await self.tmp_dir.deallocate.z()
+            await self.tmp_dir.deallocate()
 
-    _tmp_dir: "RemoteTemporaryDir[BaseDarwinClient[DarwinSymbolT_co]] | None" = None
+    _tmp_dir: "RemoteTemporaryDir[DarwinClient[DarwinSymbolT_co]] | None" = None
 
     @property
-    def tmp_dir(self) -> "RemoteTemporaryDir[BaseDarwinClient[DarwinSymbolT_co]]":
+    def tmp_dir(self) -> "RemoteTemporaryDir[DarwinClient[DarwinSymbolT_co]]":
         if self._tmp_dir is None:
             raise RuntimeError(f"{type(self).__name__} object not yet allocated")
         return self._tmp_dir
@@ -223,7 +218,6 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
             raise RuntimeError(f"{type(self).__name__} object not yet allocated")  # noqa: TRY004
         return self._cached_BMEventClassForStreamIdentifier
 
-    @zyncio.zproperty
     async def streams(self) -> set[str]:
         """
         Scan all configured Biome paths for accessible streams.
@@ -233,9 +227,8 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
         :return: Stream identifiers discovered under the configured paths.
         :rtype: set[str]
         """
-        return await self.biome.get_streams.z()
+        return await self.biome.get_streams()
 
-    @zyncio.zmethod
     async def read_stream(self, stream: str, refresh: bool = True) -> list[BiomeEvent]:
         """
         Read events from a specified Biome stream.
@@ -249,28 +242,28 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
         :return: Parsed events.
         :rtype: list[BiomeEvent]
         """
-        if refresh or not await self.biome.fs.accessible.z(self.tmp_dir / stream):
-            remote_path = await self.biome.resolve_stream_path.z(stream)
+        if refresh or not await self.biome.fs.accessible(self.tmp_dir / stream):
+            remote_path = await self.biome.resolve_stream_path(stream)
             if remote_path is None:
                 return []
-            await self.biome.fs.cp.z([remote_path], self.tmp_dir, recursive=True, force=True)
+            await self.biome.fs.cp([remote_path], self.tmp_dir, recursive=True, force=True)
         return await self._get_events_for_local_stream(stream)
 
     async def _get_event_class(self, stream: str) -> DarwinSymbolT_co:
         if stream in self._event_classes:
             return self._event_classes[stream]
-        cf_stream_name = await self._client.cf.z(stream)
+        cf_stream_name = await self._client.cf(stream)
         if self._BMEventClassForStreamIdentifier is not None:
-            event_class = await self._BMEventClassForStreamIdentifier.z(cf_stream_name)
+            event_class = await self._BMEventClassForStreamIdentifier(cf_stream_name)
         else:
             if stream.endswith(":tombstones"):
-                return await self._client.symbols.objc_getClass.z("BMTombstoneEvent")
-            internal_library = await self._client.symbols.BiomeLibraryAndInternalLibraryNode.z()
-            stream_obj = await internal_library.objc_call.z("streamWithIdentifier:error:", cf_stream_name, 0)
+                return await self._client.symbols.objc_getClass("BMTombstoneEvent")
+            internal_library = await self._client.symbols.BiomeLibraryAndInternalLibraryNode()
+            stream_obj = await internal_library.objc_call("streamWithIdentifier:error:", cf_stream_name, 0)
             event_class = (
                 self._client.null
                 if stream_obj == 0
-                else await (await stream_obj.objc_call.z("configuration")).objc_call.z("eventClass")
+                else await (await stream_obj.objc_call("configuration")).objc_call("eventClass")
             )
         self._event_classes[stream] = event_class
         return event_class
@@ -283,10 +276,10 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
         :return: Objective-C publisher object.
         :rtype: DarwinSymbol
         """
-        cf_stream_name = await self._client.cf.z(stream)
+        cf_stream_name = await self._client.cf(stream)
         event_class = await self._get_event_class(stream)
 
-        return await (await self.biome.BPSBiomeStorePublisher_cls.objc_call.z("alloc")).objc_call.z(
+        return await (await self.biome.BPSBiomeStorePublisher_cls.objc_call("alloc")).objc_call(
             "initWithStreamId:storeConfig:streamsAccessClient:eventDataClass:",
             cf_stream_name,
             self.store_config,
@@ -305,10 +298,10 @@ class BiomeLibrary(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Darw
         :rtype: list[BiomeEvent]
         """
         publisher = await self._create_publisher(stream)
-        await publisher.objc_call.z("startWithSubscriber:", 0)
+        await publisher.objc_call("startWithSubscriber:", 0)
         events: list[BiomeEvent] = []
-        while await publisher.objc_call.z("finished") != 1:
-            event = await publisher.objc_call.z("nextEvent")
+        while await publisher.objc_call("finished") != 1:
+            event = await publisher.objc_call("nextEvent")
             if event != 0:
                 events.append(await BiomeEvent.create(event, stream))
         return events

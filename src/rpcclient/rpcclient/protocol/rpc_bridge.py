@@ -1,15 +1,12 @@
-import abc
 import logging
 import socket
 import subprocess
-from typing import Any, Generic, TypeVar, final
+from typing import Any, final
 from typing_extensions import Self
-
-import zyncio
 
 from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError
 from rpcclient.protocol.messages import RpcMessageRegistry
-from rpcclient.protocol.rpc_socket import AsyncRpcSocket, SyncRpcSocket
+from rpcclient.protocol.rpc_socket import RpcSocket
 from rpcclient.protos.rpc_pb2 import ProtocolConstants, RpcMessage
 
 
@@ -22,14 +19,11 @@ def _has_process_exited(process: subprocess.Popen) -> bool:
     return process.poll() is not None
 
 
-RpcSocketT = TypeVar("RpcSocketT", SyncRpcSocket, AsyncRpcSocket)
-
-
-class RpcBridge(Generic[RpcSocketT], abc.ABC):
+class RpcBridge:
     @final
     def __init__(
         self,
-        sock: RpcSocketT,
+        sock: RpcSocket,
         client_id: int,
         platform_name: str,
         arch: int,
@@ -39,7 +33,7 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
         local_process: subprocess.Popen | None = None,
     ) -> None:
         self.messages: RpcMessageRegistry = messages or BASIC_MESSAGES.clone()
-        self.sock: RpcSocketT = sock
+        self.sock: RpcSocket = sock
         self.client_id: int = client_id
         self.platform: str = platform_name
         self.arch: int = arch
@@ -48,15 +42,9 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
         self._local_process: subprocess.Popen | None = local_process
 
     @classmethod
-    @abc.abstractmethod
-    def _create_socket(cls, raw_sock: socket.socket) -> RpcSocketT:
-        raise NotImplementedError
-
-    @zyncio.zclassmethod
-    @classmethod
     async def connect(cls, raw_sock: socket.socket, messages: RpcMessageRegistry | None = None) -> Self:
-        sock = cls._create_socket(raw_sock)
-        handshake = await sock.rpc_handshake_recv.z()
+        sock = RpcSocket(raw_sock)
+        handshake = await sock.rpc_handshake_recv()
         if handshake.server_version != ProtocolConstants.SERVER_VERSION:
             raise InvalidServerVersionMagicError(
                 f"got {handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}"
@@ -75,7 +63,7 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
             msg_id=msg_id,
             payload=req.SerializeToString(),
         )
-        rep_msg = await self.sock.rpc_msg_send_recv.z(msg)
+        rep_msg = await self.sock.rpc_msg_send_recv(msg)
         rep = self.messages.get(rep_msg.msg_id)()
         rep.ParseFromString(rep_msg.payload)
         if rep_msg.msg_id == ProtocolConstants.REP_ERROR:
@@ -109,15 +97,3 @@ class RpcBridge(Generic[RpcSocketT], abc.ABC):
         return type(self)(
             self.sock, self.client_id, self.platform, self.arch, self.sysname, self.messages.clone(), owns_socket=False
         )
-
-
-class SyncRpcBridge(zyncio.SyncMixin, RpcBridge[SyncRpcSocket]):
-    @classmethod
-    def _create_socket(cls, raw_sock: socket.socket) -> SyncRpcSocket:
-        return SyncRpcSocket(raw_sock)
-
-
-class AsyncRpcBridge(zyncio.AsyncMixin, RpcBridge[AsyncRpcSocket]):
-    @classmethod
-    def _create_socket(cls, raw_sock: socket.socket) -> AsyncRpcSocket:
-        return AsyncRpcSocket(raw_sock)

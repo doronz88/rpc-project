@@ -4,8 +4,6 @@ from pathlib import PurePath
 from typing import TYPE_CHECKING, Generic
 from typing_extensions import Self
 
-import zyncio
-
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import AVAudioSessionCategoryOptions, AVAudioSessionRouteSharingPolicy
 from rpcclient.core._types import ClientBound
@@ -15,7 +13,7 @@ from rpcclient.utils import cached_async_method
 
 
 if TYPE_CHECKING:
-    from rpcclient.clients.darwin.client import BaseDarwinClient
+    from rpcclient.clients.darwin.client import DarwinClient
 
 
 class AVAudioSessionCategory(Enum):
@@ -50,14 +48,14 @@ class InterruptionPriority(Enum):
     EmergencyAlert = 20
 
 
-class Recorder(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Recorder(Allocated["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Wrapper for AVAudioRecorder
     https://developer.apple.com/documentation/avfaudio/avaudiorecorder?language=objc
     """
 
     def __init__(
-        self, client: "BaseDarwinClient[DarwinSymbolT_co]", session: "AudioSession", recorder: DarwinSymbolT_co
+        self, client: "DarwinClient[DarwinSymbolT_co]", session: "AudioSession", recorder: DarwinSymbolT_co
     ) -> None:
         super().__init__()
         self._client = client
@@ -65,37 +63,32 @@ class Recorder(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSy
         self._recorder = recorder
 
     async def _deallocate(self) -> None:
-        await self._recorder.objc_call.z("release")
+        await self._recorder.objc_call("release")
 
-    @zyncio.zmethod
     async def record(self) -> None:
-        await self._session.set_category.z(AVAudioSessionCategory.PlayAndRecord)
-        await self._session.set_active.z(True)
-        await self._recorder.objc_call.z("record")
+        await self._session.set_category(AVAudioSessionCategory.PlayAndRecord)
+        await self._session.set_active(True)
+        await self._recorder.objc_call("record")
         if not await type(self).recording(self):
             raise RpcFailedToRecordError()
 
-    @zyncio.zmethod
     async def pause(self) -> None:
-        await self._recorder.objc_call.z("pause")
-        await self._session.set_active.z(False)
+        await self._recorder.objc_call("pause")
+        await self._session.set_active(False)
 
-    @zyncio.zmethod
     async def stop(self) -> None:
-        await self._recorder.objc_call.z("stop")
-        await self._session.set_active.z(False)
+        await self._recorder.objc_call("stop")
+        await self._session.set_active(False)
 
-    @zyncio.zmethod
     async def delete_recording(self) -> None:
-        if not await self._recorder.objc_call.z("deleteRecording"):
+        if not await self._recorder.objc_call("deleteRecording"):
             raise BadReturnValueError("deleteRecording failed")
 
-    @zyncio.zproperty
     async def recording(self) -> bool:
-        return bool(await self._recorder.objc_call.z("isRecording"))
+        return bool(await self._recorder.objc_call("isRecording"))
 
 
-class Player(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class Player(Allocated["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     Wrapper for AVAudioPlayer
     https://developer.apple.com/documentation/avfaudio/avaudioplayer?language=objc
@@ -103,7 +96,7 @@ class Player(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymb
 
     def __init__(
         self,
-        client: "BaseDarwinClient[DarwinSymbolT_co]",
+        client: "DarwinClient[DarwinSymbolT_co]",
         session: "AudioSession[DarwinSymbolT_co]",
         player: DarwinSymbolT_co,
     ) -> None:
@@ -112,70 +105,60 @@ class Player(Allocated["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymb
         self._player: DarwinSymbolT_co = player
 
     async def _deallocate(self) -> None:
-        await self._player.objc_call.z("release")
+        await self._player.objc_call("release")
 
-    @zyncio.zmethod
     async def play(self) -> None:
-        await self._session.set_category.z(AVAudioSessionCategory.PlayAndRecord)
-        await self._session.set_active.z(True)
-        await self._player.objc_call.z("play")
+        await self._session.set_category(AVAudioSessionCategory.PlayAndRecord)
+        await self._session.set_active(True)
+        await self._player.objc_call("play")
         if not await type(self).playing(self):
             raise RpcFailedToPlayError()
 
-    @zyncio.zmethod
     async def pause(self) -> None:
-        await self._player.objc_call.z("pause")
+        await self._player.objc_call("pause")
 
-    @zyncio.zmethod
     async def stop(self) -> None:
-        await self._player.objc_call.z("stop")
-        await self._session.set_active.z(False)
+        await self._player.objc_call("stop")
+        await self._session.set_active(False)
 
-    @zyncio.zmethod
     async def set_volume(self, value: float) -> None:
-        await self._player.objc_call.z("setVolume:", struct.pack("<f", value))
+        await self._player.objc_call("setVolume:", struct.pack("<f", value))
 
-    @zyncio.zproperty
     async def playing(self) -> bool:
-        return bool(await self._player.objc_call.z("isPlaying"))
+        return bool(await self._player.objc_call("isPlaying"))
 
-    @zyncio.zproperty
-    async def _loops(self) -> int:
-        return await self._player.objc_call.z("numberOfLoops")
+    async def get_loops(self) -> int:
+        return await self._player.objc_call("numberOfLoops")
 
-    @_loops.setter
-    async def loops(self, value: int) -> None:
-        await self._player.objc_call.z("setNumberOfLoops:", value)
+    async def set_loops(self, value: int) -> None:
+        await self._player.objc_call("setNumberOfLoops:", value)
 
 
-class AudioSession(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class AudioSession(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """
     wrapper for AVAudioSession
     https://developer.apple.com/documentation/avfaudio/avaudiosession?language=objc
     """
 
-    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]", session: DarwinSymbolT_co) -> None:
+    def __init__(self, client: "DarwinClient[DarwinSymbolT_co]", session: DarwinSymbolT_co) -> None:
         self._client = client
         self._session: DarwinSymbolT_co = session
 
     @classmethod
-    async def create(cls, client: "BaseDarwinClient[DarwinSymbolT_co]") -> Self:
-        session = await (await client.symbols.objc_getClass.z("AVAudioSession")).objc_call.z("sharedInstance")
+    async def create(cls, client: "DarwinClient[DarwinSymbolT_co]") -> Self:
+        session = await (await client.symbols.objc_getClass("AVAudioSession")).objc_call("sharedInstance")
         return cls(client, session)
 
-    @zyncio.zmethod
     async def set_active(self, is_active: bool) -> None:
-        await self._session.objc_call.z("setActive:error:", is_active, 0)
+        await self._session.objc_call("setActive:error:", is_active, 0)
 
-    @zyncio.zmethod
     async def set_mode(self, mode: AVAudioSessionMode) -> None:
-        await self._session.objc_call.z(
+        await self._session.objc_call(
             "setMode:error:",
             await self._client.symbols[mode.value].getindex(0),
             0,
         )
 
-    @zyncio.zmethod
     async def set_category(
         self,
         category: AVAudioSessionCategory,
@@ -183,7 +166,7 @@ class AudioSession(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Da
         route_sharing_policy: AVAudioSessionRouteSharingPolicy = AVAudioSessionRouteSharingPolicy.Default,
         options: AVAudioSessionCategoryOptions = AVAudioSessionCategoryOptions.DefaultToSpeaker,
     ) -> None:
-        await self._session.objc_call.z(
+        await self._session.objc_call(
             "setCategory:mode:routeSharingPolicy:options:error:",
             await self._client.symbols[category.value].getindex(0),
             await self._client.symbols[mode.value].getindex(0),
@@ -192,74 +175,64 @@ class AudioSession(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[Da
             0,
         )
 
-    @zyncio.zmethod
     async def set_interruption_priority(self, priority: InterruptionPriority) -> None:
-        await self._session.objc_call.z("setInterruptionPriority:error:", priority, 0)
+        await self._session.objc_call("setInterruptionPriority:error:", priority, 0)
 
-    @zyncio.zmethod
     async def override_output_audio_port(self, port: int) -> None:
-        await self._session.objc_call.z("overrideOutputAudioPort:error:", port, 0)
+        await self._session.objc_call("overrideOutputAudioPort:error:", port, 0)
 
-    @zyncio.zproperty
     async def other_audio_playing(self) -> bool:
-        return bool(await self._session.objc_call.z("isOtherAudioPlaying"))
+        return bool(await self._session.objc_call("isOtherAudioPlaying"))
 
-    @zyncio.zproperty
     async def record_permission(self) -> str:
-        return struct.pack("<I", await self._session.objc_call.z("recordPermission"))[::-1].decode()
+        return struct.pack("<I", await self._session.objc_call("recordPermission"))[::-1].decode()
 
-    @zyncio.zproperty
     async def available_categories(self) -> list[str]:
-        return await (await self._session.objc_call.z("availableCategories")).py.z(list)
+        return await (await self._session.objc_call("availableCategories")).py(list)
 
-    @zyncio.zproperty
     async def available_modes(self) -> list[str]:
-        return await (await self._session.objc_call.z("availableModes")).py.z(list)
+        return await (await self._session.objc_call("availableModes")).py(list)
 
-    @zyncio.zproperty
     async def is_active(self) -> bool:
-        return bool(await self._session.objc_call.z("isActive"))
+        return bool(await self._session.objc_call("isActive"))
 
 
-class DarwinMedia(ClientBound["BaseDarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class DarwinMedia(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
     """Media utils"""
 
-    def __init__(self, client: "BaseDarwinClient[DarwinSymbolT_co]") -> None:
+    def __init__(self, client: "DarwinClient[DarwinSymbolT_co]") -> None:
         """
         :param rpcclient.darwin.client.DarwinClient client:
         """
         self._client = client
         client.load_framework_lazy("AVFoundation")
 
-    @zyncio.zproperty
     @cached_async_method
     async def session(self) -> AudioSession[DarwinSymbolT_co]:
         return await AudioSession.create(self._client)
 
-    @zyncio.zmethod
     async def get_recorder(self, filename: str | PurePath) -> Recorder[DarwinSymbolT_co]:
-        url = await (await self._client.symbols.objc_getClass.z("NSURL")).objc_call.z(
-            "fileURLWithPath:", await self._client.cf.z(str(filename))
+        url = await (await self._client.symbols.objc_getClass("NSURL")).objc_call(
+            "fileURLWithPath:", await self._client.cf(str(filename))
         )
-        settings = await self._client.cf.z({
+        settings = await self._client.cf({
             "AVEncoderQualityKey": 100,
             "AVEncoderBitRateKey": 16,
             "AVNumberOfChannelsKey": 1,
             "AVSampleRateKey": 8000.0,
         })
-        AVAudioRecorder = await self._client.symbols.objc_getClass.z("AVAudioRecorder")
-        recorder = await (await AVAudioRecorder.objc_call.z("alloc")).objc_call.z(
+        AVAudioRecorder = await self._client.symbols.objc_getClass("AVAudioRecorder")
+        recorder = await (await AVAudioRecorder.objc_call("alloc")).objc_call(
             "initWithURL:settings:error:", url, settings, 0
         )
 
         return Recorder(self._client, await type(self).session(self), recorder)
 
-    @zyncio.zmethod
     async def get_player(self, filename: str | PurePath) -> Player[DarwinSymbolT_co]:
-        NSURL = await self._client.symbols.objc_getClass.z("NSURL")
-        url = await NSURL.objc_call.z("fileURLWithPath:", await self._client.cf.z(str(filename)))
+        NSURL = await self._client.symbols.objc_getClass("NSURL")
+        url = await NSURL.objc_call("fileURLWithPath:", await self._client.cf(str(filename)))
 
-        AVAudioPlayer = await self._client.symbols.objc_getClass.z("AVAudioPlayer")
-        player = await (await AVAudioPlayer.objc_call.z("alloc")).objc_call.z("initWithContentsOfURL:error:", url, 0)
+        AVAudioPlayer = await self._client.symbols.objc_getClass("AVAudioPlayer")
+        player = await (await AVAudioPlayer.objc_call("alloc")).objc_call("initWithContentsOfURL:error:", url, 0)
 
         return Player(self._client, await type(self).session(self), player)

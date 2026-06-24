@@ -1,13 +1,32 @@
 import asyncio
-import time
 from collections.abc import Callable, Coroutine
 from functools import wraps
 from typing import Any, TypeVar, cast
 
 import click
 import inquirer3
-import zyncio
 from inquirer3.themes import GreenPassion
+
+
+_ASYNCIO_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def get_asyncio_loop() -> asyncio.AbstractEventLoop:
+    """Return a process-wide singleton event loop, (re)creating it if missing/closed.
+
+    Reused by every sync entrypoint (CLI, xonsh shell) and by the IPython console's
+    ``loop_runner`` so that client setup, REPL ``await``\\ s, and shutdown all share one
+    loop instead of spinning up a fresh ``asyncio.run`` loop per call.
+    """
+    global _ASYNCIO_LOOP
+    if _ASYNCIO_LOOP is None or _ASYNCIO_LOOP.is_closed():
+        _ASYNCIO_LOOP = asyncio.new_event_loop()
+    return _ASYNCIO_LOOP
+
+
+def run_in_loop(coro: Coroutine[Any, Any, "T"]) -> "T":
+    """Drive ``coro`` to completion on the shared loop (see `get_asyncio_loop`)."""
+    return get_asyncio_loop().run_until_complete(coro)
 
 
 def prompt_selection(choices: list[Any], message: str, idx: bool = False) -> Any:
@@ -74,17 +93,3 @@ def cached_async_method(func: AsyncMethodT) -> AsyncMethodT:
 def assert_cast(typ: type[T] | tuple[type[T], ...], obj: object) -> T:
     assert isinstance(obj, typ)
     return obj
-
-
-def zync_mode(obj: object) -> zyncio.Mode:
-    mode = zyncio.get_mode(obj)
-    if mode is None:
-        raise TypeError(f"{type(obj).__name__} has no zyncio mode")
-    return mode
-
-
-async def zync_sleep(mode: zyncio.Mode, seconds: float) -> None:
-    if mode is zyncio.SYNC:
-        time.sleep(seconds)
-    else:
-        await asyncio.sleep(seconds)

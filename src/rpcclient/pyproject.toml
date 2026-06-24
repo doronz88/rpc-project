@@ -55,7 +55,7 @@ dependencies = [
     "requests",
     "protobuf",
     "inquirer3",
-    "zyncio~=0.18.0",
+    "ipython-smart-await>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -152,4 +152,5 @@ ignore = [
 reportUnnecessaryComparison = "warning"
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

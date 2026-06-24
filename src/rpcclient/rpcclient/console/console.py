@@ -12,7 +12,7 @@ from rpcclient.client_manager import ClientManager, CoreClient
 from rpcclient.console.extensions.keybindings import get_keybindings
 from rpcclient.exceptions import NoSuchClientError
 from rpcclient.registry import Registry, RegistryEvent
-from rpcclient.utils import prompt_selection
+from rpcclient.utils import prompt_selection, run_in_loop
 
 
 logger = logging.getLogger(__name__)
@@ -135,11 +135,17 @@ class Console:
         sys.argv = ["a"]
         ipython_config = Config()
         ipython_config.IPCompleter.use_jedi = False
+        # Enable top-level `await` at the REPL so the pure-async client can be driven directly,
+        # e.g. `await p.get_pid()`. Drive it on the shared loop (see rpcclient.utils.run_in_loop)
+        # so REPL awaits use the same loop that created/primed the clients.
+        ipython_config.InteractiveShell.autoawait = True
+        ipython_config.InteractiveShell.loop_runner = run_in_loop
         ipython_config.InteractiveShellApp.exec_lines = [f"""console.setup_shell({switch_cid})"""]
         ipython_config.TerminalInteractiveShell.autoformatter = None
         ipython_config.BaseIPythonApplication.profile = "rpcclient"
         ipython_config.TerminalInteractiveShell.prompts_class = "rpcclient.console.prompt.RpcPrompt"
         ipython_config.InteractiveShellApp.extensions = [
+            "smart_await",
             "rpcclient.console.extensions.events",
             "rpcclient.console.extensions.keybindings",
         ]
@@ -161,7 +167,7 @@ class Console:
         try:
             IPython.start_ipython(config=ipython_config, user_ns=namespace)
         finally:
-            self.mgr.close_all()
+            run_in_loop(self.mgr.close_all())
 
     def switch(self, cid: int | None = None) -> None:
         """Switch the active console context by client ID (or interactively pick one)."""
@@ -249,7 +255,7 @@ class Console:
         help_snippets = [
             HelpSnippet(key="mgr", description="Client manager: create | get | remove | clients | clear"),
             HelpSnippet(key="console", description="Console controller: switch"),
-            HelpSnippet(key="p", description="Active client (e.g., p.info(), p.pid)"),
+            HelpSnippet(key="p", description="Active client (e.g., await p.info(), await p.get_pid())"),
         ]
         for keybinding in get_keybindings(self):
             help_snippets.append(HelpSnippet(key=keybinding.key.upper(), description=keybinding.description))

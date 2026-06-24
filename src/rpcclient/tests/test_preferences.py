@@ -1,8 +1,9 @@
 import plistlib
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from contextlib import suppress
 
 import pytest
+import pytest_asyncio
 
 from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.exceptions import NoSuchPreferenceError
@@ -14,164 +15,164 @@ USERNAME = "kCFPreferencesAnyUser"
 PLIST_PATH = f"/Library/Preferences/{DOMAIN}.plist"
 
 
-@pytest.fixture()
-def tmp_preference(client: DarwinClient) -> Generator[None]:
-    client.preferences.cf.set_dict({"key1": "value1"}, DOMAIN, USERNAME)
-    client.preferences.cf.sync(DOMAIN, USERNAME)
-    client.fs.write_file(PLIST_PATH, plistlib.dumps({"key1": "value1"}))
+@pytest_asyncio.fixture()
+async def tmp_preference(client: DarwinClient) -> AsyncGenerator[None]:
+    await client.preferences.cf.set_dict({"key1": "value1"}, DOMAIN, USERNAME)
+    await client.preferences.cf.sync(DOMAIN, USERNAME)
+    await client.fs.write_file(PLIST_PATH, plistlib.dumps({"key1": "value1"}))
     try:
         yield
     finally:
         with suppress(NoSuchPreferenceError):
-            client.preferences.cf.clear(DOMAIN, USERNAME)
-        client.preferences.cf.sync(DOMAIN, USERNAME)
+            await client.preferences.cf.clear(DOMAIN, USERNAME)
+        await client.preferences.cf.sync(DOMAIN, USERNAME)
 
 
-def test_cf_get_keys(client: DarwinClient, tmp_preference: None) -> None:
-    assert "key1" in client.preferences.cf.get_keys(DOMAIN, USERNAME)
+async def test_cf_get_keys(client: DarwinClient, tmp_preference: None) -> None:
+    assert "key1" in await client.preferences.cf.get_keys(DOMAIN, USERNAME)
 
 
-def test_cf_get_keys_invalid_preference(client: DarwinClient, tmp_preference: None) -> None:
+async def test_cf_get_keys_invalid_preference(client: DarwinClient, tmp_preference: None) -> None:
     with pytest.raises(NoSuchPreferenceError):
-        client.preferences.cf.get_keys("com.apple.invalid_preference_for_sure", USERNAME)
+        await client.preferences.cf.get_keys("com.apple.invalid_preference_for_sure", USERNAME)
 
 
-def test_cf_get_value(client: DarwinClient, tmp_preference: None) -> None:
-    assert client.preferences.cf.get_value("key1", DOMAIN, USERNAME) == "value1"
+async def test_cf_get_value(client: DarwinClient, tmp_preference: None) -> None:
+    assert await client.preferences.cf.get_value("key1", DOMAIN, USERNAME) == "value1"
 
 
-def test_cf_get_dict(client: DarwinClient, tmp_preference: None) -> None:
-    assert client.preferences.cf.get_dict(DOMAIN, USERNAME)["key1"] == "value1"
+async def test_cf_get_dict(client: DarwinClient, tmp_preference: None) -> None:
+    assert (await client.preferences.cf.get_dict(DOMAIN, USERNAME))["key1"] == "value1"
 
 
-def test_cf_set(client: DarwinClient, tmp_preference: None) -> None:
-    client.preferences.cf.set("key2", {"hey": "you"}, DOMAIN, USERNAME)
-    assert client.preferences.cf.get_value("key2", DOMAIN, USERNAME) == {"hey": "you"}
+async def test_cf_set(client: DarwinClient, tmp_preference: None) -> None:
+    await client.preferences.cf.set("key2", {"hey": "you"}, DOMAIN, USERNAME)
+    assert await client.preferences.cf.get_value("key2", DOMAIN, USERNAME) == {"hey": "you"}
 
 
-def test_cf_remove(client: DarwinClient, tmp_preference: None) -> None:
-    client.preferences.cf.remove("key1", DOMAIN, USERNAME)
-    assert client.preferences.cf.get_value("key1", DOMAIN, USERNAME) is None
+async def test_cf_remove(client: DarwinClient, tmp_preference: None) -> None:
+    await client.preferences.cf.remove("key1", DOMAIN, USERNAME)
+    assert await client.preferences.cf.get_value("key1", DOMAIN, USERNAME) is None
 
 
-def test_cf_set_dict(client: DarwinClient, tmp_preference: None) -> None:
-    client.preferences.cf.get_value("key1", DOMAIN, USERNAME)
-    client.preferences.cf.set_dict({"b": 5}, DOMAIN, USERNAME)
-    assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == {"b": 5}
+async def test_cf_set_dict(client: DarwinClient, tmp_preference: None) -> None:
+    await client.preferences.cf.get_value("key1", DOMAIN, USERNAME)
+    await client.preferences.cf.set_dict({"b": 5}, DOMAIN, USERNAME)
+    assert await client.preferences.cf.get_dict(DOMAIN, USERNAME) == {"b": 5}
 
 
-def test_cf_update_dict(client: DarwinClient, tmp_preference: None) -> None:
+async def test_cf_update_dict(client: DarwinClient, tmp_preference: None) -> None:
     update_contents = {"a": 5}
-    expected_dict = client.preferences.cf.get_dict(DOMAIN, USERNAME)
+    expected_dict = await client.preferences.cf.get_dict(DOMAIN, USERNAME)
     expected_dict.update(update_contents)
-    client.preferences.cf.update_dict(update_contents, DOMAIN, USERNAME)
-    assert client.preferences.cf.get_dict(DOMAIN, USERNAME) == expected_dict
+    await client.preferences.cf.update_dict(update_contents, DOMAIN, USERNAME)
+    assert await client.preferences.cf.get_dict(DOMAIN, USERNAME) == expected_dict
 
 
-def test_cf_clear(client: DarwinClient, tmp_preference: None) -> None:
-    client.preferences.cf.clear(DOMAIN, USERNAME)
+async def test_cf_clear(client: DarwinClient, tmp_preference: None) -> None:
+    await client.preferences.cf.clear(DOMAIN, USERNAME)
     with pytest.raises(NoSuchPreferenceError):
-        assert not client.preferences.cf.get_dict(DOMAIN, USERNAME)
+        assert not await client.preferences.cf.get_dict(DOMAIN, USERNAME)
 
 
-def test_sc_get_keys(client: DarwinClient, tmp_preference: None) -> None:
-    keys = client.preferences.sc.get_keys(PLIST_PATH)
+async def test_sc_get_keys(client: DarwinClient, tmp_preference: None) -> None:
+    keys = await client.preferences.sc.get_keys(PLIST_PATH)
     assert "key1" in keys
 
 
-def test_sc_get_dict(client: DarwinClient, tmp_preference: None) -> None:
-    dict_ = client.preferences.sc.get_dict(PLIST_PATH)
+async def test_sc_get_dict(client: DarwinClient, tmp_preference: None) -> None:
+    dict_ = await client.preferences.sc.get_dict(PLIST_PATH)
     assert "key1" in dict_
 
 
-def test_sc_object_keys(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        keys = pref.keys
+async def test_sc_object_keys(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        keys = await pref.keys()
     assert "key1" in keys
 
 
-def test_sc_object_set(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        pref.set("key2", "value2")
-    assert client.preferences.sc.get_dict(PLIST_PATH)["key2"] == "value2"
+async def test_sc_object_set(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        await pref.set("key2", "value2")
+    assert (await client.preferences.sc.get_dict(PLIST_PATH))["key2"] == "value2"
 
 
-def test_sc_object_set_dict(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        pref.set_dict({"hey": "you"})
-    assert client.preferences.sc.get_dict(PLIST_PATH) == {"hey": "you"}
+async def test_sc_object_set_dict(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        await pref.set_dict({"hey": "you"})
+    assert await client.preferences.sc.get_dict(PLIST_PATH) == {"hey": "you"}
 
 
-def test_sc_object_update_dict(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        pref.update_dict({"hey": "you"})
-    dict_ = client.preferences.sc.get_dict(PLIST_PATH)
+async def test_sc_object_update_dict(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        await pref.update_dict({"hey": "you"})
+    dict_ = await client.preferences.sc.get_dict(PLIST_PATH)
     assert dict_["key1"] == "value1"
     assert dict_["hey"] == "you"
 
 
-def test_sc_object_remove(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        pref.remove("key1")
-    assert "key1" not in client.preferences.sc.get_dict(PLIST_PATH)
+async def test_sc_object_remove(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        await pref.remove("key1")
+    assert "key1" not in await client.preferences.sc.get_dict(PLIST_PATH)
 
 
-def test_sc_object_get(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        val = pref.get("key1")
+async def test_sc_object_get(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        val = await pref.get("key1")
     assert val == "value1"
 
 
-def test_sc_object_get_dict(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        dict_ = pref.get_dict()
+async def test_sc_object_get_dict(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        dict_ = await pref.get_dict()
     assert dict_ == {"key1": "value1"}
 
 
-def test_sc_object_clear(client: DarwinClient, tmp_preference: None) -> None:
-    with client.preferences.sc.open(PLIST_PATH) as pref:
-        pref.clear()
-    assert not client.preferences.sc.get_dict(PLIST_PATH)
+async def test_sc_object_clear(client: DarwinClient, tmp_preference: None) -> None:
+    async with await client.preferences.sc.open(PLIST_PATH) as pref:
+        await pref.clear()
+    assert not await client.preferences.sc.get_dict(PLIST_PATH)
 
 
 class TestCustomDomain:
-    @pytest.fixture(autouse=True)
-    def clear_domain(self, client):
+    @pytest_asyncio.fixture(autouse=True)
+    async def clear_domain(self, client):
         with suppress(NoSuchPreferenceError):
             # if from some reason this domain already exist, empty it
-            client.preferences.cf.clear(DOMAIN)
-            assert client.preferences.cf.get_keys(DOMAIN) is None
+            await client.preferences.cf.clear(DOMAIN)
+            assert await client.preferences.cf.get_keys(DOMAIN) is None
 
-    def test_set_dict(self, client):
+    async def test_set_dict(self, client):
         test_dict = {"KEY1": "VALUE1", "KEY2": "VALUE2"}
-        client.preferences.cf.set_dict(test_dict, DOMAIN)
-        assert test_dict == client.preferences.cf.get_dict(DOMAIN)
+        await client.preferences.cf.set_dict(test_dict, DOMAIN)
+        assert test_dict == await client.preferences.cf.get_dict(DOMAIN)
 
-    def test_remove(self, client):
+    async def test_remove(self, client):
         test_dict = {"KEY1": "VALUE1", "KEY2": "VALUE2"}
-        client.preferences.cf.set_dict(test_dict, DOMAIN)
-        client.preferences.cf.remove("KEY2", DOMAIN)
+        await client.preferences.cf.set_dict(test_dict, DOMAIN)
+        await client.preferences.cf.remove("KEY2", DOMAIN)
         test_dict.pop("KEY2")
-        assert test_dict == client.preferences.cf.get_dict(DOMAIN)
+        assert test_dict == await client.preferences.cf.get_dict(DOMAIN)
 
 
-def test_sc_preferences(client):
-    with client.preferences.sc.open(DOMAIN) as pref:
-        if pref.get_dict() != {}:
+async def test_sc_preferences(client):
+    async with await client.preferences.sc.open(DOMAIN) as pref:
+        if await pref.get_dict() != {}:
             # if from some reason this domain already exist, empty it
-            pref.clear()
-            assert pref.get_dict() == {}
+            await pref.clear()
+            assert await pref.get_dict() == {}
 
         # test set a full dictionary
         test_dict = {"KEY1": "VALUE1", "KEY2": "VALUE2"}
-        pref.set_dict(test_dict)
-        assert test_dict == pref.get_dict()
+        await pref.set_dict(test_dict)
+        assert test_dict == await pref.get_dict()
 
         # test set remove a single value
-        pref.remove("KEY2")
+        await pref.remove("KEY2")
         test_dict.pop("KEY2")
-        assert test_dict == pref.get_dict()
+        assert test_dict == await pref.get_dict()
 
         # remove out test data and verify it works
-        pref.clear()
-        assert pref.get_dict() == {}
+        await pref.clear()
+        assert await pref.get_dict() == {}

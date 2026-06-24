@@ -5,9 +5,8 @@ import dataclasses
 import logging
 import os
 import sys
-import threading
 from collections.abc import AsyncGenerator, Callable, Coroutine, Iterable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import asynccontextmanager
 from enum import Enum, auto
 from functools import cached_property, wraps
 from pathlib import Path, PurePath
@@ -28,7 +27,6 @@ from typing import (
 )
 from typing_extensions import Buffer, Self, assert_never
 
-import zyncio
 from construct import Container
 
 from rpcclient.clients.darwin.consts import BLOCK_IS_GLOBAL
@@ -52,9 +50,8 @@ from rpcclient.core.subsystems.lief import Lief
 from rpcclient.core.subsystems.network import Network
 from rpcclient.core.subsystems.processes import Processes
 from rpcclient.core.subsystems.sysctl import Sysctl
-from rpcclient.core.symbol import BaseSymbol
+from rpcclient.core.symbol import Symbol
 from rpcclient.core.symbols_jar import (
-    AsyncSymbolT_co,
     LazySymbol,
     SymbolsJar,
     SymbolT,
@@ -76,7 +73,7 @@ from rpcclient.exceptions import (
     ServerResponseError,
     SpawnError,
 )
-from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
+from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.protos.rpc_api_pb2 import Argument, MsgId
 from rpcclient.protos.rpc_pb2 import ProtocolConstants
 
@@ -181,23 +178,26 @@ def null_pointer_guard(
 RemoteCallArg: TypeAlias = LazySymbol | float | str | int | bytes | Enum | PurePath
 
 
-class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
+class CoreClient(Generic[SymbolT_co], abc.ABC):
     """Main client interface to access the remote rpcserver"""
 
     DEFAULT_ARGV: ClassVar[list[str]] = ["/bin/sh"]
     DEFAULT_ENVP: ClassVar[list[str]] = []
 
-    def __init__(self, bridge: SyncRpcBridge | AsyncRpcBridge, dlsym_global_handle: int = RTLD_NEXT) -> None:
-        self._bridge: SyncRpcBridge | AsyncRpcBridge = bridge
+    def __init__(self, bridge: RpcBridge, dlsym_global_handle: int = RTLD_NEXT) -> None:
+        self._bridge: RpcBridge = bridge
         self._old_settings = None
         self._endianness: Literal["<", ">"] = "<"
         self._dlsym_global_handle: int = dlsym_global_handle
         self._logger: logging.Logger = logging.getLogger(self.__module__)
         self.notifier: EventNotifier = EventNotifier()
         self.pre_rpc_call_hooks: list[Callable[[], Coroutine[Any, Any, object]]] = []
+        self._protocol_lock: asyncio.Lock = asyncio.Lock()
 
-    @abc.abstractmethod
-    def _acquire_protocol_lock(self) -> AbstractAsyncContextManager[None]: ...
+    @asynccontextmanager
+    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
+        async with self._protocol_lock:
+            yield
 
     @cached_property
     def symbols(self) -> SymbolsJar[SymbolT_co]:
@@ -207,9 +207,8 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
     def null(self) -> SymbolT_co:
         return self.symbol(0)
 
-    @zyncio.zclassmethod
     @classmethod
-    async def create(cls, bridge: SyncRpcBridge | AsyncRpcBridge) -> Self:
+    async def create(cls, bridge: RpcBridge) -> Self:
         return cls(bridge)
 
     @subsystem
@@ -232,48 +231,43 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
     def sysctl(self) -> Sysctl[Self]:
         return Sysctl(self)
 
-    @zyncio.zmethod
     async def info(self) -> None:
         """print information about the current target"""
-        uname = await self.get_uname.z()
+        uname = await self.get_uname()
         print("sysname:", uname.sysname)
         print("nodename:", uname.nodename)
         print("release:", uname.release)
         print("version:", uname.version)
         print("machine:", uname.machine)
-        print(f"uid: {(await self.symbols.getuid.z()):d}")
-        print(f"gid: {(await self.symbols.getgid.z()):d}")
-        print(f"pid: {await self.get_pid.z():d}")
-        print(f"ppid: {(await self.symbols.getppid.z()):d}")
-        print(f"progname: {await self.get_progname.z()}")
+        print(f"uid: {(await self.symbols.getuid()):d}")
+        print(f"gid: {(await self.symbols.getgid()):d}")
+        print(f"pid: {await self.get_pid():d}")
+        print(f"ppid: {(await self.symbols.getppid()):d}")
+        print(f"progname: {await self.get_progname()}")
 
     _cached_progname: str | None = None
 
-    @zyncio.zmethod
     async def get_progname(self) -> str:
         """get the program name from remote"""
         if self._cached_progname is None:
             # bugfix https://github.com/doronz88/rpc-project/issues/405
             # Default Linux libraries don't expose `getprogname()`, so instead we use the `__progname` global symbol.
             # Tested on both macOS and Ubuntu.
-            self._cached_progname = await (await self.symbols["__progname"].getindex(0)).peek_str.z()
+            self._cached_progname = await (await self.symbols["__progname"].getindex(0)).peek_str()
 
         return self._cached_progname
 
-    @zyncio.zproperty
     async def progname(self) -> str:
         """get the program name from remote"""
-        return await self.get_progname.z()
+        return await self.get_progname()
 
-    @zyncio.zmethod
     @abc.abstractmethod
     async def get_uname(self) -> Container:
         """get the utsname struct from remote"""
 
-    @zyncio.zproperty
     async def uname(self) -> Container:
         """get the utsname struct from remote"""
-        return await self.get_uname.z()
+        return await self.get_uname()
 
     @property
     def id(self) -> int:
@@ -291,7 +285,6 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
     def arch(self) -> int:
         return self._bridge.arch
 
-    @zyncio.zmethod
     async def rpc_call(self, msg_id: int, **kwargs: Any) -> Any:
         # Pop all hooks here, to prevent hooks from running out of order due to recursion.
         hooks, self.pre_rpc_call_hooks[:] = self.pre_rpc_call_hooks[::-1], []
@@ -311,25 +304,21 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
         except ServerResponseError:
             raise
 
-    @zyncio.zmethod
     async def dlopen(self, filename: str, mode: int) -> SymbolT_co:
         """Load a shared library on the remote host and return its handle."""
-        return self.symbol((await self.rpc_call.z(MsgId.REQ_DLOPEN, filename=filename, mode=mode)).handle)
+        return self.symbol((await self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode)).handle)
 
-    @zyncio.zmethod
     async def dlclose(self, lib: int) -> int:
         """Close a previously opened remote library handle."""
-        return (await self.rpc_call.z(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value)).res
+        return (await self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value)).res
 
-    @zyncio.zmethod
     async def dlsym(self, lib: int, symbol_name: str) -> int:
         """Resolve a symbol name in a remote library handle and return its address.
 
         Runs and pops any hooks in `self.pre_dlsym_hooks` first.
         """
-        return (await self.rpc_call.z(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)).ptr
+        return (await self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)).ptr
 
-    @zyncio.zmethod
     @null_pointer_guard
     async def call(
         self,
@@ -365,7 +354,7 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
                 assert_never(arg)
                 raise ArgumentError(f"Can't serialize object of type {type(arg).__name__}")
 
-        ret = await self.rpc_call.z(MsgId.REQ_CALL, address=address, va_list_index=va_list_index, argv=args)
+        ret = await self.rpc_call(MsgId.REQ_CALL, address=address, va_list_index=va_list_index, argv=args)
         if ret.HasField("arm_registers"):
             d0 = ret.arm_registers.d0
             if return_float32:
@@ -377,35 +366,32 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
             return self.symbol(ret.arm_registers.x0)
         return self.symbol(ret.return_value)
 
-    @zyncio.zmethod
     @null_pointer_guard
     async def peek(self, address: int, size: int) -> bytes:
         """peek data at the given address"""
         try:
-            return (await self.rpc_call.z(MsgId.REQ_PEEK, address=address, size=size)).data
+            return (await self.rpc_call(MsgId.REQ_PEEK, address=address, size=size)).data
         except ServerResponseError as e:
             raise ArgumentError() from e
 
-    @zyncio.zmethod
     @null_pointer_guard
     async def poke(self, address: int, data: bytes) -> Any:
         """poke data at a given address"""
         try:
-            return await self.rpc_call.z(MsgId.REQ_POKE, address=address, data=data)
+            return await self.rpc_call(MsgId.REQ_POKE, address=address, data=data)
         except ServerResponseError as e:
             raise ArgumentError() from e
 
-    @zyncio.zmethod
     async def get_dummy_block(self) -> SymbolT_co:
         """Get an address for a stub block containing nothing"""
         block_size = block_literal.sizeof()
         desc_size = block_descriptor.sizeof()
 
-        descriptor = await self.symbols.malloc.z(desc_size)
-        await descriptor.poke.z(block_descriptor.build({"reserved": 0, "size": block_size}))
+        descriptor = await self.symbols.malloc(desc_size)
+        await descriptor.poke(block_descriptor.build({"reserved": 0, "size": block_size}))
 
-        block = await self.symbols.malloc.z(block_size)
-        await block.poke.z(
+        block = await self.symbols.malloc(block_size)
+        await block.poke(
             block_literal.build({
                 "isa": await self.symbols._NSConcreteGlobalBlock.resolve(),
                 "flags": BLOCK_IS_GLOBAL,
@@ -417,14 +403,13 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
 
         return block
 
-    @zyncio.zmethod
     async def listdir(self, path: str | PurePath) -> list[ProtocolDirent]:
         """get an address for a stub block containing nothing"""
         entries: list[ProtocolDirent] = []
         try:
-            ret = await self.rpc_call.z(MsgId.REQ_LIST_DIR, path=str(path))
+            ret = await self.rpc_call(MsgId.REQ_LIST_DIR, path=str(path))
         except ServerResponseError:
-            await self.raise_errno_exception.z(f"failed to listdir: {path}")
+            await self.raise_errno_exception(f"failed to listdir: {path}")
 
         for entry in ret.dir_entries:
             lstat = ProtocolDitentStat(
@@ -470,7 +455,6 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
             )
         return entries
 
-    @zyncio.zmethod
     async def spawn(
         self,
         argv: list[str] | None = None,
@@ -507,7 +491,7 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
             if raw_tty:
                 self._prepare_terminal()
             try:
-                error = await self.enter_pty_mode.z(stdin, stdout)
+                error = await self.enter_pty_mode(stdin, stdout)
             except Exception:
                 # this is important to really catch every exception here, even exceptions not inheriting from Exception
                 # so the controlling terminal will remain working with its previous settings
@@ -521,102 +505,84 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
     def symbol(self, symbol: int) -> SymbolT_co:
         """Get a symbol object from a given address"""
 
-    @zyncio.zmethod
     async def get_errno(self) -> int:
         return await self.symbols.errno.getindex(0)
 
-    @zyncio.zmethod
     async def set_errno(self, value: int) -> None:
         await self.symbols.errno.setindex(0, value)
 
-    @zyncio.zproperty
-    async def _get_errno(self) -> int:
-        return await self.get_errno.z()
-
-    @_get_errno.setter
-    async def errno(self, value: int) -> None:
-        await self.set_errno.z(value)
-
-    @zyncio.zmethod
     async def get_last_error(self) -> str:
         """get info about the last occurred error"""
-        if not (errno := await self.get_errno.z()):
+        if not (errno := await self.get_errno()):
             return ""
-        err_str_ptr = await self.symbols.strerror.z(errno)
-        err_str = await err_str_ptr.peek_str.z()
+        err_str_ptr = await self.symbols.strerror(errno)
+        err_str = await err_str_ptr.peek_str()
         return f"[{errno}] {err_str}"
 
-    @zyncio.zproperty
     async def environ(self) -> list[str]:
         result = []
         environ = await self.symbols.environ.getindex(0)
         i = 0
         while var_ptr := await environ.getindex(i):
-            result.append(await var_ptr.peek_str.z())
+            result.append(await var_ptr.peek_str())
             i += 1
         return result
 
-    @zyncio.zmethod
     async def setenv(self, name: str, value: str) -> None:
         """set process environment variable"""
         await (await self.symbols.setenv.resolve()).call(name, value)
 
-    @zyncio.zmethod
     async def getenv(self, name: str) -> str | None:
         """get process environment variable"""
-        value = await self.symbols.getenv.z(name)
-        if not isinstance(value, BaseSymbol) or not value:
+        value = await self.symbols.getenv(name)
+        if not isinstance(value, Symbol) or not value:
             return None
-        return await value.peek_str.z()
+        return await value.peek_str()
 
     _cached_pid: int | None = None
 
-    @zyncio.zmethod
     async def get_pid(self) -> int:
         if self._cached_pid is None:
-            self._cached_pid = int(await self.symbols.getpid.z())
+            self._cached_pid = int(await self.symbols.getpid())
 
         return self._cached_pid
 
-    @zyncio.zproperty
     async def pid(self) -> int:
-        return await self.get_pid.z()
+        return await self.get_pid()
 
-    @zyncio.zcontextmanagermethod
+    @asynccontextmanager
     async def safe_calloc(self, size: int) -> AsyncGenerator[SymbolT_co]:
-        async with self.safe_malloc.z(size) as x:
-            await x.poke.z(b"\x00" * size)
+        async with self.safe_malloc(size) as x:
+            await x.poke(b"\x00" * size)
             yield x
 
-    @zyncio.zcontextmanagermethod
+    @asynccontextmanager
     async def safe_malloc(self, size: int) -> AsyncGenerator[SymbolT_co]:
-        ptr = cast(SymbolT_co, await self.symbols.malloc.z(size))
-        async with self.freeing.z(ptr) as x:
+        ptr = cast(SymbolT_co, await self.symbols.malloc(size))
+        async with self.freeing(ptr) as x:
             yield x
 
-    @zyncio.zcontextmanagermethod
+    @asynccontextmanager
     async def freeing(self, symbol: SymbolT) -> AsyncGenerator[SymbolT]:
         try:
             yield symbol
         finally:
             if symbol:
-                await self.symbols.free.z(symbol)
+                await self.symbols.free(symbol)
 
-    @zyncio.zmethod
     async def close(self) -> None:
         try:
-            await self.rpc_call.z(MsgId.REQ_CLOSE_CLIENT)
+            await self.rpc_call(MsgId.REQ_CLOSE_CLIENT)
         finally:
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
             self._bridge.close()
 
     async def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
         try:
-            return (await self.rpc_call.z(MsgId.REQ_EXEC, background=background, argv=argv, envp=envp)).pid
+            return (await self.rpc_call(MsgId.REQ_EXEC, background=background, argv=argv, envp=envp)).pid
         except ServerResponseError as e:
             raise SpawnError(f"failed to spawn: {argv}") from e
 
-    @zyncio.zmethod
     async def enter_pty_mode(self, stdin=sys.stdin, stdout=sys.stdout):
         # the socket must be non-blocking for using select()
         sock = self._bridge.sock.raw_socket
@@ -649,7 +615,7 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
                             sock.sendall(buf)
                     elif fd == sock:
                         try:
-                            response = await self._bridge.sock.rpc_msg_recv_pty.z()
+                            response = await self._bridge.sock.rpc_msg_recv_pty()
                         except ConnectionResetError:
                             print("Bye. 👋")
                             running = False
@@ -680,9 +646,8 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
         self._old_settings = termios.tcgetattr(fd)  # pyright: ignore[reportPossiblyUnboundVariable]
         tty.setraw(fd)  # pyright: ignore[reportPossiblyUnboundVariable]
 
-    @zyncio.zmethod
     async def raise_errno_exception(self, message: str):
-        message += f" ({await self.get_last_error.z()})"
+        message += f" ({await self.get_last_error()})"
         exceptions = {
             EPERM: RpcPermissionError,
             ENOENT: RpcFileNotFoundError,
@@ -694,7 +659,7 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
             EAGAIN: RpcResourceTemporarilyUnavailableError,
             ECONNREFUSED: RpcConnectionRefusedError,
         }
-        exception = exceptions.get(await self.get_errno.z())
+        exception = exceptions.get(await self.get_errno())
         if exception:
             raise exception(message)
         raise BadReturnValueError(message)
@@ -711,35 +676,8 @@ class BaseCoreClient(Generic[SymbolT_co], abc.ABC):
         """
         return CaptureFD(self, fd, sock_buf_size)
 
-    def __repr__(self) -> str:
-        if zyncio.is_sync(self):
-            progname = self.progname
-            pid = self.pid
-        else:
-            pid = self._cached_pid if self._cached_pid is not None else "?"
-            progname = self._cached_progname if self._cached_progname is not None else "?"
-        return f"<{self.__class__.__name__}: {pid} | {progname}>"
-
-
-class CoreClient(zyncio.SyncMixin, BaseCoreClient[SymbolT_co]):
-    def __init__(self, bridge: SyncRpcBridge | AsyncRpcBridge, dlsym_global_handle: int = RTLD_NEXT) -> None:
-        self._protocol_lock: threading.Lock = threading.Lock()
-        super().__init__(bridge, dlsym_global_handle)
-
-    @asynccontextmanager
-    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
-        with self._protocol_lock:
-            yield
-
-    @property
-    def last_error(self) -> str:
-        return self.get_last_error()
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
+    async def last_error(self) -> str:
+        return await self.get_last_error()
 
     def shell(self) -> None:
         from xonsh.built_ins import XSH
@@ -760,19 +698,13 @@ class CoreClient(zyncio.SyncMixin, BaseCoreClient[SymbolT_co]):
         except SystemExit:
             self._logger.disabled = False
 
-
-class AsyncCoreClient(zyncio.AsyncMixin, BaseCoreClient[AsyncSymbolT_co]):
-    def __init__(self, bridge: SyncRpcBridge | AsyncRpcBridge, dlsym_global_handle: int = RTLD_NEXT) -> None:
-        self._protocol_lock: asyncio.Lock = asyncio.Lock()
-        super().__init__(bridge, dlsym_global_handle)
-
-    @asynccontextmanager
-    async def _acquire_protocol_lock(self) -> AsyncGenerator[None]:
-        async with self._protocol_lock:
-            yield
-
     async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.close()
+
+    def __repr__(self) -> str:
+        pid = self._cached_pid if self._cached_pid is not None else "?"
+        progname = self._cached_progname if self._cached_progname is not None else "?"
+        return f"<{self.__class__.__name__}: {pid} | {progname}>"

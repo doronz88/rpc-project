@@ -4,9 +4,9 @@ import plistlib
 from collections import namedtuple
 from dataclasses import dataclass
 from functools import partial
+from typing import cast
 from typing_extensions import Self
 
-import zyncio
 from construct import Container
 from IPython.core.getipython import get_ipython
 from tqdm import tqdm
@@ -35,13 +35,13 @@ from rpcclient.clients.darwin.subsystems.processes import DarwinProcesses
 from rpcclient.clients.darwin.subsystems.syslog import Syslog
 from rpcclient.clients.darwin.subsystems.time import Time
 from rpcclient.clients.darwin.subsystems.xpc import Xpc
-from rpcclient.clients.darwin.symbol import AsyncDarwinSymbol, BaseDarwinSymbol, DarwinSymbol
-from rpcclient.core.client import AsyncCoreClient, BaseCoreClient, CoreClient, RemoteCallArg
+from rpcclient.clients.darwin.symbol import DarwinSymbol
+from rpcclient.core.client import CoreClient, RemoteCallArg
 from rpcclient.core.structs.consts import RTLD_GLOBAL, RTLD_NOW
 from rpcclient.core.subsystems.decorator import subsystem
 from rpcclient.core.symbols_jar import LazySymbol
 from rpcclient.exceptions import CfSerializationError, MissingLibraryError
-from rpcclient.protocol.rpc_bridge import AsyncRpcBridge, SyncRpcBridge
+from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.protos.rpc_api_pb2 import MsgId
 from rpcclient.utils import cached_async_method
 
@@ -84,21 +84,23 @@ class DyldImage:
     base_address: int
 
 
-class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
+class DarwinClient(CoreClient[DarwinSymbolT_co]):
     loaded_objc_classes: list
     _NSPropertyListSerialization: DarwinSymbolT_co
     _CFNullTypeID: object
 
-    def __init__(self, bridge: SyncRpcBridge | AsyncRpcBridge) -> None:
+    def __init__(self, bridge: RpcBridge) -> None:
         super().__init__(bridge, RTLD_GLOBAL)
         self._objc_class_cache: dict[str, objective_c_class.Class[DarwinSymbolT_co]] = {}
 
-    @zyncio.zclassmethod
+    def symbol(self, symbol: int) -> DarwinSymbolT_co:
+        return cast(DarwinSymbolT_co, DarwinSymbol(symbol, self))
+
     @classmethod
-    async def create(cls, bridge: SyncRpcBridge | AsyncRpcBridge) -> Self:
+    async def create(cls, bridge: RpcBridge) -> Self:
         self = cls(bridge)
         if (
-            await self.dlopen.z(
+            await self.dlopen(
                 "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
                 RTLD_NOW,
             )
@@ -107,8 +109,8 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
             raise MissingLibraryError("failed to load CoreFoundation")
 
         self.loaded_objc_classes = []
-        self._NSPropertyListSerialization = await self.symbols.objc_getClass.z("NSPropertyListSerialization")
-        self._CFNullTypeID = await self.symbols.CFNullGetTypeID.z()
+        self._NSPropertyListSerialization = await self.symbols.objc_getClass("NSPropertyListSerialization")
+        self._CFNullTypeID = await self.symbols.CFNullGetTypeID()
 
         return self
 
@@ -184,59 +186,50 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
     def location(self) -> Location[DarwinSymbolT_co]:
         return Location(self)
 
-    @zyncio.zmethod
     async def get_images(self) -> list[DyldImage]:
         m = []
-        for i in range(await self.symbols._dyld_image_count.z()):
-            module_name = await (await self.symbols._dyld_get_image_name.z(i)).peek_str.z()
-            base_address = await self.symbols._dyld_get_image_header.z(i)
+        for i in range(await self.symbols._dyld_image_count()):
+            module_name = await (await self.symbols._dyld_get_image_name(i)).peek_str()
+            base_address = await self.symbols._dyld_get_image_header(i)
             m.append(DyldImage(module_name, base_address))
         return m
 
-    @zyncio.zproperty
     async def images(self) -> list[DyldImage]:
-        return await self.get_images.z()
+        return await self.get_images()
 
-    @zyncio.zmethod
     @cached_async_method
     async def get_uname(self) -> Container:
-        async with self.safe_calloc.z(utsname.sizeof()) as uname:
-            assert await self.symbols.uname.z(uname) == 0
-            return await uname.parse.z(utsname)
+        async with self.safe_calloc(utsname.sizeof()) as uname:
+            assert await self.symbols.uname(uname) == 0
+            return await uname.parse(utsname)
 
-    @zyncio.zproperty
     async def is_idevice(self) -> bool:
-        return (await self.get_uname.z()).machine.startswith("i")
+        return (await self.get_uname()).machine.startswith("i")
 
-    @zyncio.zmethod
     async def roots(self) -> list[str]:
         """get a list of all accessible darwin roots when used for lookup of files/preferences/..."""
         return ["/", "/var/root"]
 
-    @zyncio.zmethod
     async def showobject(self, object_address: int) -> dict:
-        return json.loads((await self.rpc_call.z(MsgId.REQ_SHOW_OBJECT, address=object_address)).description)
+        return json.loads((await self.rpc_call(MsgId.REQ_SHOW_OBJECT, address=object_address)).description)
 
-    @zyncio.zmethod
     async def showclass(self, class_address: int) -> dict:
-        return json.loads((await self.rpc_call.z(MsgId.REQ_SHOW_CLASS, address=class_address)).description)
+        return json.loads((await self.rpc_call(MsgId.REQ_SHOW_CLASS, address=class_address)).description)
 
-    @zyncio.zmethod
     async def get_class_list(self) -> dict[str, objective_c_class.Class]:
-        ret = await self.rpc_call.z(MsgId.REQ_GET_CLASS_LIST)
+        ret = await self.rpc_call(MsgId.REQ_GET_CLASS_LIST)
         result = {}
         for _class in ret.classes:
             result[_class.name] = objective_c_class.Class(self, self.symbol(_class.address), lazy=True)
         return result
 
-    @zyncio.zmethod
     async def decode_cf(self, symbol: int) -> CfSerializable:
-        if await self.symbols.CFGetTypeID.z(symbol) == self._CFNullTypeID:
+        if await self.symbols.CFGetTypeID(symbol) == self._CFNullTypeID:
             return None
 
-        async with self.safe_malloc.z(8) as p_error:
+        async with self.safe_malloc(8) as p_error:
             await p_error.setindex(0, 0)
-            objc_data = await self._NSPropertyListSerialization.objc_call.z(
+            objc_data = await self._NSPropertyListSerialization.objc_call(
                 "dataWithPropertyList:format:options:error:",
                 symbol,
                 CFPropertyListFormat.kCFPropertyListBinaryFormat_v1_0,
@@ -247,24 +240,23 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
                 raise CfSerializationError()
         if objc_data == 0:
             return None
-        count = await self.symbols.CFDataGetLength.z(objc_data)
-        async with self.safe_malloc.z(count) as buf:
-            await self.symbols.CFDataGetBytes.z(objc_data, 0, count, buf)
-            result = plistlib.loads(await buf.peek.z(count))
-        await objc_data.objc_call.z("release")
+        count = await self.symbols.CFDataGetLength(objc_data)
+        async with self.safe_malloc(count) as buf:
+            await self.symbols.CFDataGetBytes(objc_data, 0, count, buf)
+            result = plistlib.loads(await buf.peek(count))
+        await objc_data.objc_call("release")
         return result
 
-    @zyncio.zmethod
     async def cf(self, o: CfSerializable) -> DarwinSymbolT_co:
         """construct a CFObject from a given python object"""
         if o is None:
             return await self.symbols.kCFNull.getindex(0)
 
         plist_bytes = plistlib.dumps(o, fmt=plistlib.FMT_BINARY)
-        plist_objc_bytes = await self.symbols.CFDataCreate.z(kCFAllocatorDefault, plist_bytes, len(plist_bytes))
-        async with self.safe_malloc.z(8) as p_error:
+        plist_objc_bytes = await self.symbols.CFDataCreate(kCFAllocatorDefault, plist_bytes, len(plist_bytes))
+        async with self.safe_malloc(8) as p_error:
             await p_error.setindex(0, 0)
-            result = await self._NSPropertyListSerialization.objc_call.z(
+            result = await self._NSPropertyListSerialization.objc_call(
                 "propertyListWithData:options:format:error:",
                 plist_objc_bytes,
                 CFPropertyListMutabilityOptions.kCFPropertyListMutableContainersAndLeaves,
@@ -283,7 +275,6 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         """
         return ObjectiveCSymbol(int(address), self)
 
-    @zyncio.zmethod
     async def objc_get_class(self, name: str) -> objective_c_class.Class[DarwinSymbolT_co]:
         """
         Get ObjC class object
@@ -298,19 +289,17 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
     def objc_get_class_lazy(self, name: str) -> "LazyObjectiveCClassSymbol[DarwinSymbolT_co]":
         return LazyObjectiveCClassSymbol(self, name)
 
-    @zyncio.zmethod
-    async def is_objc_type(self, symbol: BaseDarwinSymbol) -> bool:
+    async def is_objc_type(self, symbol: DarwinSymbol) -> bool:
         """
         Test if a given symbol represents an objc object
         :param symbol:
         :return:
         """
-        class_info = await (await self.processes.get_self.z()).get_symbol_class_info.z(symbol)
+        class_info = await (await self.processes.get_self()).get_symbol_class_info(symbol)
         if class_info == 0:
             return False
-        return await (await class_info.objc_call.z("typeName")).py.z() == "ObjC"
+        return await (await class_info.objc_call("typeName")).py() == "ObjC"
 
-    @zyncio.zmethod
     async def rebind_symbols(self, populate_global_scope: bool = True) -> None:
         ip = get_ipython()
         if ip is None:
@@ -319,24 +308,22 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         self.loaded_objc_classes.clear()
 
         # enumerate all loaded objc classes
-        for name, class_ in (await self.get_class_list.z()).items():
+        for name, class_ in (await self.get_class_list()).items():
             self.loaded_objc_classes.append(name)
             if populate_global_scope:
                 ip.user_ns[name] = class_
 
-    @zyncio.zmethod
     async def load_framework(self, name: str) -> None:
-        lib = await self.dlopen.z(f"{FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
+        lib = await self.dlopen(f"{FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
         if lib == 0:
-            lib = await self.dlopen.z(f"{PRIVATE_FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
+            lib = await self.dlopen(f"{PRIVATE_FRAMEWORKS_PATH}/{name}.framework/{name}", RTLD_NOW)
         if lib == 0:
             raise MissingLibraryError(f"failed to load {name}")
 
     def load_framework_lazy(self, name: str) -> None:
         """Register a framework to be loaded at the beginning of the next RPC call operation."""
-        self.pre_rpc_call_hooks.append(partial(self.load_framework.z, name=name))
+        self.pre_rpc_call_hooks.append(partial(self.load_framework, name=name))
 
-    @zyncio.zmethod
     async def load_all_libraries(self, rebind_symbols: bool = True) -> None:
         logger.debug(f"loading frameworks: {FRAMEWORKS_PATH}")
         await self._load_frameworks(FRAMEWORKS_PATH)
@@ -344,23 +331,22 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         await self._load_frameworks(PRIVATE_FRAMEWORKS_PATH)
 
         logger.debug(f"loading libraries: {LIB_PATH}")
-        for filename in tqdm(await self.fs.listdir.z(LIB_PATH)):
+        for filename in tqdm(await self.fs.listdir(LIB_PATH)):
             if not filename.endswith(".dylib"):
                 continue
-            await self.dlopen.z(f"{LIB_PATH}/{filename}", RTLD_NOW)
+            await self.dlopen(f"{LIB_PATH}/{filename}", RTLD_NOW)
 
         if rebind_symbols:
-            await self.rebind_symbols.z()
+            await self.rebind_symbols()
 
     async def _load_frameworks(self, frameworks_path: str) -> None:
-        for filename in tqdm(await self.fs.listdir.z(frameworks_path)):
+        for filename in tqdm(await self.fs.listdir(frameworks_path)):
             if filename in FRAMEWORKS_BLACKLIST:
                 continue
             if "SpringBoard" in filename or "UI" in filename:
                 continue
-            await self.dlopen.z(f"{frameworks_path}/{filename}/{filename.split('.', 1)[0]}", RTLD_NOW)
+            await self.dlopen(f"{frameworks_path}/{filename}/{filename.split('.', 1)[0]}", RTLD_NOW)
 
-    @zyncio.zmethod
     async def create_autorelease_pool_ctx(self) -> autorelease_pool.AutorelesePoolCtx:
         """
         Create `AutoreleasePoolCtx` representing an Objective-C `NSAutoreleasePool`.
@@ -371,7 +357,6 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         """
         return autorelease_pool.AutorelesePoolCtx(self)
 
-    @zyncio.zmethod
     async def get_autorelease_pools(self) -> list[autorelease_pool.AutoreleasePool]:
         """
         Get all autorelease pools currently in the thread.
@@ -380,7 +365,6 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
         """
         return await autorelease_pool.get_autorelease_pools(self)
 
-    @zyncio.zmethod
     async def get_current_autorelease_pool(self) -> autorelease_pool.AutoreleasePool:
         """
         Get the most recently created autorelease pool.
@@ -394,21 +378,10 @@ class BaseDarwinClient(BaseCoreClient[DarwinSymbolT_co]):
 class LazyObjectiveCClassSymbol(LazySymbol[DarwinSymbolT_co]):
     @cached_async_method
     async def resolve(self) -> DarwinSymbolT_co:
-        return await self._client.symbols.objc_getClass.z(self.name)
+        return await self._client.symbols.objc_getClass(self.name)
 
-    @zyncio.zmethod
     async def objc_call(
         self, selector: str, *params: RemoteCallArg, va_list_index: int | None = None
     ) -> DarwinSymbolT_co:
         """call an objc method on a given object and return a symbol"""
         return await (await self.resolve())._objc_call(selector, *params, va_list_index=va_list_index)
-
-
-class DarwinClient(BaseDarwinClient[DarwinSymbol], CoreClient[DarwinSymbol]):
-    def symbol(self, symbol: int) -> DarwinSymbol:
-        return DarwinSymbol(symbol, self)
-
-
-class AsyncDarwinClient(BaseDarwinClient[AsyncDarwinSymbol], AsyncCoreClient[AsyncDarwinSymbol]):
-    def symbol(self, symbol: int) -> AsyncDarwinSymbol:
-        return AsyncDarwinSymbol(symbol, self)

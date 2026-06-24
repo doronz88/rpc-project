@@ -20,10 +20,14 @@ class RpcPrompt(Prompts):
         """Return token list for the prompt, falling back if `p` is missing."""
         try:
             client = get_ipython().user_ns.get("p")
+            # `progname` is an async method now; the prompt renders synchronously and must not
+            # block on an RPC, so show the value cached by a prior `get_progname()` (primed at
+            # connect time), falling back to "?" until it is known.
+            progname = client._cached_progname if client._cached_progname is not None else "?"
             result = [
                 (base_token, f"[{client.platform}| "),
                 (num_token, f"({client.id}) "),
-                (base_token, f"{client.progname}]: "),
+                (base_token, f"{progname}]: "),
             ]
         except AttributeError:
             result = [(base_token, "[Rpc-client]: ")]

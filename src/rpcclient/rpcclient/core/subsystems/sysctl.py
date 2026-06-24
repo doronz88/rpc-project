@@ -2,14 +2,12 @@ import struct
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
-import zyncio
-
 from rpcclient.core._types import ClientBound, ClientT_co
 from rpcclient.core.symbol import SymbolT_co
 
 
 if TYPE_CHECKING:
-    from rpcclient.core.client import BaseCoreClient
+    from rpcclient.core.client import CoreClient
 
 
 class CTL(IntEnum):
@@ -110,28 +108,26 @@ class Sysctl(ClientBound[ClientT_co]):
     def __init__(self, client: ClientT_co) -> None:
         self._client = client
 
-    @zyncio.zmethod
     async def get(self, ctl: CTL, kern: KERN, arg: int | None = None, size: int = MAX_SIZE) -> bytes:
         """call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote"""
         namelen = 2
 
-        async with self._client.safe_malloc.z(4 * 3) as mib:
+        async with self._client.safe_malloc(4 * 3) as mib:
             mib.item_size = 4
             await mib.setindex(0, ctl)
             await mib.setindex(1, kern)
             if arg is not None:
                 await mib.setindex(2, int(arg))
                 namelen += 1
-            async with self._client.safe_malloc.z(8) as oldenp:
+            async with self._client.safe_malloc(8) as oldenp:
                 await oldenp.setindex(0, size)
-                async with self._client.safe_malloc.z(size) as oldp:
-                    if await self._client.symbols.sysctl.z(mib, namelen, oldp, oldenp, 0, 0):
-                        await self._client.raise_errno_exception.z("sysctl() failed")
-                    return await oldp.peek.z(await oldenp.getindex(0))
+                async with self._client.safe_malloc(size) as oldp:
+                    if await self._client.symbols.sysctl(mib, namelen, oldp, oldenp, 0, 0):
+                        await self._client.raise_errno_exception("sysctl() failed")
+                    return await oldp.peek(await oldenp.getindex(0))
 
-    @zyncio.zmethod
     async def set(
-        self: "Sysctl[BaseCoreClient[SymbolT_co]]",
+        self: "Sysctl[CoreClient[SymbolT_co]]",
         ctl: CTL,
         kern: KERN,
         oldp: SymbolT_co,
@@ -141,49 +137,43 @@ class Sysctl(ClientBound[ClientT_co]):
         """call sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) on remote"""
         namelen = 2
 
-        async with self._client.safe_malloc.z(4 * 3) as mib:
+        async with self._client.safe_malloc(4 * 3) as mib:
             mib.item_size = 4
             await mib.setindex(0, ctl)
             await mib.setindex(1, kern)
             if arg is not None:
                 await mib.setindex(2, int(arg))
                 namelen += 1
-            if await self._client.symbols.sysctl.z(mib, namelen, oldp, oldenp, 0, 0):
-                await self._client.raise_errno_exception.z("sysctl() failed")
+            if await self._client.symbols.sysctl(mib, namelen, oldp, oldenp, 0, 0):
+                await self._client.raise_errno_exception("sysctl() failed")
 
-    @zyncio.zmethod
     async def get_str_by_name(self, name: str) -> str:
         """equivalent of: sysctl <name>"""
-        return (await self.get_by_name.z(name)).strip(b"\x00").decode()
+        return (await self.get_by_name(name)).strip(b"\x00").decode()
 
-    @zyncio.zmethod
     async def get_int_by_name(self, name: str) -> int:
         """equivalent of: sysctl <name>"""
-        return struct.unpack("<I", await self.get_by_name.z(name))[0]
+        return struct.unpack("<I", await self.get_by_name(name))[0]
 
-    @zyncio.zmethod
     async def set_int_by_name(self, name: str, value: int) -> None:
         """equivalent of: sysctl <name> -w value"""
-        await self.set_by_name.z(name, struct.pack("<I", value))
+        await self.set_by_name(name, struct.pack("<I", value))
 
-    @zyncio.zmethod
     async def set_str_by_name(self, name: str, value: str) -> None:
         """equivalent of: sysctl <name> -w value"""
-        await self.set_by_name.z(name, value.encode() + b"\x00")
+        await self.set_by_name(name, value.encode() + b"\x00")
 
-    @zyncio.zmethod
     async def set_by_name(self, name: str, value: bytes) -> None:
         """equivalent of: sysctl <name> -w value"""
-        if await self._client.symbols.sysctlbyname.z(name, 0, 0, value, len(value)):
-            await self._client.raise_errno_exception.z("sysctlbyname() failed")
+        if await self._client.symbols.sysctlbyname(name, 0, 0, value, len(value)):
+            await self._client.raise_errno_exception("sysctlbyname() failed")
 
-    @zyncio.zmethod
     async def get_by_name(self, name: str, size=MAX_SIZE) -> bytes:
         """equivalent of: sysctl <name>"""
         oldval_len = size
-        async with self._client.safe_malloc.z(8) as p_oldval_len:
+        async with self._client.safe_malloc(8) as p_oldval_len:
             await p_oldval_len.setindex(0, oldval_len)
-            async with self._client.safe_malloc.z(oldval_len) as oldval:
-                if await self._client.symbols.sysctlbyname.z(name, oldval, p_oldval_len, 0, 0):
-                    await self._client.raise_errno_exception.z("sysctlbyname() failed")
-                return await oldval.peek.z(await p_oldval_len.getindex(0))
+            async with self._client.safe_malloc(oldval_len) as oldval:
+                if await self._client.symbols.sysctlbyname(name, oldval, p_oldval_len, 0, 0):
+                    await self._client.raise_errno_exception("sysctlbyname() failed")
+                return await oldval.peek(await p_oldval_len.getindex(0))
