@@ -1,4 +1,5 @@
-from contextlib import suppress
+import asyncio
+import concurrent.futures
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic
@@ -16,7 +17,7 @@ from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol
 from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import RpcClientException
-from rpcclient.utils import readonly, run_in_loop
+from rpcclient.utils import get_asyncio_loop, readonly, run_in_loop
 
 
 if TYPE_CHECKING:
@@ -239,13 +240,58 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
 
         return jar
 
+    def _ensure_class_loaded_for_dir(self) -> None:
+        """Load the class synchronously so completions list selectors on the first TAB.
+
+        Introspection (`__dir__`) is synchronous, but loading the class is async and the RPC I/O is
+        bound to the shared loop (see `rpcclient.utils.get_asyncio_loop`). Three cases:
+
+        - No loop running in this thread (CLI / startup): drive the shared loop directly.
+        - A *different* loop is running here — typically prompt_toolkit's during tab-completion. We
+          can't nest `run_until_complete` on it, but the shared loop is idle, so drive the load to
+          completion on a worker thread and block. This is what makes selectors show on the *first*
+          TAB instead of only after dismissing the menu and pressing TAB again.
+        - We're inside the shared loop itself (can't block it): fall back to a background task, so
+          completions populate on a subsequent introspection.
+
+        Either way the coroutine is always consumed, so no "never awaited" warning.
+        """
+        if self.class_ is not None or getattr(self, "_loading_class", False):
+            return
+        coro = self.reload()
+        shared_loop = get_asyncio_loop()
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is None:
+            try:
+                run_in_loop(coro)
+            except Exception:
+                coro.close()
+            return
+
+        if running_loop is not shared_loop:
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    executor.submit(shared_loop.run_until_complete, coro).result()
+            except Exception:
+                coro.close()
+            return
+
+        self._loading_class = True
+
+        def _done(task: asyncio.Task) -> None:
+            self._loading_class = False
+            # Retrieve any error (e.g. not a real ObjC object) so asyncio doesn't log it.
+            if not task.cancelled():
+                task.exception()
+
+        shared_loop.create_task(coro).add_done_callback(_done)
+
     def __dir__(self):
-        # Completions need the class loaded; load it synchronously on the shared loop the first
-        # time (cached via `class_`). Guarded so introspection never raises (e.g. if the loop is
-        # already running, or the object isn't a real ObjC instance).
-        if self.class_ is None:
-            with suppress(Exception):
-                run_in_loop(self.reload())
+        self._ensure_class_loaded_for_dir()
 
         result = set()
 
