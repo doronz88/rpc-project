@@ -292,6 +292,39 @@ class ObjectiveCSymbol(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
 
         raise AttributeError(f"{self.class_.name!r} has no attribute {name!r}")
 
+    def _has_member(self, name: str) -> bool:
+        """Whether `name` (an ObjC selector/ivar/property name) is a member of the loaded class."""
+        if any(ivar.name == name for ivar in self.ivars):
+            return True
+        if any(prop.name == name for prop in self.properties):
+            return True
+        if any(method.name == name for method in self.methods):
+            return True
+        if self.class_ is not None:
+            for sup in self.class_.iter_supers():
+                if any(method.name == name for method in sup.methods):
+                    return True
+        return False
+
+    def __getattr__(self, name: str) -> Any:
+        """Resolve a missing attribute as an ObjC member (awaitable).
+
+        Returns the coroutine produced by `get`, which loads the class on first access and resolves
+        `name` to an ivar value, a property invocation, or a bound method. Designed to be awaited
+        automatically by the `smart_await` IPython extension (``obj.selector``).
+
+        Raises `AttributeError` synchronously for dunder / introspection names, and — once the class
+        is loaded — for names that aren't real members, so `repr`/`hasattr`/IPython introspection
+        don't receive stray coroutines. Private (`_`-prefixed) selectors remain reachable via
+        ``await obj.get(...)`` / ``await obj.objc_call(...)``.
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+        sanitized = Class.sanitize_name(name)
+        if self.class_ is not None and not self._has_member(sanitized):
+            raise AttributeError(name)
+        return self.get(sanitized)
+
     def __str__(self):
         return self._to_str(False)
 
