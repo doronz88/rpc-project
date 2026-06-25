@@ -66,6 +66,10 @@ class ClientManager:
             raise ValueError(f"Unknown client mode: {server_type}")
 
         client: ClientType = await client_factory.create(bridge=rpc_bridge)
+        # Prime caches so the prompt/repr can render progname/pid synchronously. Every creation
+        # path flows through here — CLI connect and interactive `mgr.create` alike.
+        await client.get_progname()
+        await client.get_pid()
         client.notifier.register(ClientEvent.TERMINATED, self._on_client_terminated)
         client.notifier.register(ClientEvent.CREATED, self._on_client_created)
         self.add(client, internal=internal)
