@@ -31,9 +31,6 @@ def rpclocal(startup_files: tuple[str]) -> None:
 
     async def _connect() -> int:
         client = await manager.create(mode="local")
-        # Prime caches so the prompt can render progname/pid synchronously.
-        await client.get_progname()
-        await client.get_pid()
         return client.id
 
     cid = run_in_loop(_connect())
@@ -67,9 +64,6 @@ def rpcclient(
                     await client.rebind_symbols()
                 if load_all_libraries:
                     await client.load_all_libraries()
-            # Prime caches so the prompt can render progname/pid synchronously.
-            await client.get_progname()
-            await client.get_pid()
             return client.id
 
         cid = run_in_loop(_connect())
