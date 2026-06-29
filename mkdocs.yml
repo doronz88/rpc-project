@@ -1,0 +1,103 @@
+site_name: rpc-project
+site_description: Simple RPC service for controlling every aspect of a remote machine — a C server and a Python client.
+site_url: https://doronz88.github.io/rpc-project/
+repo_url: https://github.com/doronz88/rpc-project
+repo_name: doronz88/rpc-project
+edit_uri: edit/master/docs/
+copyright: Licensed under GPL-3.0
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle: { icon: material/brightness-auto, name: Switch to light mode }
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle: { icon: material/brightness-7, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle: { icon: material/brightness-4, name: Switch to system preference }
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src/rpcclient]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]
+            heading_level: 2
+  - llmstxt:
+      markdown_description: >-
+        rpc-project: a C server and Python rpcclient for calling native functions and controlling a
+        remote machine (filesystem, processes, network, HID, ObjC, and more).
+      full_output: llms-full.txt
+      sections:
+        Getting started:
+          - index.md
+          - installation.md
+        Guides:
+          - guides/quickstart.md
+          - guides/calling-native-functions.md
+        API reference:
+          - api/index.md
+          - api/core.md
+          - api/clients.md
+          - api/darwin.md
+          - api/ios.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed: { alternate_style: true }
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+hooks:
+  - docs/_hooks/suppress_griffe.py
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Guides:
+      - Quick start: guides/quickstart.md
+      - Calling native functions: guides/calling-native-functions.md
+  - API Reference:
+      - Overview: api/index.md
+      - Core client: api/core.md
+      - Platform clients: api/clients.md
+      - Darwin subsystems: api/darwin.md
+      - iOS subsystems: api/ios.md

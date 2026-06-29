@@ -60,7 +60,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-repeat", "pytest-asyncio"]
-docs = ["toml", "myst_parser", "sphinx", "sphinx-rtd-theme"]
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "mkdocs-llmstxt>=0.5"]
 dev = ["rpcclient[test,docs]"]
 
 [project.urls]

@@ -4,6 +4,8 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/doronz88/rpc-project)
 <!-- markdownlint-enable MD013 -->
 
+📖 **Full documentation: <https://doronz88.github.io/rpc-project/>**
+
 
 - [rpc-project](#rpc-project)
   - [Description](#description)
