@@ -33,12 +33,10 @@ def prompt_selection(choices: list[Any], message: str, idx: bool = False) -> Any
     """
     Prompt the user to select a value from a list.
 
-    - choices: iterable of options to present.
-    - message: prompt message shown to the user.
-    - idx: when True, return the index of the selected item; otherwise return the item itself.
-
-    Raises:
-        click.ClickException: if the user cancels the prompt (Ctrl-C).
+    :param choices: iterable of options to present.
+    :param message: prompt message shown to the user.
+    :param idx: when True, return the index of the selected item; otherwise return the item itself.
+    :raises click.ClickException: if the user cancels the prompt (Ctrl-C).
     """
     question = [inquirer3.List("selection", message=message, choices=choices, carousel=True)]
     try:

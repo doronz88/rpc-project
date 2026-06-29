@@ -43,7 +43,7 @@ plugins:
         python:
           paths: [src/rpcclient]
           options:
-            docstring_style: google
+            docstring_style: sphinx
             show_root_heading: true
             show_source: true
             show_signature_annotations: true
@@ -85,9 +85,6 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
-
-hooks:
-  - docs/_hooks/suppress_griffe.py
 
 nav:
   - Home: index.md

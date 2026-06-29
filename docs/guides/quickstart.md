@@ -13,19 +13,33 @@ Example:
 
 ## Connect the client
 
+Connect to a running server (`HOSTNAME` is optional — omit it to start without a connection and
+connect later from the console):
+
 ```shell
-python3 -m rpcclient <HOST>
+rpcclient [HOSTNAME]
+# or: python3 -m rpcclient [HOSTNAME]
+```
+
+To control the **local** machine (no remote server needed), use:
+
+```shell
+rpclocal
 ```
 
 Full usage:
 
 ```none
-Usage: python -m rpcclient [OPTIONS] HOSTNAME
+Usage: rpcclient [OPTIONS] [HOSTNAME]
+
+  Start the console. If HOSTNAME is provided, connect immediately. Otherwise,
+  start without a connection. You can connect later from the console.
 
 Options:
-  -p, --port INTEGER
+  -p, --port INTEGER        TCP port to connect to
   -r, --rebind-symbols      reload all symbols upon connection
   -l, --load-all-libraries  load all libraries
+  -f, --startup-files PATH  File(s) (python) to run on session start. Repeatable.
   --help                    Show this message and exit.
 ```
 
@@ -37,26 +51,37 @@ Options:
     python3 -m pymobiledevice3 usbmux forward 5910 5910 -vvv
     ```
 
-You'll land in an IPython shell with two globals ready to use:
+## The console: `mgr`, `console`, `p`
 
-- 🌍 `p` — the injected process
-- 🌍 `symbols` — process global symbols
+You land in an IPython shell with three globals:
+
+- **`mgr`** — client manager: `mgr.create(hostname="127.0.0.1", port=5910)`, `mgr.get(pid)`,
+  `mgr.remove(pid)`, `mgr.clients`, `mgr.clear()`
+- **`console`** — context controller: `console.switch(pid)`, or `console.switch()` to pick
+  interactively
+- **`p`** — the active client; auto-updated when you switch context (`p.info()`, `p.pid`,
+  `p.fs.listdir(".")`, `p.spawn([...])`)
+
+`F1` shows help, `F2` shows active contexts, `F3` switches to the previous context, `F4` toggles
+auto-switch on creation.
+
+```text
+[Rpc-client]: mgr.create(hostname="127.0.0.1")
+Auto-switched to new client PID: 79669
+[osx| (79669) rpcserver_macosx]: <MacosClient: 79669 | rpcserver_macosx>
+```
 
 ## Try it
 
 ```python
-In [2]: p.spawn(['sleep', '1'])
-Out[2]: SpawnResult(error=0, pid=25047, stdout=<_io.TextIOWrapper ...>)
+[osx| (78479) rpcserver_macosx]: p.spawn(['sleep', '1'])
+SpawnResult(error=0, pid=25047, stdout=<_io.TextIOWrapper ...>)
 
-In [3]: p.fs.listdir('.')
-Out[3]: ['common.c', 'Makefile', 'rpcserver.c', ...]
+[osx| (78479) rpcserver_macosx]: p.fs.listdir('.')
+['common.c', 'Makefile', 'rpcserver.c', ...]
 
-In [4]: p.processes.get_by_pid(p.pid).fds
-Out[4]: [FileFd(fd=0, path='/dev/ttys000'), ...]
-
-In [5]: p.processes.get_by_pid(p.pid).regions[:3]
-Out[5]: [Region(region_type='__TEXT', start=..., protection='r-x', ...), ...]
+[osx| (78479) rpcserver_macosx]: p.processes.get_by_pid(p.pid).fds
+[FileFd(fd=0, path='/dev/ttys000'), ...]
 ```
 
-Explore the rest through the global `p`. See
-[Calling native functions](calling-native-functions.md) next.
+Explore the rest through `p`. Next: [Calling native functions](calling-native-functions.md).

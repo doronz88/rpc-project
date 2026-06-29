@@ -2,40 +2,53 @@
 
 ## Client
 
-Install the latest client from PyPI:
+Install the latest client from PyPI (requires **Python 3.10+**):
 
 ```shell
 python3 -m pip install -U rpcclient
 ```
 
-Requires **Python 3.10+**.
+This provides two console entry points:
+
+- `rpcclient [HOSTNAME]` — connect to a remote `rpcserver`
+- `rpclocal` — control the **local** machine, no remote server required
 
 ## Server
 
-Download and run the latest server artifact for your platform/arch:
-
-- [rpcserver_iphoneos_arm64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_iphoneos_arm64.zip)
-- [rpcserver_macosx_x86_64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_macosx_x86_64.zip)
-- [rpcserver_ubuntu_x86_64.zip](https://nightly.link/doronz88/rpc-project/workflows/server-publish/master/rpcserver_ubuntu_x86_64.zip)
-
-If your platform/arch isn't listed, build it yourself (below).
+Download and run the latest server artifact for your platform/arch from the latest
+[server-publish GitHub Action](https://github.com/doronz88/rpc-project/actions/workflows/server-publish.yml),
+or build it yourself (below).
 
 ## Building the server
 
-=== "macOS & Linux"
+!!! note
+    Cross-platform builds are not currently supported — build on the target OS.
 
-    ```shell
-    git clone git@github.com:doronz88/rpc-project.git
-    cd rpc-project/src/rpcserver
-    make
-    ```
-
-=== "iOS"
+=== "macOS / iOS"
 
     Requires Xcode.
 
-    ```shell
+    ```bash
+    brew install protobuf protobuf-c
+    python3 -m pip install mypy-protobuf protobuf grpcio-tools
     git clone git@github.com:doronz88/rpc-project.git
-    cd rpc-project/src/rpcserver
-    ./build_darwin.sh
+    cd rpc-project
+    make -C src/protos/ all
+    cd src/rpcserver
+    mkdir build && cd build
+    cmake .. -DTARGET=OSX && make     # macOS
+    cmake .. -DTARGET=IOS && make     # iOS
+    ```
+
+=== "Linux"
+
+    ```bash
+    sudo apt-get install -y protobuf-compiler libprotobuf-dev libprotoc-dev protobuf-c-compiler
+    python3 -m pip install mypy-protobuf protobuf grpcio-tools
+    git clone git@github.com:doronz88/rpc-project.git --recurse-submodules
+    cd rpc-project
+    make -C src/protos/ all
+    cd src/rpcserver
+    mkdir build && cd build
+    cmake .. -DTARGET=LINUX && make
     ```

@@ -83,3 +83,21 @@ a = a.py()
 # load all frameworks for ObjC auto-completion (same as client -l -r)
 p.load_all_libraries()
 ```
+
+### Autorelease pools
+
+```python
+# create an autorelease pool context, drained at the end
+pool_ctx = p.create_autorelease_pool_ctx()
+# ... do stuff ...
+pool_ctx.drain()
+
+# same, as a context manager
+with p.create_autorelease_pool_ctx() as pool_ctx:
+    ...  # do stuff
+
+# iterate over all currently existing autorelease pools and their objects
+for pool in p.get_autorelease_pools():
+    for obj in pool:
+        ...  # do stuff with objects
+```
