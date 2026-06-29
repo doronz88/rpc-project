@@ -156,14 +156,9 @@ def null_pointer_guard(
     address is zero before calling the wrapped function. If the address is zero,
     an ArgumentError is raised.
 
-    Parameters:
-        func (Callable): The function to be wrapped by the decorator.
-
-    Returns:
-        Callable: The wrapped function with null pointer guard applied.
-
-    Raises:
-        ArgumentError: If the 'address' argument is zero.
+    :param func: The function to be wrapped by the decorator.
+    :returns: The wrapped function with null pointer guard applied.
+    :raises ArgumentError: If the 'address' argument is zero.
     """
 
     @wraps(func)
