@@ -5,6 +5,8 @@ import pytest
 from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.core.client import RemoteCallArg
 from rpcclient.core.subsystems.decorator import SubsystemNotAvailable, subsystem
+from rpcclient.core.symbol import Symbol
+from rpcclient.core.symbols_jar import LazySymbol
 from rpcclient.exceptions import ArgumentError
 from tests._types import Client
 
@@ -16,6 +18,24 @@ def _get_subsystems(client) -> list[str]:
             if isinstance(attr, subsystem):
                 names.add(name)
     return sorted(names)
+
+
+async def test_uncached_symbol_is_lazy(client: Client) -> None:
+    # An unresolved symbol name yields a LazySymbol placeholder (sync attribute access can't await).
+    if "strlen" in client.symbols:
+        del client.symbols["strlen"]
+    assert isinstance(client.symbols.strlen, LazySymbol)
+
+
+async def test_lazy_symbol_is_awaitable(client: Client) -> None:
+    # `await`-ing an unresolved lazy handle resolves it to a real Symbol (what the REPL relies on).
+    if "strlen" in client.symbols:
+        del client.symbols["strlen"]
+    lazy = client.symbols.strlen
+    assert isinstance(lazy, LazySymbol)
+    resolved = await lazy
+    assert isinstance(resolved, Symbol)
+    assert int(resolved) == int(await lazy.resolve())
 
 
 async def test_peek(client: Client) -> None:

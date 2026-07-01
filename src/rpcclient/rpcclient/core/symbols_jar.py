@@ -81,6 +81,11 @@ class LazySymbol(Generic[SymbolT_co]):
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name!r} of {self._client}>"
 
+    def __await__(self):
+        # Make the lazy handle a first-class awaitable so `await p.symbols.errno` yields the
+        # resolved symbol, and so the REPL (smart_await) auto-resolves it into a real symbol.
+        return self.resolve().__await__()
+
     async def resolve(self) -> SymbolT_co:
         return await self._client.symbols.get_lazy(self.name)
 

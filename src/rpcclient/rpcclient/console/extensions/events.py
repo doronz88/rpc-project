@@ -7,6 +7,7 @@ from IPython.terminal.interactiveshell import TerminalInteractiveShell
 from rpcclient.clients.darwin.objective_c import objective_c_class
 from rpcclient.core.symbols_jar import SymbolsJar
 from rpcclient.exceptions import GettingObjectiveCClassError, SymbolAbsentError
+from rpcclient.utils import run_in_loop
 
 
 class RpcEvents:
@@ -53,10 +54,13 @@ class RpcEvents:
             ):
                 continue
 
-            # 1) Generic: SymbolsJar lazy load
+            # 1) Generic: resolve the name to a real symbol. `get_lazy` performs the dlsym round-trip
+            # and raises SymbolAbsentError for unknown names (so they fall through to Obj-C autoload).
+            # Bind the resolved symbol — not a LazySymbol — since a bare name reference in the cell
+            # isn't rewritten by the `smart_await` transformer and so would never auto-resolve.
             if not hasattr(SymbolsJar, node.id):
                 try:
-                    symbol = getattr(client.symbols, node.id)
+                    symbol = run_in_loop(client.symbols.get_lazy(node.id))
                 except SymbolAbsentError:
                     pass
                 else:
@@ -66,11 +70,11 @@ class RpcEvents:
             # 2) Darwin-specific: Objective-C class autoload / lazy reload
             if hasattr(client, "objc_get_class"):
                 if objc_class_place_holder and existing is not None:
-                    existing.reload()
+                    run_in_loop(existing.reload())
                     continue
 
                 try:
-                    objc_cls = client.objc_get_class(node.id)
+                    objc_cls = run_in_loop(client.objc_get_class(node.id))
                 except GettingObjectiveCClassError:
                     pass
                 else:
