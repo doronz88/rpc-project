@@ -7,18 +7,22 @@ from construct import Container
 from rpcclient.clients.darwin._types import DarwinSymbolT_co
 from rpcclient.clients.darwin.common import CfSerializable
 from rpcclient.clients.darwin.consts import XPC_ARRAY_APPEND
+from rpcclient.clients.darwin.symbol import AbstractDarwinSymbol
 from rpcclient.core._types import ClientBound
-from rpcclient.core.symbol import AbstractSymbol
 from rpcclient.exceptions import BadReturnValueError, RpcXpcSerializationError
+from rpcclient.utils import readonly
 
 
 if TYPE_CHECKING:
     from rpcclient.clients.darwin.client import DarwinClient
 
 
-class XPCObject(AbstractSymbol, ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_co]):
+class XPCObject(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
+    @readonly
+    def _client(self) -> "DarwinClient[DarwinSymbolT_co]": ...
+
     def __init__(self, value: int, client: "DarwinClient[DarwinSymbolT_co]") -> None:
-        self._client = client
+        XPCObject._client.set(self, client)
         self._sym: DarwinSymbolT_co = client.symbol(value)
 
     def _symbol_from_value(self, value: int) -> DarwinSymbolT_co:
