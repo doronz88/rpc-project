@@ -295,6 +295,7 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
             return await self._bridge.rpc_call(msg_id, **kwargs)
         except ConnectionError:
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
+            self._bridge.close()
             raise
         except ServerResponseError:
             raise
