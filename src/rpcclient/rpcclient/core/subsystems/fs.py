@@ -753,7 +753,7 @@ class Fs(ClientBound[ClientT_co], abc.ABC):
         :param mode: Mode to create the temp directory with (default 0o700).
         """
         remote_dir = self.remote_path(directory)
-        if not remote_dir.exists:
+        if not await remote_dir.exists():
             raise RpcFileNotFoundError(f"remote dir {remote_dir} does not exist")
 
         while True:

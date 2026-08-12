@@ -25,9 +25,11 @@ class DarwinLief(Lief["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbolT_c
         if not isinstance(parsed, lief.MachO.Binary):
             raise TypeError(f"{str(path)!r} is not a Mach-O binary")
 
-        code_signature = buf[
-            parsed.code_signature.data_offset : parsed.code_signature.data_offset + parsed.code_signature.data_size
-        ]
+        signature = parsed.code_signature
+        if signature is None:
+            raise NoEntitlementsError(f"{str(path)!r} has no code signature")
+
+        code_signature = buf[signature.data_offset : signature.data_offset + signature.data_size]
 
         ent_magic = struct.pack(">I", kSecCodeMagicEntitlement)
         ent_magic_offset = code_signature.find(ent_magic)
