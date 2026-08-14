@@ -77,6 +77,7 @@ from rpcclient.clients.darwin.structs import (
     vnode_fdinfowithpath,
     x86_thread_state64_t,
 )
+from rpcclient.clients.darwin.subsystems.process_preferences import ProcessPreferences
 from rpcclient.clients.darwin.symbol import DarwinSymbol
 from rpcclient.core._types import ClientBound
 from rpcclient.core.structs.consts import SEEK_SET, SIGKILL, SIGTERM
@@ -110,6 +111,7 @@ logger = logging.getLogger(__name__)
 CDHASH_SIZE = 20
 CHUNK_SIZE = 1024 * 64
 APP_SUFFIX = ".app/"
+CS_OPS_IDENTITY = 11  # csops(2) op: copy the code-signing identity string
 
 
 @dataclasses.dataclass
@@ -907,6 +909,21 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
         """Return the process name from task info."""
         return (await self._get_pbsd()).pbi_name
 
+    async def bundle_id(self) -> str | None:
+        """Return the process's code-signing identity via ``csops(CS_OPS_IDENTITY)``.
+
+        For a signed app or daemon this is its bundle identifier (e.g. ``com.apple.CrashReporter``) -
+        the domain its ``NSUserDefaults standardUserDefaults`` uses. None if the process is unsigned
+        or has no identity. Works for daemons too, unlike ``SBSCopyDisplayIdentifierForProcessID``.
+        """
+        size = 1024
+        async with self._client.safe_malloc(size) as buf:
+            if await self._client.symbols.csops(self.pid, CS_OPS_IDENTITY, buf, size):
+                return None
+            # blob layout: uint32 type, uint32 length (big-endian), then the identity C-string
+            identity = (await buf.peek(size))[8:].split(b"\x00", 1)[0]
+        return identity.decode() if identity else None
+
     async def ppid(self) -> int:
         """Return the parent process id."""
         return (await self._get_pbsd()).pbi_ppid
@@ -945,9 +962,10 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
         """Return a Process wrapper for the parent pid."""
         return type(self)(self._client, await type(self).ppid(self))
 
-    async def environ(self) -> list[str]:
-        """Return the process environment variables."""
-        return await (await (await type(self).vmu_proc_info(self)).objc_call("envVars")).py(list)
+    async def environ(self) -> dict[str, str]:
+        """Return the process environment as a ``KEY -> VALUE`` mapping."""
+        entries = await (await (await type(self).vmu_proc_info(self)).objc_call("envVars")).py(list)
+        return dict(entry.partition("=")[::2] for entry in entries)
 
     async def arguments(self) -> list[str]:
         """Return the process argument list."""
@@ -960,6 +978,16 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
     async def procargs2(self) -> Container:
         """Parse and return the PROCARGS2 buffer."""
         return procargs2_t.parse(await type(self).raw_procargs2(self))
+
+    def preferences(
+        self, application_id: str | None = None, *, any_user: bool = False
+    ) -> "ProcessPreferences[DarwinSymbolT_co]":
+        """Read/write a preference domain as *this* process resolves it (container, uid).
+
+        With no ``application_id`` this is the process's own bundle-id domain - the
+        ``standardUserDefaults`` domain. See ``ProcessPreferences``.
+        """
+        return ProcessPreferences(self, application_id, any_user=any_user)
 
     async def get_regions(self) -> list[Region[DarwinSymbolT_co]]:
         """Return the list of VM regions for the process."""
