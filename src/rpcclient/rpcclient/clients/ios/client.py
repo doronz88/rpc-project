@@ -7,6 +7,7 @@ from rpcclient.clients.ios.subsystems.backlight import Backlight
 from rpcclient.clients.ios.subsystems.installations import Installations
 from rpcclient.clients.ios.subsystems.lockdown import Lockdown
 from rpcclient.clients.ios.subsystems.mobile_gestalt import MobileGestalt
+from rpcclient.clients.ios.subsystems.preferences import IosPreferences
 from rpcclient.clients.ios.subsystems.processes import IosProcesses
 from rpcclient.clients.ios.subsystems.screen_capture import ScreenCapture
 from rpcclient.clients.ios.subsystems.springboard import SpringBoard
@@ -34,6 +35,10 @@ class IosClient(DarwinClient[DarwinSymbolT_co]):
     @subsystem
     def processes(self) -> IosProcesses[DarwinSymbolT_co]:
         return IosProcesses(self)
+
+    @subsystem
+    def preferences(self) -> IosPreferences[DarwinSymbolT_co]:
+        return IosPreferences(self)
 
     @subsystem
     def lockdown(self) -> Lockdown[DarwinSymbolT_co]:

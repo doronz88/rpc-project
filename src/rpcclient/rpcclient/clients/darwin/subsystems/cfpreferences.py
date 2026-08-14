@@ -27,7 +27,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         self._client = client
 
     async def get_keys(
-        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesCurrentHost
+        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesAnyHost
     ) -> list[str]:
         """wrapper for CFPreferencesCopyKeyList"""
         keys = await (
@@ -49,7 +49,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         key: str,
         application_id: str,
         username: str = kCFPreferencesCurrentUser,
-        hostname: str = kCFPreferencesCurrentHost,
+        hostname: str = kCFPreferencesAnyHost,
         typ: type[CfSerializableT] | tuple[type[CfSerializableT], ...] = CfSerializableAny,
     ) -> CfSerializableT:
         """wrapper for CFPreferencesCopyValue"""
@@ -65,7 +65,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         return value
 
     async def get_dict(
-        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesCurrentHost
+        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesAnyHost
     ) -> dict:
         """get a dictionary representation of given preference"""
         key_list = await self.get_keys(application_id, username, hostname)
@@ -80,7 +80,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         value: CfSerializable,
         application_id: str,
         username: str = kCFPreferencesCurrentUser,
-        hostname: str = kCFPreferencesCurrentHost,
+        hostname: str = kCFPreferencesAnyHost,
     ):
         """wrapper for CFPreferencesSetValue"""
         await self._client.symbols.CFPreferencesSetValue(
@@ -96,7 +96,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         key: str,
         application_id: str,
         username: str = kCFPreferencesCurrentUser,
-        hostname: str = kCFPreferencesCurrentHost,
+        hostname: str = kCFPreferencesAnyHost,
     ):
         """remove a given key from a preference"""
         await self._client.symbols.CFPreferencesSetValue(
@@ -112,7 +112,7 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         d: dict,
         application_id: str,
         username: str = kCFPreferencesCurrentUser,
-        hostname: str = kCFPreferencesCurrentHost,
+        hostname: str = kCFPreferencesAnyHost,
     ):
         """set entire preference dictionary (erase first if exists)"""
         with suppress(NoSuchPreferenceError):
@@ -124,21 +124,21 @@ class CFPreferences(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
         d: dict,
         application_id: str,
         username: str = kCFPreferencesCurrentUser,
-        hostname: str = kCFPreferencesCurrentHost,
+        hostname: str = kCFPreferencesAnyHost,
     ):
         """update preference dictionary"""
         for k, v in d.items():
             await self.set(k, v, application_id, username, hostname)
 
     async def clear(
-        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesCurrentHost
+        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesAnyHost
     ):
         """remove all values from given preference"""
         for k in await self.get_keys(application_id, username, hostname):
             await self.remove(k, application_id, username, hostname)
 
     async def sync(
-        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesCurrentHost
+        self, application_id: str, username: str = kCFPreferencesCurrentUser, hostname: str = kCFPreferencesAnyHost
     ):
         if not await self._client.symbols.CFPreferencesSynchronize(
             await self._client.cf(application_id),
