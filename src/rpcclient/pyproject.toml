@@ -56,10 +56,13 @@ dependencies = [
     "protobuf",
     "inquirer3",
     "ipython-smart-await>=0.3.0",
+    "asgiwebdav>=2.0.1",
+    "backports.zstd; python_version < '3.14'",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-repeat", "pytest-asyncio"]
+test = ["pytest", "pytest-repeat", "pytest-asyncio", "httpx"]
 docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "mkdocs-llmstxt>=0.5"]
 dev = ["rpcclient[test,docs]"]
 
@@ -70,6 +73,7 @@ dev = ["rpcclient[test,docs]"]
 [project.scripts]
 rpcclient = "rpcclient.__main__:rpcclient"
 rpclocal = "rpcclient.__main__:rpclocal"
+rpcdav = "rpcclient.__main__:rpcdav"
 
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*"]

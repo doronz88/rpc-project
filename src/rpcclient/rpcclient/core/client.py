@@ -50,6 +50,7 @@ from rpcclient.core.subsystems.lief import Lief
 from rpcclient.core.subsystems.network import Network
 from rpcclient.core.subsystems.processes import Processes
 from rpcclient.core.subsystems.sysctl import Sysctl
+from rpcclient.core.subsystems.webdav import WebDav
 from rpcclient.core.symbol import Symbol
 from rpcclient.core.symbols_jar import (
     LazySymbol,
@@ -225,6 +226,10 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
     @subsystem
     def sysctl(self) -> Sysctl[Self]:
         return Sysctl(self)
+
+    @subsystem
+    def webdav(self) -> WebDav[Self]:
+        return WebDav(self)
 
     async def info(self) -> None:
         """print information about the current target"""
