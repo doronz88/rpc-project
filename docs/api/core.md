@@ -4,6 +4,12 @@
 
 ::: rpcclient.core.client.CoreClient
 
+## WebDAV mounting
+
+::: rpcclient.core.subsystems.webdav.WebDav
+
+::: rpcclient.core.subsystems.webdav.WebDavServer
+
 ## Symbols
 
 ::: rpcclient.core.symbol

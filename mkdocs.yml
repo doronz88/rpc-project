@@ -66,6 +66,7 @@ plugins:
         Guides:
           - guides/quickstart.md
           - guides/calling-native-functions.md
+          - guides/mounting-webdav.md
         API reference:
           - api/index.md
           - api/core.md
@@ -95,6 +96,7 @@ nav:
   - Guides:
       - Quick start: guides/quickstart.md
       - Calling native functions: guides/calling-native-functions.md
+      - Mounting in Finder (WebDAV): guides/mounting-webdav.md
   - API Reference:
       - Overview: api/index.md
       - Core client: api/core.md
