@@ -7,6 +7,7 @@ import coloredlogs
 from rpcclient.client_manager import ClientManager
 from rpcclient.clients.darwin.client import DarwinClient
 from rpcclient.console.console import Console, disable_loggers
+from rpcclient.core.client import ClientEvent, CoreClient
 from rpcclient.core.webdav_mount import (
     mount_webdav_volume,
     reveal_in_file_manager,
@@ -99,6 +100,30 @@ def rpcclient(
     Console(manager).interactive(switch_cid=cid, startup_files=startup_files)
 
 
+_DISCONNECT_HEARTBEAT_INTERVAL = 5.0
+
+
+async def _wait_for_disconnect(client: CoreClient) -> None:
+    """Block until the RPC connection to the target drops.
+
+    The WebDAV server bridges every request to ``client``; if the target goes away (device
+    reboot, cable pull, server killed) the mount would otherwise keep serving errors until the
+    user hits Ctrl-C. ``ClientEvent.TERMINATED`` fires the moment an in-flight call fails, and a
+    periodic liveness probe catches a disconnect that happens while the mount is idle.
+    """
+    loop = asyncio.get_running_loop()
+    terminated = asyncio.Event()
+    client.notifier.register_once(ClientEvent.TERMINATED, lambda *_: loop.call_soon_threadsafe(terminated.set))
+    while not terminated.is_set():
+        try:
+            await asyncio.wait_for(terminated.wait(), timeout=_DISCONNECT_HEARTBEAT_INTERVAL)
+        except asyncio.TimeoutError:
+            try:
+                await client.symbols.getpid()
+            except Exception:
+                return
+
+
 def _require_mount_tool(mount: bool) -> None:
     """Fail early if ``--mount`` was requested but no WebDAV mount tool is available on this host."""
     if mount and not webdav_mount_supported():
@@ -141,7 +166,8 @@ def _serve_webdav(
     click.echo("Press Ctrl-C to stop.")
 
     try:
-        run_in_loop(asyncio.Event().wait())
+        run_in_loop(_wait_for_disconnect(client))
+        click.echo(f"Connection to {hostname} lost; stopping.")
     except KeyboardInterrupt:
         pass
     finally:
