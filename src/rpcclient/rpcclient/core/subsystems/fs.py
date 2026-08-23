@@ -45,7 +45,8 @@ from rpcclient.utils import cached_async_method
 
 
 if TYPE_CHECKING:
-    from construct import Construct, ParsedType
+    from construct import Construct
+    from construct.core import ParsedType
 
     from rpcclient.core.symbol import Symbol
 
@@ -148,7 +149,7 @@ class File(Allocated[ClientT_co]):
 
     async def seek(self, offset: int, whence: int) -> int:
         """Seek the remote file descriptor and return the resulting offset."""
-        err = (await self._client.symbols.lseek(self.fd, offset, whence)).c_int32
+        err = (await self._client.symbols.lseek(self.fd, offset, whence)).c_int64
         if err < 0:
             await self._client.raise_errno_exception(f"failed to lseek fd: {self.fd}")
         return err

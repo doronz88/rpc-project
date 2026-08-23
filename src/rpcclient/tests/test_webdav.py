@@ -112,6 +112,41 @@ async def test_get_serves_existing_file(client: Client, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_honors_range_request(client: Client, tmp_path) -> None:
+    # macOS Finder / webdavfs reads large files as a series of byte ranges. Answering a Range
+    # request with 200 + the whole file makes the client write the full body at the range's
+    # offset, corrupting the result. The server must reply 206 with exactly the requested bytes.
+    payload = bytes((i * 131 + 7) % 256 for i in range(4096)) * 64  # 256 KiB, spans many blocks
+    target = tmp_path / "big.bin"
+    await client.fs.write_file(target, payload)
+
+    server = await client.webdav.serve(str(tmp_path), port=0)
+    try:
+        async with httpx.AsyncClient() as http:
+            head = await http.head(f"{server.url}big.bin")
+            assert head.headers.get("accept-ranges") == "bytes"
+
+            start, end = 100_000, 200_000
+            response = await http.get(f"{server.url}big.bin", headers={"Range": f"bytes={start}-{end}"})
+            assert response.status_code == 206
+            assert response.headers["content-range"] == f"bytes {start}-{end}/{len(payload)}"
+            assert response.content == payload[start : end + 1]
+
+            # reassembling sequential ranges must reproduce the file byte-for-byte
+            buf = bytearray()
+            off = 0
+            while off < len(payload):
+                stop = min(off + 40_000 - 1, len(payload) - 1)
+                part = await http.get(f"{server.url}big.bin", headers={"Range": f"bytes={off}-{stop}"})
+                assert part.status_code == 206
+                buf += part.content
+                off = stop + 1
+            assert bytes(buf) == payload
+    finally:
+        await server.stop()
+
+
+@pytest.mark.asyncio
 async def test_put_when_fs_open_fails_returns_error_not_crash(client: Client, tmp_path) -> None:
     # a regular file used as a path component makes the remote open() fail (ENOTDIR),
     # standing in for the read-only-filesystem case Finder hits writing /.DS_Store

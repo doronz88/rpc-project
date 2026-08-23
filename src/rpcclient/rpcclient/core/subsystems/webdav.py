@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import posixpath
 from stat import S_ISDIR, S_ISREG
 from typing import TYPE_CHECKING, Any
@@ -26,7 +27,7 @@ from asgi_webdav.constants import (
 )
 from asgi_webdav.helpers import generate_etag, guess_type
 from asgi_webdav.property import DAVProperty, DAVPropertyBasicData
-from asgi_webdav.provider.common import DAVProvider, DAVProviderFeature
+from asgi_webdav.provider.common import DAVProvider, DAVProviderFeature, get_response_content_range
 from asgi_webdav.request import DAVRequest
 from asgi_webdav.server import DAVApp
 from asgi_webdav.web_dav import PrefixProviderInfo
@@ -68,7 +69,7 @@ class RpcFsProvider(DAVProvider):
     """A WebDAV provider whose backing store is a remote target's filesystem."""
 
     type = "rpcfs"
-    feature = DAVProviderFeature(content_range=False, home_dir=False)
+    feature = DAVProviderFeature(content_range=True, home_dir=False)
 
     def __init__(self, client: Any, root: str, config: Config, prefix: DAVPath, read_only: bool) -> None:
         super().__init__(
@@ -196,7 +197,25 @@ class RpcFsProvider(DAVProvider):
             return 403, None, None, None
 
         dav_property = await self._create_dav_property_obj(request, request.src_path, stat_result)
-        return 200, dav_property.basic_data, self._body_generator(remote), None
+
+        if not request.ranges:
+            return 200, dav_property.basic_data, self._body_generator(remote), None
+
+        # a Range request: macOS Finder / webdavfs reads large files as a series of byte ranges.
+        # Answering those with 200 + the whole file makes the client write the full body at the
+        # range's offset, corrupting the result. Serve the requested bytes as 206 Partial Content.
+        content_range = get_response_content_range(
+            request_ranges=request.ranges,
+            file_size=dav_property.basic_data.content_length,
+        )
+        if content_range is None:
+            return 200, dav_property.basic_data, self._body_generator(remote), None
+        if request.if_range and not request.if_range.match(
+            etag=dav_property.basic_data.etag,
+            last_modified=dav_property.basic_data.last_modified.http_date,
+        ):
+            return 416, dav_property.basic_data, None, content_range
+        return 206, dav_property.basic_data, self._body_generator(remote, content_range), content_range
 
     async def _do_head(self, request: DAVRequest) -> tuple[int, DAVPropertyBasicData | None]:
         if _is_apple_metadata(request.dist_src_path):
@@ -211,13 +230,26 @@ class RpcFsProvider(DAVProvider):
         dav_property = await self._create_dav_property_obj(request, request.src_path, stat_result)
         return 200, dav_property.basic_data
 
-    async def _body_generator(self, remote: RemotePath) -> DAVResponseBodyGenerator:
+    async def _body_generator(
+        self, remote: RemotePath, content_range: DAVResponseContentRange | None = None
+    ) -> DAVResponseBodyGenerator:
         async with await self._client.fs.open(str(remote), "r") as f:
-            more_body = True
-            while more_body:
-                data = await f.read(RESPONSE_DATA_BLOCK_SIZE)
-                more_body = len(data) == RESPONSE_DATA_BLOCK_SIZE
-                yield data, more_body
+            if content_range is None:
+                more_body = True
+                while more_body:
+                    data = await f.read(RESPONSE_DATA_BLOCK_SIZE)
+                    more_body = len(data) == RESPONSE_DATA_BLOCK_SIZE
+                    yield data, more_body
+                return
+
+            await f.seek(content_range.content_start, os.SEEK_SET)
+            remaining = content_range.content_end - content_range.content_start + 1
+            while remaining > 0:
+                data = await f.read(min(remaining, RESPONSE_DATA_BLOCK_SIZE))
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data, remaining > 0
 
     async def _do_put(self, request: DAVRequest) -> int:
         if _is_apple_metadata(request.dist_src_path):
