@@ -45,7 +45,8 @@ from rpcclient.utils import cached_async_method
 
 
 if TYPE_CHECKING:
-    from construct import Construct, ParsedType
+    from construct import Construct
+    from construct.core import ParsedType
 
     from rpcclient.core.symbol import Symbol
 

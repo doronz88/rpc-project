@@ -15,7 +15,8 @@ from rpcclient.utils import readonly
 
 
 if TYPE_CHECKING:
-    from construct import Construct, Container, ParsedType
+    from construct import Construct, Container
+    from construct.core import ParsedType
 
     from rpcclient.core.client import CoreClient, RemoteCallArg
 
