@@ -1,12 +1,52 @@
 import asyncio
 import os
 from contextlib import suppress
+from typing import Any, cast
 
 import click
 import httpx
 import pytest
 
 from tests._types import Client
+
+
+@pytest.mark.asyncio
+async def test_wait_for_disconnect_returns_on_terminated_event() -> None:
+    # An in-flight WebDAV request that fails fires ClientEvent.TERMINATED; the serve loop must
+    # unblock immediately instead of waiting for the next heartbeat probe.
+    from rpcclient.__main__ import _wait_for_disconnect
+    from rpcclient.core.client import ClientEvent
+    from rpcclient.event_notifier import EventNotifier
+
+    class _FakeClient:
+        def __init__(self) -> None:
+            self.notifier: EventNotifier = EventNotifier()
+
+    client = _FakeClient()
+    waiter = asyncio.ensure_future(_wait_for_disconnect(cast("Any", client)))
+    await asyncio.sleep(0)
+    client.notifier.notify(ClientEvent.TERMINATED, 0)
+    await asyncio.wait_for(waiter, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_disconnect_detects_idle_disconnect_via_heartbeat(monkeypatch) -> None:
+    # With no WebDAV traffic, a disconnect is noticed only by the periodic liveness probe.
+    from rpcclient import __main__ as cli
+    from rpcclient.event_notifier import EventNotifier
+
+    monkeypatch.setattr(cli, "_DISCONNECT_HEARTBEAT_INTERVAL", 0.01)
+
+    class _DeadSymbols:
+        async def getpid(self) -> None:
+            raise ConnectionError("device disconnected")
+
+    class _DeadClient:
+        def __init__(self) -> None:
+            self.notifier: EventNotifier = EventNotifier()
+            self.symbols = _DeadSymbols()
+
+    await asyncio.wait_for(cli._wait_for_disconnect(cast("Any", _DeadClient())), timeout=1)
 
 
 def test_webdav_cli_subcommand_registered() -> None:
