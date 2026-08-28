@@ -101,3 +101,22 @@ for pool in p.get_autorelease_pools():
     for obj in pool:
         ...  # do stuff with objects
 ```
+
+### Run loop and threading
+
+On Apple targets the server pumps the main thread's run loop for the lifetime of the connection and
+serves your requests on a dedicated thread. Anything driven by the main run loop or the main dispatch
+queue - blocks dispatched to the main queue, run loop timers and sources, framework callbacks and
+notifications - keeps making progress while you work:
+
+```python
+main_run_loop = p.symbols.CFRunLoopGetMain()
+# the main run loop is up and waiting for work, not blocked serving you
+p.symbols.CFRunLoopIsWaiting(main_run_loop)
+```
+
+There is no need to run a loop yourself; calling `CFRunLoopRun()` over RPC only hangs your own
+session, since it never returns.
+
+Note that requests are served off the main thread. APIs that must run on the main thread need to be
+dispatched there explicitly.

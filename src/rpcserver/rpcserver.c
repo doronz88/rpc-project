@@ -172,6 +172,145 @@ void signal_handler(int sig) {
 }
 
 /**
+ * Handles a single RPC request: receives it, dispatches it and sends back the reply.
+ * If the request asked for a pty (foreground process spawn), the pty session is entered
+ * before returning.
+ *
+ * @param sockfd The socket file descriptor associated with the connected client.
+ * @return True while the connection should keep being served, false once it must be torn down
+ *         (protocol error, peer disconnect, or an explicit close request).
+ */
+static bool handle_client_request(int sockfd) {
+    bool keep_serving = false;
+    Rpc__RpcMessage *request = NULL;
+    Rpc__RpcMessage reply = RPC__RPC_MESSAGE__INIT;
+    uint32_t msg_id = 0;
+
+    CHECK(rpc_msg_recv(sockfd, &request) == MSG_SUCCESS);
+    CHECK(request->magic == RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC);
+    msg_id = request->msg_id;
+
+    TRACE("client fd: %d, msg_id: %u", sockfd, msg_id);
+
+    rpc_dispatch(request, &reply);
+
+    CHECK(proto_msg_send(sockfd, (ProtobufCMessage *) &reply) == MSG_SUCCESS);
+
+    // Keep serving unless the client explicitly asked to close the connection.
+    keep_serving = msg_id != RPC__API__MSG_ID__REQ_CLOSE_CLIENT;
+
+error:
+    if (request) {
+        rpc__rpc_message__free_unpacked(request, NULL);
+    }
+    if (reply.payload.data) {
+        free(reply.payload.data);
+    }
+
+    // If a user requested pty (foreground process spawn), now handle it.
+    if (keep_serving && g_pending_pty.valid) {
+        enter_pty_mode(sockfd);
+    }
+
+    return keep_serving;
+}
+
+#ifdef __APPLE__
+
+typedef struct {
+    int sockfd;
+    CFRunLoopRef runloop;
+    volatile bool done;
+} client_thread_args_t;
+
+#define CLIENT_THREAD_STACK_SIZE (8 * 1024 * 1024)
+#define RUNLOOP_POLL_INTERVAL (1.0)
+
+/**
+ * Gives the calling thread a real autorelease pool page, the way the main thread always has one.
+ *
+ * A freshly created thread has no autorelease pool page at all, and the objc runtime answers the
+ * first objc_autoreleasePoolPush() on such a thread with EMPTY_POOL_PLACEHOLDER (0x1) instead of
+ * an address inside a page. Clients walking a pool they pushed themselves would then be handed
+ * that placeholder and scan unmapped memory. The second push installs the page for real.
+ *
+ * Neither pool is ever popped, matching what the main thread used to do: nothing drains the
+ * objects a request autoreleased, so they stay valid for the next request to use.
+ */
+static void prepare_autorelease_pool(void) {
+    extern void *objc_autoreleasePoolPush(void);
+
+    objc_autoreleasePoolPush();
+    objc_autoreleasePoolPush();
+}
+
+/**
+ * Serves the client connection until it is torn down, then stops the run loop the main thread
+ * is pumping.
+ */
+static void *client_thread(void *arg) {
+    client_thread_args_t *args = (client_thread_args_t *) arg;
+
+    prepare_autorelease_pool();
+
+    while (handle_client_request(args->sockfd)) {}
+
+    close(args->sockfd);
+    args->done = true;
+    CFRunLoopStop(args->runloop);
+    return NULL;
+}
+
+/**
+ * Serves the client from a dedicated thread while the main thread pumps its run loop.
+ *
+ * The main thread used to sit in recv() for the entire lifetime of the connection, so nothing ever
+ * drained the main dispatch queue or the main run loop. Everything that needs them to make progress
+ * - blocks dispatched to the main queue, run loop timers and sources, framework callbacks and
+ * notifications delivered on the main run loop - silently did nothing for as long as a client was
+ * connected. The only workaround was calling CFRunLoopRun() over RPC, which hangs the session that
+ * called it.
+ *
+ * Requests are served on a dedicated thread rather than from a run loop source on the main thread
+ * on purpose: a run loop drains an autorelease pool on every iteration, which would release every
+ * autoreleased object a request handed back to the client before the next request can use it.
+ *
+ * @param sockfd The socket file descriptor associated with the connected client.
+ */
+static void serve_client_with_runloop(int sockfd) {
+    bool attr_initialized = false;
+    bool joinable = false;
+    pthread_t thread;
+    pthread_attr_t attr;
+    client_thread_args_t args = {.sockfd = sockfd, .runloop = CFRunLoopGetCurrent(), .done = false};
+
+    CHECK(0 == pthread_attr_init(&attr));
+    attr_initialized = true;
+    // Match the main thread's stack size, the served requests used to run on it.
+    CHECK(0 == pthread_attr_setstacksize(&attr, CLIENT_THREAD_STACK_SIZE));
+    CHECK(0 == pthread_create(&thread, &attr, client_thread, &args));
+    joinable = true;
+
+    // Pump the run loop until the connection is done with. The timeout also covers the case of a
+    // connection that ends before this loop is entered, where CFRunLoopStop() had nothing to stop.
+    while (!args.done) {
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, RUNLOOP_POLL_INTERVAL, false);
+    }
+
+error:
+    if (attr_initialized) {
+        pthread_attr_destroy(&attr);
+    }
+    if (joinable) {
+        pthread_join(thread, NULL);
+    } else {
+        close(sockfd);
+    }
+}
+
+#endif// __APPLE__
+
+/**
  * Manages client communication over a socket using the RPC (Remote Procedure Call) protocol.
  * This function performs message exchange with the connected client, processes incoming requests,
  * and sends appropriate responses. It ensures data integrity and protocol compliance and manages
@@ -187,34 +326,13 @@ void handle_client(int sockfd) {
     // Send handshake
     CHECK(rpc_send_handshake(sockfd) == MSG_SUCCESS);
 
-    while (true) {
-        Rpc__RpcMessage *request = NULL;
-        Rpc__RpcMessage reply = RPC__RPC_MESSAGE__INIT;
-
-        CHECK(rpc_msg_recv(sockfd, &request) == MSG_SUCCESS);
-        CHECK(request->magic == RPC__PROTOCOL_CONSTANTS__MESSAGE_MAGIC);
-
-        TRACE("client fd: %d, msg_id: %d", sockfd, request->msg_id);
-
-        rpc_dispatch(request, &reply);
-
-        CHECK(proto_msg_send(sockfd, (ProtobufCMessage *) &reply) == MSG_SUCCESS);
-
-        rpc__rpc_message__free_unpacked(request, NULL);
-        if (reply.payload.data) {
-            free(reply.payload.data);
-        }
-
-        // If a user requested pty (foreground process spawn), now handle it.
-        if (g_pending_pty.valid) {
-            enter_pty_mode(sockfd);
-        }
-
-        // Break if the connection closed (e.g., CLOSE command)
-        if (request->msg_id == RPC__API__MSG_ID__REQ_CLOSE_CLIENT) {
-            break;
-        }
-    }
+#ifdef __APPLE__
+    // The client socket is closed by serve_client_with_runloop().
+    serve_client_with_runloop(sockfd);
+    return;
+#else
+    while (handle_client_request(sockfd)) {}
+#endif// __APPLE__
 
 error:
     close(sockfd);

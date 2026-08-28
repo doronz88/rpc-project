@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from rpcclient.clients.darwin.client import DarwinClient
@@ -69,3 +71,21 @@ async def test_autorelease_pool_object_retrival_refresh(client: DarwinClient) ->
         assert obj2 not in pool
         await pool.refresh()
         assert obj2 in pool
+
+
+async def test_requests_are_served_off_the_main_thread(client: DarwinClient) -> None:
+    """The main thread is left to pump its run loop, requests are served on a dedicated thread."""
+    assert not await client.symbols.pthread_main_np()
+
+
+async def test_main_run_loop_is_pumped(client: DarwinClient) -> None:
+    """
+    The main run loop must actually be running, otherwise nothing driven by it - main queue blocks,
+    timers, sources, framework callbacks - ever makes progress while a client is connected.
+    """
+    main_run_loop = await client.symbols.CFRunLoopGetMain()
+    for _ in range(50):
+        if await client.symbols.CFRunLoopIsWaiting(main_run_loop):
+            return
+        await asyncio.sleep(0.1)
+    pytest.fail("the main run loop is not being pumped")
