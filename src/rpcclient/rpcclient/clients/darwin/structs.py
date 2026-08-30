@@ -1010,6 +1010,11 @@ ipc_info_name_t = Struct(
     "iin_hash" / natural_t,  # hash index
 )
 
+ipc_info_port_t = Struct(
+    "iip_port_object" / natural_t,  # port object identifier
+    "iip_receiver_object" / natural_t,  # receiver task identifier
+)
+
 POLLIN = 0x01
 POLLPRI = 0x02
 POLLOUT = 0x04

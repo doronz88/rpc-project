@@ -7,7 +7,7 @@ import posixpath
 import re
 import struct
 from collections import namedtuple
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Generic, NoReturn, cast
@@ -19,6 +19,7 @@ from rpcclient.clients.darwin._types import DarwinClientT_co, DarwinSymbolT_co
 from rpcclient.clients.darwin.consts import (
     EXC_MASK_ALL,
     EXC_TYPES_COUNT,
+    IKOT_NONE,
     MACH_PORT_TYPE_ALL_RIGHTS,
     MACH_PORT_TYPE_DEAD_NAME,
     MACH_PORT_TYPE_DNREQUEST,
@@ -32,6 +33,8 @@ from rpcclient.clients.darwin.consts import (
     THREAD_IDENTIFIER_INFO,
     VM_FLAGS_ANYWHERE,
     ARMThreadFlavors,
+    exc_mask_names,
+    ikot_name,
     kCSNow,
     x86_THREAD_STATE64,
 )
@@ -60,6 +63,7 @@ from rpcclient.clients.darwin.structs import (
     dyld_image_info_t,
     fat_header,
     ipc_info_name_t,
+    ipc_info_port_t,
     mach_header_t,
     mach_port_t,
     pid_t,
@@ -112,6 +116,7 @@ CDHASH_SIZE = 20
 CHUNK_SIZE = 1024 * 64
 APP_SUFFIX = ".app/"
 CS_OPS_IDENTITY = 11  # csops(2) op: copy the code-signing identity string
+_IKOT_UNDISCLOSED = 0xFFFFFFFF  # mach_port_kernel_object sentinel for a port whose kobject isn't disclosed
 
 
 @dataclasses.dataclass
@@ -442,6 +447,24 @@ class MachPortThreadInfo:
 
 
 @dataclasses.dataclass
+class MachPortKobjectInfo:
+    """Identity of the kernel object a port names (a task, thread, host, clock, IOKit object, ...)."""
+
+    type_id: int  # raw IKOT_* value
+    type: str  # human-readable IKOT_* name, e.g. "TASK_CONTROL"
+    addr: int  # kernel object address (as reported by mach_port_kernel_object, may be truncated)
+
+
+@dataclasses.dataclass
+class MachPortExceptionInfo:
+    """A port registered as an exception handler (for a task or one of its threads)."""
+
+    masks: list[str]  # decoded EXC_MASK_* names this handler is registered for
+    behavior: int  # exception_behavior_t (raw, incl. MACH_EXCEPTION_* flags)
+    flavor: int  # thread_state_flavor_t (raw)
+
+
+@dataclasses.dataclass
 class MachPortInfo:
     task: int
     pid: int
@@ -451,6 +474,8 @@ class MachPortInfo:
     dead: bool
     proc_name: str | None = None
     thread_info: MachPortThreadInfo | None = None
+    kobject: MachPortKobjectInfo | None = None
+    exception: MachPortExceptionInfo | None = None
 
     @property
     def has_recv_right(self) -> bool:
@@ -462,11 +487,17 @@ class MachPortInfo:
         """Return True if the port has a send right."""
         return "send" in self.rights
 
+    @property
+    def has_send_once_right(self) -> bool:
+        """Return True if the port has a send-once right."""
+        return "send-once" in self.rights
+
 
 @dataclasses.dataclass
 class MachPortCrossRefInfo:
     name: int
     ipc_object: int
+    rights: list[str]
     recv_right_pid: int
     recv_right_proc_name: str | None
 
@@ -1137,6 +1168,20 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
                         output_file.flush()
                         output_file.write((image.address + crypt_offset).peek(crypt_size))
 
+    async def get_mach_ports(
+        self, include_thread_info: bool = False, resolve_kobjects: bool = False
+    ) -> AsyncGenerator[MachPortInfo]:
+        """Enumerate this process's own mach ports, with rights, kobject type and exception handlers.
+
+        :param include_thread_info: also collect this task's thread ids.
+        :param resolve_kobjects: resolve each port's kernel-object type (IKOT_*); one extra RPC per
+            port, so it is off by default (``MachPortInfo.kobject`` stays ``None`` when disabled).
+        """
+        async for port in self._client.processes.get_pid_mach_ports(
+            self.pid, include_thread_info=include_thread_info, resolve_kobjects=resolve_kobjects
+        ):
+            yield port
+
     async def get_mach_port_cross_ref_info(self) -> list[MachPortCrossRefInfo]:
         """Get all allocated mach ports and cross-refs to get the recv right owner"""
         own_ports: list[MachPortInfo] = []
@@ -1152,6 +1197,7 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
             MachPortCrossRefInfo(
                 name=port.name,
                 ipc_object=port.ipc_object,
+                rights=port.rights,
                 recv_right_pid=cross_ref_port_info.pid,
                 recv_right_proc_name=cross_ref_port_info.proc_name,
             )
@@ -1313,224 +1359,322 @@ class DarwinProcesses(Processes["DarwinClient[DarwinSymbolT_co]"], Generic[Darwi
 
             await asyncio.sleep(1)
 
-    async def get_mach_ports(self, include_thread_info: bool = False) -> AsyncGenerator[MachPortInfo]:
-        """Enumerate all mach ports (heavily inspired by lsmp)"""
-        thread_info = None
+    async def get_mach_ports(
+        self, include_thread_info: bool = False, resolve_kobjects: bool = False
+    ) -> AsyncGenerator[MachPortInfo]:
+        """Enumerate all mach ports (heavily inspired by lsmp).
+
+        :param include_thread_info: also collect each task's thread ids (costs extra RPCs per thread).
+        :param resolve_kobjects: resolve every port's kernel-object type (IKOT_*, e.g. TASK_CONTROL /
+            THREAD / HOST / CLOCK / IOKIT_CONNECT). This issues one extra RPC per port, so it is off
+            by default; when disabled ``MachPortInfo.kobject`` stays ``None``.
+        """
         mach_task_self = await self._client.symbols.mach_task_self()
+        for task in await self._list_task_read_ports(mach_task_self):
+            async for port in self._dump_task_ipc_space(mach_task_self, task, include_thread_info, resolve_kobjects):
+                yield port
 
-        malloc = self._client.symbols.malloc.call
-        p_psets = await self._client.symbols.malloc(8)
-        p_pset_count = await malloc(8)
-        p_pset_priv = await malloc(8)
-        p_tasks = await malloc(8)
-        p_task_count = await malloc(8)
-        p_count = await malloc(4)
-        ports_info = await malloc(4 * 2 * EXC_TYPES_COUNT)
-        masks = await malloc(4 * EXC_TYPES_COUNT)
-        behaviors = await malloc(4 * EXC_TYPES_COUNT)
-        flavors = await malloc(4 * EXC_TYPES_COUNT)
-        p_thread_count = await malloc(4)
-        p_thread_ports = await malloc(8)
-        info = await malloc(200)
-        p_pid = await malloc(4)
-        th_info = await malloc(thread_identifier_info.sizeof())
-        p_th_kobject = await malloc(4)
-        p_th_kotype = await malloc(4)
-        p_th_info_count = await malloc(4)
-        p_th_voucher = await self._client.symbols.calloc(4, 1)
-        p_table = await malloc(8)
-        unused = await malloc(200)
-        proc_name = await malloc(100)
-        p_kotype = await malloc(4)
+    async def get_pid_mach_ports(
+        self, pid: int, include_thread_info: bool = False, resolve_kobjects: bool = False
+    ) -> AsyncGenerator[MachPortInfo]:
+        """Enumerate the mach ports of a single task, addressed by pid.
 
-        p_pid.item_size = 4
-        p_count.item_size = 4
-        p_thread_count.item_size = 4
-        p_th_info_count.item_size = 4
-        p_th_voucher.item_size = 4
-        await p_th_info_count.setindex(0, THREAD_IDENTIFIER_INFO_COUNT)
-        p_kotype.item_size = 4
+        Unlike :meth:`get_mach_ports` this reads only the target's own IPC space (no processor-set
+        walk), so it needs privilege only to read that one task. See :meth:`get_mach_ports` for the
+        meaning of ``include_thread_info`` / ``resolve_kobjects``.
+        """
+        mach_task_self = await self._client.symbols.mach_task_self()
+        async with self._client.safe_malloc(8) as p_task:
+            if await self._client.symbols.task_read_for_pid(mach_task_self, pid, p_task) != 0:
+                raise BadReturnValueError(f"task_read_for_pid({pid}) failed")
+            task = int(await p_task.getindex(0))
+        async for port in self._dump_task_ipc_space(mach_task_self, task, include_thread_info, resolve_kobjects):
+            yield port
 
-        if await self._client.symbols.getuid() == 0:
-            # if privileged, get the info for all tasks so we can match ports up
-            if (
-                await self._client.symbols.host_processor_sets(
-                    await self._client.symbols.mach_host_self(),
-                    p_psets,
-                    p_pset_count,
-                )
-                != 0
-            ):
+    async def _list_task_read_ports(self, mach_task_self: int) -> Sequence[int]:
+        """Return the task read ports to enumerate: every task when privileged, else just our own."""
+        if await self._client.symbols.getuid() != 0:
+            logger.warning("should run as root for best output (cross-ref to other tasks' ports)")
+            async with self._client.safe_malloc(8) as p_task:
+                if await self._client.symbols.task_read_for_pid(mach_task_self, (await self.get_self()).pid, p_task):
+                    raise BadReturnValueError("task_read_for_pid() failed")
+                return [int(await p_task.getindex(0))]
+
+        # privileged: convert the processor set to the full list of task read ports so ports held in
+        # other tasks can be cross-referenced
+        async with (
+            self._client.safe_malloc(8) as p_psets,
+            self._client.safe_malloc(8) as p_pset_count,
+            self._client.safe_malloc(8) as p_pset_priv,
+            self._client.safe_malloc(8) as p_tasks,
+            self._client.safe_malloc(8) as p_task_count,
+        ):
+            host = await self._client.symbols.mach_host_self()
+            if await self._client.symbols.host_processor_sets(host, p_psets, p_pset_count) != 0:
                 raise BadReturnValueError("host_processor_sets() failed")
             if await p_pset_count.getindex(0) != 1:
                 raise BadReturnValueError("Assertion Failure: pset count greater than one")
-
-            # convert the processor-set-name port to a privileged port
-            if (
-                await self._client.symbols.host_processor_set_priv(
-                    await self._client.symbols.mach_host_self(),
-                    await p_psets.getindex(0, 0),
-                    p_pset_priv,
-                )
-                != 0
-            ):
+            if await self._client.symbols.host_processor_set_priv(host, await p_psets.getindex(0, 0), p_pset_priv) != 0:
                 raise BadReturnValueError("host_processor_set_priv() failed")
 
             await self._client.symbols.mach_port_deallocate(mach_task_self, await p_psets.getindex(0, 0))
             await self._client.symbols.vm_deallocate(
-                mach_task_self,
-                await p_psets.getindex(0),
-                await p_pset_count.getindex(0) * mach_port_t.sizeof(),
+                mach_task_self, await p_psets.getindex(0), await p_pset_count.getindex(0) * mach_port_t.sizeof()
             )
 
-            # convert the processor-set-priv to a list of task read ports for the processor set
             if (
                 await self._client.symbols.processor_set_tasks_with_flavor(
-                    await p_pset_priv.getindex(0),
-                    TASK_FLAVOR_READ,
-                    p_tasks,
-                    p_task_count,
+                    await p_pset_priv.getindex(0), TASK_FLAVOR_READ, p_tasks, p_task_count
                 )
                 != 0
             ):
                 raise BadReturnValueError("processor_set_tasks_with_flavor() failed")
-
             await self._client.symbols.vm_deallocate(mach_task_self, await p_pset_priv.getindex(0))
 
-            # swap my current instances port to be last to collect all threads and exception port info
-            my_task_position = None
-            task_count = await p_task_count.getindex(0)
-            tasks = list(struct.unpack(f"<{int(task_count)}I", await (await p_tasks.getindex(0)).peek(task_count * 4)))
+            task_count = int(await p_task_count.getindex(0))
+            tasks_ptr = await p_tasks.getindex(0)
+            tasks = list(struct.unpack(f"<{task_count}I", await tasks_ptr.peek(task_count * 4))) if task_count else []
+            await self._client.symbols.vm_deallocate(mach_task_self, tasks_ptr, task_count * mach_port_t.sizeof())
 
-            for i in range(task_count):
-                if await self._client.symbols.mach_task_is_self(tasks[i]):
-                    my_task_position = i
-                    break
+        # move our own task to the end so its (self-referential) ports come last, matching lsmp
+        for i, task in enumerate(tasks):
+            if await self._client.symbols.mach_task_is_self(task):
+                tasks[i], tasks[-1] = tasks[-1], tasks[i]
+                break
+        return tasks
 
-            if my_task_position is not None:
-                swap_holder = tasks[task_count - 1]
-                tasks[task_count - 1] = tasks[my_task_position]
-                tasks[my_task_position] = swap_holder
-        else:
-            logger.warning("should run as root for best output (cross-ref to other tasks' ports)")
-            # just the one process
-            task_count = 1
-            async with self._client.safe_malloc(8) as p_task:
-                ret = await self._client.symbols.task_read_for_pid(
-                    mach_task_self,
-                    (await self.get_self()).pid,
-                    p_task,
+    async def _dump_task_ipc_space(
+        self, mach_task_self: int, task: int, include_thread_info: bool, resolve_kobjects: bool
+    ) -> AsyncGenerator[MachPortInfo]:
+        """Yield a ``MachPortInfo`` for every named right in a single task's IPC space.
+
+        If the task dies mid-enumeration one of the mach calls fails; we log and stop for that task
+        (its port is now dead) instead of aborting the whole walk. The task read port is always
+        released via the ``finally``, so repeated calls don't leak a port per task.
+        """
+        try:
+            pid = await self._pid_for_task(task)
+
+            exception_ports = await self._read_exception_ports(self._client.symbols.task_get_exception_ports_info, task)
+            if exception_ports is None:
+                logger.debug("skipping pid %s: task_get_exception_ports_info() failed (task likely died)", pid)
+                return
+
+            thread_info = None
+            if include_thread_info:
+                thread_info = await self._collect_thread_info(mach_task_self, task, exception_ports)
+                if thread_info is None:
+                    logger.debug("skipping pid %s: task_threads() failed (task likely died)", pid)
+                    return
+
+            entries = await self._read_port_space(mach_task_self, task)
+            if entries is None:
+                logger.debug("skipping pid %s: mach_port_space_info() failed (task likely died)", pid)
+                return
+
+            proc_name = await self._task_proc_name(pid)
+            for entry in entries:
+                port = await self._classify_port_entry(
+                    task, pid, entry, proc_name, thread_info, exception_ports, resolve_kobjects
                 )
-                if ret != 0:
-                    raise BadReturnValueError("task_read_for_pid() failed")
-                tasks = [await p_task.getindex(0)]
+                if port is not None:
+                    yield port
+        finally:
+            await self._client.symbols.mach_port_deallocate(mach_task_self, task)
 
-        for task in tasks:
+    async def _pid_for_task(self, task: int) -> int:
+        """Resolve the pid owning a task port."""
+        async with self._client.safe_malloc(4) as p_pid:
+            p_pid.item_size = 4
             await self._client.symbols.pid_for_task(task, p_pid)
-            pid = (await p_pid.getindex(0)).c_uint32
+            return int((await p_pid.getindex(0)).c_uint32)
 
+    async def _task_proc_name(self, pid: int) -> str | None:
+        """Return the executable name for a pid, or None if it can't be resolved."""
+        async with self._client.safe_malloc(100) as proc_name:
+            if await self._client.symbols.proc_name(pid, proc_name, 100) == 0:
+                return None
+            return await proc_name.peek_str()
+
+    async def _read_exception_ports(self, getter, port: int) -> dict[int, MachPortExceptionInfo] | None:
+        """Read the exception handler ports of a task or thread via ``getter`` (the ``*_info`` variant).
+
+        Returns a map of ``ipc_object`` -> :class:`MachPortExceptionInfo` so port-table entries can be
+        matched to the handler they implement. Returns None if the call fails (port likely died).
+        """
+        async with (
+            self._client.safe_malloc(4) as p_count,
+            self._client.safe_malloc(ipc_info_port_t.sizeof() * EXC_TYPES_COUNT) as ports_info,
+            self._client.safe_malloc(4 * EXC_TYPES_COUNT) as masks,
+            self._client.safe_malloc(4 * EXC_TYPES_COUNT) as behaviors,
+            self._client.safe_malloc(4 * EXC_TYPES_COUNT) as flavors,
+        ):
+            p_count.item_size = 4
+            if await getter(port, EXC_MASK_ALL, masks, p_count, ports_info, behaviors, flavors) != 0:
+                return None
+
+            count = int((await p_count.getindex(0)).c_uint32)
+            if not count:
+                return {}
+            mask_vals = struct.unpack(f"<{count}I", await masks.peek(4 * count))
+            behavior_vals = struct.unpack(f"<{count}I", await behaviors.peek(4 * count))
+            flavor_vals = struct.unpack(f"<{count}I", await flavors.peek(4 * count))
+            port_infos = await ports_info.parse(Array(count, ipc_info_port_t))
+
+            result: dict[int, MachPortExceptionInfo] = {}
+            for i in range(count):
+                obj = port_infos[i].iip_port_object
+                if not obj:
+                    continue  # no handler registered for this exception slot
+                result[obj] = MachPortExceptionInfo(
+                    masks=exc_mask_names(mask_vals[i]), behavior=behavior_vals[i], flavor=flavor_vals[i]
+                )
+            return result
+
+    async def _collect_thread_info(
+        self, mach_task_self: int, task: int, exception_ports: dict[int, MachPortExceptionInfo]
+    ) -> MachPortThreadInfo | None:
+        """Collect a task's thread ids and fold each thread's exception handlers into ``exception_ports``."""
+        async with (
+            self._client.safe_malloc(8) as p_thread_ports,
+            self._client.safe_malloc(4) as p_thread_count,
+        ):
+            p_thread_count.item_size = 4
+            if await self._client.symbols.task_threads(task, p_thread_ports, p_thread_count) != 0:
+                return None
+            thread_count = int((await p_thread_count.getindex(0)).c_uint32)
+            thread_ports = (
+                struct.unpack(f"<{thread_count}I", await (await p_thread_ports.getindex(0)).peek(4 * thread_count))
+                if thread_count
+                else ()
+            )
+
+        thread_ids = []
+        for thread_port in thread_ports:
+            thread_exceptions = await self._read_exception_ports(
+                self._client.symbols.thread_get_exception_ports_info, thread_port
+            )
+            for obj, info in (thread_exceptions or {}).items():
+                exception_ports.setdefault(obj, info)
+
+            thread_id = await self._resolve_thread_id(mach_task_self, thread_port)
+            if thread_id is not None:
+                thread_ids.append(thread_id)
+            await self._client.symbols.mach_port_deallocate(mach_task_self, thread_port)
+        return MachPortThreadInfo(thread_ids=thread_ids)
+
+    async def _resolve_thread_id(self, mach_task_self: int, thread_port: int) -> int | None:
+        """Resolve the kernel thread id behind a thread port, or None if unavailable."""
+        async with (
+            self._client.safe_malloc(4) as p_kotype,
+            self._client.safe_malloc(4) as p_kobject,
+            self._client.safe_malloc(thread_identifier_info.sizeof()) as th_info,
+            self._client.safe_malloc(4) as p_info_count,
+        ):
+            p_kotype.item_size = 4
+            p_info_count.item_size = 4
+            await p_info_count.setindex(0, THREAD_IDENTIFIER_INFO_COUNT)
             if (
-                await self._client.symbols.task_get_exception_ports_info(
-                    task, EXC_MASK_ALL, masks, p_count, ports_info, behaviors, flavors
+                await self._client.symbols.mach_port_kernel_object(mach_task_self, thread_port, p_kotype, p_kobject)
+                == 0
+                and await self._client.symbols.thread_info(thread_port, THREAD_IDENTIFIER_INFO, th_info, p_info_count)
+                == 0
+            ):
+                return (await th_info.parse(thread_identifier_info)).thread_id
+        return None
+
+    async def _read_port_space(self, mach_task_self: int, task: int) -> Sequence | None:
+        """Parse a task's IPC name table, freeing the kernel-allocated arrays. None if the task died."""
+        async with (
+            self._client.safe_malloc(200) as space_info,
+            self._client.safe_malloc(8) as p_table,
+            self._client.safe_malloc(4) as p_table_count,
+            self._client.safe_malloc(8) as p_tree,
+            self._client.safe_malloc(4) as p_tree_count,
+        ):
+            p_table_count.item_size = 4
+            p_tree_count.item_size = 4
+            if (
+                await self._client.symbols.mach_port_space_info(
+                    task, space_info, p_table, p_table_count, p_tree, p_tree_count
                 )
                 != 0
             ):
-                raise BadReturnValueError("task_get_exception_ports_info() failed")
+                return None
 
-            if include_thread_info:
-                # collect threads port as well
-                if await self._client.symbols.task_threads(task, p_thread_ports, p_thread_count) != 0:
-                    raise BadReturnValueError("task_threads() failed")
-
-                # collect the thread information
-                thread_count = (await p_thread_count.getindex(0)).c_uint32
-                thread_ports = struct.unpack(
-                    f"<{thread_count}I",
-                    await (await p_thread_ports.getindex(0)).peek(4 * thread_count),
+            table_count = int((await p_table_count.getindex(0)).c_uint32)
+            table_ptr = await p_table.getindex(0)
+            entries = list(await table_ptr.parse(Array(table_count, ipc_info_name_t))) if table_count else []
+            if table_ptr:
+                await self._client.symbols.vm_deallocate(
+                    mach_task_self, table_ptr, table_count * ipc_info_name_t.sizeof()
                 )
-                thread_ids = []
-                for thread_port in thread_ports:
-                    ret = await self._client.symbols.thread_get_exception_ports_info(
-                        thread_port,
-                        EXC_MASK_ALL,
-                        masks,
-                        p_count,
-                        ports_info,
-                        behaviors,
-                        flavors,
-                    )
-                    if ret != 0:
-                        raise BadReturnValueError(
-                            f"thread_get_exception_ports_info() failed: "
-                            f"{await (await self._client.symbols.mach_error_string(ret)).peek_str()}"
-                        )
 
-                    if (
-                        await self._client.symbols.mach_port_kernel_object(
-                            mach_task_self, thread_port, p_th_kotype, p_th_kobject
-                        )
-                        == 0
-                    ) and (
-                        await self._client.symbols.thread_info(
-                            mach_task_self,
-                            thread_port,
-                            THREAD_IDENTIFIER_INFO,
-                            th_info,
-                            await p_th_info_count.getindex(0),
-                        )
-                        == 0
-                    ):
-                        thread_id = (await th_info.parse(thread_identifier_info)).thread_id
-                        thread_ids.append(thread_id)
-
-                    await self._client.symbols.mach_port_deallocate(mach_task_self, thread_port)
-                thread_info = MachPortThreadInfo(thread_ids=thread_ids)
-
-            if await self._client.symbols.mach_port_space_info(task, info, p_table, p_count, unused, unused) != 0:
-                raise BadReturnValueError("mach_port_space_info() failed")
-
-            proc_name_str = (
-                await proc_name.peek_str() if await self._client.symbols.proc_name(pid, proc_name, 100) != 0 else None
-            )
-
-            count = (await p_count.getindex(0)).c_uint32
-            table_struct = Array(count, ipc_info_name_t)
-
-            parsed_table = await (await p_table.getindex(0)).parse(table_struct)
-
-            for entry in parsed_table:
-                dnreq = False
-                rights = []
-
-                if entry.iin_type & MACH_PORT_TYPE_ALL_RIGHTS == 0:
-                    # skip empty slots in the table
-                    continue
-
-                if entry.iin_type == MACH_PORT_TYPE_PORT_SET:
-                    continue
-
-                if entry.iin_type & MACH_PORT_TYPE_SEND:
-                    rights.append("send")
-
-                if entry.iin_type & MACH_PORT_TYPE_DNREQUEST:
-                    dnreq = True
-
-                if entry.iin_type & MACH_PORT_TYPE_RECEIVE:
-                    rights.append("recv")
-
-                elif entry.iin_type == MACH_PORT_TYPE_DEAD_NAME:
-                    continue
-
-                if entry.iin_type == MACH_PORT_TYPE_SEND_ONCE:
-                    pass
-
-                yield MachPortInfo(
-                    task=task,
-                    pid=pid,
-                    name=entry.iin_name,
-                    rights=rights,
-                    ipc_object=entry.iin_object,
-                    dead=dnreq,
-                    proc_name=proc_name_str,
-                    thread_info=thread_info,
+            tree_ptr = await p_tree.getindex(0)
+            tree_count = int((await p_tree_count.getindex(0)).c_uint32)
+            if tree_ptr and tree_count:
+                await self._client.symbols.vm_deallocate(
+                    mach_task_self, tree_ptr, tree_count * ipc_info_name_t.sizeof()
                 )
+            return entries
+
+    async def _classify_port_entry(
+        self,
+        task: int,
+        pid: int,
+        entry,
+        proc_name: str | None,
+        thread_info: MachPortThreadInfo | None,
+        exception_ports: dict[int, MachPortExceptionInfo],
+        resolve_kobjects: bool,
+    ) -> MachPortInfo | None:
+        """Turn one raw IPC table entry into a :class:`MachPortInfo`, or None for slots to skip."""
+        if entry.iin_type & MACH_PORT_TYPE_ALL_RIGHTS == 0:
+            return None  # empty table slot
+        if entry.iin_type == MACH_PORT_TYPE_PORT_SET:
+            return None
+
+        rights = []
+        if entry.iin_type & MACH_PORT_TYPE_SEND:
+            rights.append("send")
+        dead = bool(entry.iin_type & MACH_PORT_TYPE_DNREQUEST)
+        if entry.iin_type & MACH_PORT_TYPE_RECEIVE:
+            rights.append("recv")
+        elif entry.iin_type == MACH_PORT_TYPE_DEAD_NAME:
+            return None
+        if entry.iin_type & MACH_PORT_TYPE_SEND_ONCE:
+            rights.append("send-once")
+
+        kobject = await self._resolve_kobject(task, entry.iin_name) if resolve_kobjects else None
+        return MachPortInfo(
+            task=task,
+            pid=pid,
+            name=entry.iin_name,
+            rights=rights,
+            ipc_object=entry.iin_object,
+            dead=dead,
+            proc_name=proc_name,
+            thread_info=thread_info,
+            kobject=kobject,
+            exception=exception_ports.get(entry.iin_object),
+        )
+
+    async def _resolve_kobject(self, task: int, name: int) -> MachPortKobjectInfo | None:
+        """Resolve the kernel-object identity (IKOT_*) a port names, or None if it isn't one.
+
+        Regular (non-kernel) ports report ``IKOT_NONE``; ports the kernel declines to disclose report
+        the all-ones sentinel. Both mean "not an identifiable kernel object", so both yield None.
+        """
+        async with (
+            self._client.safe_calloc(4) as p_kotype,
+            self._client.safe_calloc(4) as p_kobject,
+        ):
+            p_kotype.item_size = 4
+            p_kobject.item_size = 4
+            if await self._client.symbols.mach_port_kernel_object(task, name, p_kotype, p_kobject) != 0:
+                return None
+            kotype = int((await p_kotype.getindex(0)).c_uint32)
+            if kotype in (IKOT_NONE, _IKOT_UNDISCLOSED):
+                return None
+            addr = int((await p_kobject.getindex(0)).c_uint32)
+            return MachPortKobjectInfo(type_id=kotype, type=ikot_name(kotype), addr=addr)
