@@ -75,6 +75,20 @@ EXC_MASK_ALL = (
     | EXC_MASK_MACHINE
 )
 
+# single-bit mask -> short name (e.g. EXC_MASK_BAD_ACCESS -> "BAD_ACCESS"); EXC_MASK_ALL and the
+# zero-valued EXC_MASK_MACHINE are excluded so they never swallow a decode
+EXC_MASK_NAMES = {
+    value: name[len("EXC_MASK_") :]
+    for name, value in dict(globals()).items()
+    if name.startswith("EXC_MASK_") and name not in ("EXC_MASK_ALL", "EXC_MASK_MACHINE") and isinstance(value, int)
+}
+
+
+def exc_mask_names(mask: int) -> list[str]:
+    """Decode an exception mask bitfield into its constituent EXC_MASK_* names."""
+    return [name for bit, name in EXC_MASK_NAMES.items() if mask & bit]
+
+
 IKOT_NONE = 0
 IKOT_THREAD_CONTROL = 1
 IKOT_TASK_CONTROL = 2
@@ -128,6 +142,19 @@ IKOT_HYPERVISOR = 49
 
 IKOT_UNKNOWN = 50  # magic catchall
 IKOT_MAX_TYPE = IKOT_UNKNOWN + 1  # of IKOT_ types
+
+# value -> short name (e.g. IKOT_TASK_CONTROL -> "TASK_CONTROL"), built from the IKOT_* consts above
+IKOT_NAMES = {
+    value: name[len("IKOT_") :]
+    for name, value in dict(globals()).items()
+    if name.startswith("IKOT_") and name != "IKOT_MAX_TYPE" and isinstance(value, int)
+}
+
+
+def ikot_name(kotype: int) -> str:
+    """Return the human-readable name of a kernel-object type (IKOT_*)."""
+    return IKOT_NAMES.get(kotype, IKOT_NAMES[IKOT_UNKNOWN])
+
 
 MACH_PORT_RIGHT_SEND = 0
 MACH_PORT_RIGHT_RECEIVE = 1
