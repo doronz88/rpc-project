@@ -21,6 +21,7 @@ from rpcclient.clients.darwin.subsystems.biome import Biome
 from rpcclient.clients.darwin.subsystems.bluetooth import Bluetooth
 from rpcclient.clients.darwin.subsystems.core_graphics import CoreGraphics
 from rpcclient.clients.darwin.subsystems.darwin_lief import DarwinLief
+from rpcclient.clients.darwin.subsystems.dns import Dns
 from rpcclient.clients.darwin.subsystems.duet import Duet
 from rpcclient.clients.darwin.subsystems.fs import DarwinFs
 from rpcclient.clients.darwin.subsystems.hid import Hid
@@ -177,6 +178,10 @@ class DarwinClient(CoreClient[DarwinSymbolT_co]):
     @subsystem
     def network(self) -> DarwinNetwork[DarwinSymbolT_co]:
         return DarwinNetwork(self)
+
+    @subsystem
+    def dns(self) -> Dns[DarwinSymbolT_co]:
+        return Dns(self)
 
     @subsystem
     def power(self) -> Power[DarwinSymbolT_co]:
