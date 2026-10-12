@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Iterable
 
 import pytest
@@ -131,3 +132,13 @@ async def test_all_subsystems_initialize(client: Client) -> None:
             failures[name] = repr(value)
 
     assert not failures, f"Subsystems failed to initialize: {failures}"
+
+
+async def test_cancelled_call_keeps_replies_in_sync(client: Client) -> None:
+    # cancelling a call after its request was sent must not leave its reply on the socket for the next call
+    call = asyncio.create_task(client.symbols.usleep(300_000))
+    await asyncio.sleep(0.1)
+    call.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await call
+    assert await client.symbols.strlen("abc") == 3

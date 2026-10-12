@@ -88,6 +88,12 @@ class RpcSocket:
         await self._msg_send(rpc_msg)
 
     async def rpc_msg_send_recv(self, msg: RpcMessage) -> RpcMessage:
+        # A request and its reply must stay paired on the socket: if the caller is cancelled between sending and
+        # receiving, the reply would be left unread and handed to the next request. Shielding lets the exchange
+        # finish (and its reply be consumed) even when the awaiting task is cancelled.
+        return await asyncio.shield(self._send_recv(msg))
+
+    async def _send_recv(self, msg: RpcMessage) -> RpcMessage:
         async with self._acquire_protocol_lock():
             await self.rpc_msg_send(msg)
             return await self.rpc_msg_recv()

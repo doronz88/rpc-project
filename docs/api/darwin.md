@@ -9,6 +9,9 @@ Subsystems available on Darwin (macOS/iOS) clients, reached as attributes of the
 ## Network
 ::: rpcclient.clients.darwin.subsystems.network
 
+## DNS
+::: rpcclient.clients.darwin.subsystems.dns
+
 ## Processes
 ::: rpcclient.clients.darwin.subsystems.processes
 

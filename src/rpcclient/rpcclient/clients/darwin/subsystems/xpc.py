@@ -52,6 +52,12 @@ class XPCObject(AbstractDarwinSymbol, Generic[DarwinSymbolT_co]):
     async def type(self) -> int:
         return await self._client.symbols.xpc_get_type(self)
 
+    async def release(self) -> None:
+        """
+        See https://developer.apple.com/documentation/xpc/xpc_release(_:)?language=objc
+        """
+        await self._client.symbols.xpc_release(self)
+
 
 class XPCArray(XPCObject[DarwinSymbolT_co]):
     async def set_data(self, buf: bytes, index: int = XPC_ARRAY_APPEND) -> None:
