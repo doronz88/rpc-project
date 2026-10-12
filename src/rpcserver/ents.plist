@@ -102,5 +102,9 @@
 	<true/>
 	<key>com.apple.mobileactivationd.spi</key>
 	<true/>
+	<key>com.apple.mDNSResponder.log_utility</key>
+	<true/>
+	<key>com.apple.private.mDNSResponder.record-cache.flush</key>
+	<true/>
 </dict>
 </plist>
