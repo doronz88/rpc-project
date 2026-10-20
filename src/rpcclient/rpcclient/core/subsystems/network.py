@@ -233,12 +233,14 @@ class Network(ClientBound[ClientT_co]):
             current = await parse_ifaddrs(self._client, await addresses.getindex(0))
 
             while current:
-                family = sockaddr.parse(current.ifa_addr.peek(sockaddr.sizeof())).sa_family
+                family = (await current.ifa_addr.parse(sockaddr)).sa_family if current.ifa_addr else None
 
                 if family == AF_INET:
-                    address = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_addr).sin_addr)
-                    netmask = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_netmask).sin_addr)
-                    broadcast = pysock.inet_ntoa(sockaddr_in.parse_stream(current.ifa_dstaddr).sin_addr)
+                    address = pysock.inet_ntoa((await current.ifa_addr.parse(sockaddr_in)).sin_addr)
+                    netmask = pysock.inet_ntoa((await current.ifa_netmask.parse(sockaddr_in)).sin_addr)
+                    broadcast = None
+                    if current.ifa_dstaddr:
+                        broadcast = pysock.inet_ntoa((await current.ifa_dstaddr.parse(sockaddr_in)).sin_addr)
                     results.append(
                         Interface(name=current.ifa_name, address=address, netmask=netmask, broadcast=broadcast)
                     )
