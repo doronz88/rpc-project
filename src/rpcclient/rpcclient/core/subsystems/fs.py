@@ -165,11 +165,12 @@ class File(Allocated[ClientT_co]):
         return n
 
     async def write(self, buf: bytes) -> int:
-        """Write the full buffer, retrying until all bytes are written."""
+        """Write the full buffer, retrying until all bytes are written. Return the number of bytes written."""
+        total = len(buf)
         while buf:
             err = await self._write(buf)
             buf = buf[err:]
-        return len(buf)
+        return total
 
     async def _read(self, buf: "Symbol", size: int) -> bytes:
         """read file at remote"""

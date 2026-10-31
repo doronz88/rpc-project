@@ -57,6 +57,8 @@ class IosProcesses(DarwinProcesses[DarwinSymbolT_co]):
         start_time = datetime.now()
         while datetime.now() - start_time < timedelta(seconds=timeout):
             pid = (await bkssystem_service.objc_call("pidForApplication:", await self._client.cf(bundle_id))).c_int32
+            if pid != -1:
+                break
 
         if pid == -1:
             raise LaunchError

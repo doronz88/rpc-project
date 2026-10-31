@@ -143,3 +143,21 @@ async def test_unix_receive_timeout(client: SyncClient, tmp_path: RemotePath[Syn
             with pytest.raises(RpcResourceTemporarilyUnavailableError):
                 await sock.recv(1)
         assert time.time() - start >= TIMEOUT
+
+
+@pytest.mark.local_machine
+async def test_blocking_state_before_setblocking(client: SyncClient) -> None:
+    with tcp_server() as port:
+        async with await client.network.tcp_connect("127.0.0.1", port) as sock:
+            # repr and getblocking() must work before setblocking() was ever called
+            assert "BLOCKING:<unknown>" in repr(sock)
+            assert await sock.getblocking() is True
+            assert "BLOCKING:True" in repr(sock)
+
+
+async def test_socket_returns_valid_fd(client: SyncClient) -> None:
+    fd = await client.network.socket()
+    try:
+        assert fd >= 0
+    finally:
+        await client.symbols.close(fd)

@@ -53,7 +53,7 @@ class Socket(Allocated[ClientT_co]):
         super().__init__()
         self._client = client
         self.fd: int = fd
-        self._blocking: bool | None
+        self._blocking: bool | None = None
         self._timeout = None
 
     async def _deallocate(self) -> None:
@@ -168,8 +168,8 @@ class Network(ClientBound[ClientT_co]):
 
     async def socket(self, family=AF_INET, socktype=SOCK_STREAM, proto=0) -> int:
         """Create a remote socket and return its file descriptor."""
-        result = (await self._client.symbols.socket(family, socktype, proto)).c_int64
-        if result == 0:
+        result = (await self._client.symbols.socket(family, socktype, proto)).c_int32
+        if result < 0:
             await self._client.raise_errno_exception(f"failed to create socket: {result}")
         return result
 

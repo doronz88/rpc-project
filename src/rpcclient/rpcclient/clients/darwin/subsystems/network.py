@@ -39,7 +39,7 @@ class DarwinNetwork(Network["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSym
                     "BypassAllowed": 0,
                 },
             )
-        await (await self._client.processes.get_by_basename("configd)")).kill(SIGKILL)
+        await (await self._client.processes.get_by_basename("configd")).kill(SIGKILL)
 
     async def remove_http_proxy(self) -> None:
         """Remove http proxy settings"""
