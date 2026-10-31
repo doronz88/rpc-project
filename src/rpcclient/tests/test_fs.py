@@ -46,6 +46,13 @@ async def test_open(client: SyncClient, tmp_path: RemotePath[SyncClient]) -> Non
     assert S_IMODE((await client.fs.stat(file)).st_mode) == 0o666 & ~umask
 
 
+async def test_file_write_returns_length(client: SyncClient, tmp_path: RemotePath[SyncClient]) -> None:
+    data = b"hello world"
+    async with await client.fs.open(tmp_path / "write.txt", "w") as f:
+        assert await f.write(data) == len(data)
+    assert await client.fs.read_file(tmp_path / "write.txt") == data
+
+
 async def test_flock(client: SyncClient, tmp_path: RemotePath[SyncClient]) -> None:
     file = tmp_path / "lock.txt"
     async with await client.fs.open(file, "w+") as f:

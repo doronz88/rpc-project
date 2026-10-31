@@ -115,6 +115,8 @@ logger = logging.getLogger(__name__)
 CDHASH_SIZE = 20
 CHUNK_SIZE = 1024 * 64
 APP_SUFFIX = ".app/"
+MACH_HEADER_64_SIZE = 32
+MACH_HEADER_SIZEOFCMDS_OFFSET = 20
 CS_OPS_IDENTITY = 11  # csops(2) op: copy the code-signing identity string
 _IKOT_UNDISCLOSED = 0xFFFFFFFF  # mach_port_kernel_object sentinel for a port whose kobject isn't disclosed
 
@@ -1117,7 +1119,11 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
             logger.debug(f"dumping: {output_file}")
 
             with open(output_file, "wb") as output_file:
-                macho_in_memory = mach_header_t.parse_stream(image.address)
+                # Symbol reads are async, so fetch the header + load commands first and parse locally.
+                # Offsets captured by `Tell` are then relative to the image start.
+                header = await image.address.peek(MACH_HEADER_64_SIZE)
+                sizeofcmds = Int32ul.parse(header[MACH_HEADER_SIZEOFCMDS_OFFSET:][:4])
+                macho_in_memory = mach_header_t.parse(await image.address.peek(MACH_HEADER_64_SIZE + sizeofcmds))
 
                 async with await self._client.fs.open(image.path, "r") as fat_file:
                     # locating the correct MachO offset within the FAT image (if FAT)
@@ -1154,7 +1160,8 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
                             LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO_64,
                             LOAD_COMMAND_TYPE.LC_ENCRYPTION_INFO,
                         ):
-                            offset_cryptid = load_command.data.cryptid_offset - image.address
+                            # cryptid follows cryptoff and cryptsize in both command variants
+                            offset_cryptid = load_command._data_offset + 8
                             crypt_offset = load_command.data.cryptoff
                             crypt_size = load_command.data.cryptsize
                             break
@@ -1166,7 +1173,7 @@ class Process(ClientBound["DarwinClient[DarwinSymbolT_co]"], Generic[DarwinSymbo
                         output_file.write(b"\x00" * 4)  # cryptid = 0
                         output_file.seek(crypt_offset, SEEK_SET)
                         output_file.flush()
-                        output_file.write((image.address + crypt_offset).peek(crypt_size))
+                        output_file.write(await image.address.peek(crypt_size, crypt_offset))
 
     async def get_mach_ports(
         self, include_thread_info: bool = False, resolve_kobjects: bool = False
