@@ -59,7 +59,7 @@ You land in an IPython shell with three globals:
   `mgr.remove(pid)`, `mgr.clients`, `mgr.clear()`
 - **`console`** — context controller: `console.switch(pid)`, or `console.switch()` to pick
   interactively
-- **`p`** — the active client; auto-updated when you switch context (`p.info()`, `p.pid`,
+- **`p`** — the active client; auto-updated when you switch context (`p.info()`, `p.pid()`,
   `p.fs.listdir(".")`, `p.spawn([...])`)
 
 `F1` shows help, `F2` shows active contexts, `F3` switches to the previous context, `F4` toggles
@@ -80,7 +80,7 @@ SpawnResult(error=0, pid=25047, stdout=<_io.TextIOWrapper ...>)
 [osx| (78479) rpcserver_macosx]: p.fs.listdir('.')
 ['common.c', 'Makefile', 'rpcserver.c', ...]
 
-[osx| (78479) rpcserver_macosx]: p.processes.get_by_pid(p.pid).fds
+[osx| (78479) rpcserver_macosx]: p.processes.get_self().fds()
 [FileFd(fd=0, path='/dev/ttys000'), ...]
 ```
 

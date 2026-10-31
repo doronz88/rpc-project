@@ -1,58 +1,91 @@
+---
+template: home.html
+hide:
+  - navigation
+  - toc
+---
+
 # rpc-project
 
 `rpc-project` is a simple, powerful **RPC service for controlling every aspect of a remote
 machine**. A small C **server** exposes a protocol for calling native functions; a Python
-**client** turns that into a rich, scriptable API. Think of it as a swiss-army knife for:
+**client** turns that into a rich, scriptable API. Use it for QA automation, for testing your
+APIs straight from Python, and for software research: found an interesting OS API? Try it with no
+compilation required.
 
-- QA automation
-- Development — test your APIs straight from Python
-- Software research — found an interesting OS API? Try it with no compilation required
+## How it fits together
 
-[Get started :material-arrow-right:](installation.md){ .md-button .md-button--primary }
-[Quick start](guides/quickstart.md){ .md-button }
+<div class="rp-flow" markdown>
 
-## Two components
+<div class="rp-flow__side" markdown>
+**Your machine**
 
-- **Server** — a binary written in C that exposes a protocol to call native C functions.
-- **Client** — `rpcclient`, written in Python 3, that talks to the server and builds high-level
-  APIs on top of native calls.
+`rpcclient`, written in Python 3. An IPython shell (or a library) that builds high-level APIs on
+top of native calls.
+</div>
 
-## What the client gives you
+<div class="rp-flow__wire" aria-hidden="true"><span>call → result</span></div>
 
-Cross-platform:
+<div class="rp-flow__side rp-flow__side--remote" markdown>
+**The target**
 
-- Remote system commands — `p.spawn()`
-- Remote shell — `p.shell()`
-- Filesystem — `p.fs.*`
-- Network (Wi-Fi scan, TCP connect, …) — `p.network.*`
-- Sysctl — `p.sysctl.*`
+`rpcserver`, a small binary written in C that exposes a protocol for calling native C functions.
+Runs on macOS, iOS and Linux.
+</div>
 
-Darwin (macOS/iOS):
+</div>
 
-- Multimedia record/play — `p.media.*`
-- Preferences (CFPreferences / SCPreferences) — `p.preferences.*`
-- Process management — `p.processes.*`
-- Location — `p.location.*`
-- HID simulation (touch, keyboard, battery) — `p.hid.*`
-- IORegistry — `p.ioregistry.*`
-- Logs & crash reports — `p.reports.*`
-- Time, Bluetooth, XPC — `p.time.*`, `p.bluetooth.*`, `p.xpc.*`
+## What you can reach
 
-iOS only:
+Each platform adds to the one around it: everything that works everywhere also works on Darwin,
+and everything on Darwin also works on iOS.
 
-- MobileGestalt — `p.mobile_gestalt.*`
-- Backlight — `p.backlight.*`
-- Dump decrypted apps — `p.processes.get_by_basename(name).dump_app('/path')`
+<div class="rp-scopes" markdown>
 
-…and much more.
+<div class="rp-scope rp-scope--all" markdown>
+<p class="rp-scope__name">Every platform</p>
+
+- Remote system commands: `p.spawn()`
+- Remote shell: `p.shell()`
+- Filesystem: `p.fs.*`
+- Network (Wi-Fi scan, TCP connect, …): `p.network.*`
+- Sysctl: `p.sysctl.*`
+
+<div class="rp-scope rp-scope--darwin" markdown>
+<p class="rp-scope__name">Darwin (macOS and iOS)</p>
+
+- Multimedia record and play: `p.media.*`
+- Preferences (CFPreferences, SCPreferences): `p.preferences.*`
+- Process management: `p.processes.*`
+- Location: `p.location.*`
+- HID simulation (touch, keyboard, battery): `p.hid.*`
+- IORegistry: `p.ioregistry.*`
+- Logs and crash reports: `p.reports.*`
+- Time, Bluetooth, XPC: `p.time.*`, `p.bluetooth.*`, `p.xpc.*`
+
+<div class="rp-scope rp-scope--ios" markdown>
+<p class="rp-scope__name">iOS only</p>
+
+- MobileGestalt: `p.mobile_gestalt.*`
+- Backlight: `p.backlight.*`
+- Dump decrypted apps: `p.processes.get_by_basename(name).dump_app('/path')`
+
+</div>
+</div>
+</div>
+
+</div>
 
 ## Where to go next
 
-<div class="grid cards" markdown>
+<div class="rp-next" markdown>
 
-- :material-download: **[Installation](installation.md)** — get the server and `pip install rpcclient`.
-- :material-rocket-launch: **[Quick start](guides/quickstart.md)** — run the server and open the client shell.
-- :material-function-variant: **[Calling native functions](guides/calling-native-functions.md)** — symbols, globals, ObjC.
-- :material-book-open-variant: **[API reference](api/index.md)** — the generated `rpcclient` reference.
+[**Installation**<br>Get the server binary and `pip install rpcclient`.](installation.md)
+
+[**Quick start**<br>Run the server and open the client shell.](guides/quickstart.md)
+
+[**Calling native functions**<br>Symbols, globals, raw memory and ObjC.](guides/calling-native-functions.md)
+
+[**API reference**<br>The generated `rpcclient` reference.](api/index.md)
 
 </div>

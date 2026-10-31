@@ -4,6 +4,18 @@
 
 ::: rpcclient.core.client.CoreClient
 
+## Filesystem
+
+::: rpcclient.core.subsystems.fs
+
+## Network
+
+::: rpcclient.core.subsystems.network
+
+## Processes
+
+::: rpcclient.core.subsystems.processes
+
 ## WebDAV mounting
 
 ::: rpcclient.core.subsystems.webdav.WebDav

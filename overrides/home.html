@@ -1,0 +1,75 @@
+{% extends "main.html" %}
+
+{#- Landing page: a console session hero, then the page's markdown content. -#}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="rp-hero">
+    <div class="rp-hero__inner md-grid">
+      <div class="rp-hero__copy">
+        <img class="rp-hero__mark" src="{{ 'assets/logo.svg' | url }}" alt="" width="72" height="72">
+        <h1 class="rp-hero__title">Call any native function on a remote machine, from&nbsp;Python.</h1>
+        <p class="rp-hero__lede">
+          A tiny C server runs on the target. The <code>rpcclient</code> shell on your machine
+          turns every symbol, ObjC class and system API over there into something you can call,
+          poke and script.
+        </p>
+        <div class="rp-install" data-copy="python3 -m pip install -U rpcclient">
+          <span class="rp-install__prompt" aria-hidden="true">$</span>
+          <code>python3 -m pip install -U rpcclient</code>
+          <button type="button" class="rp-install__copy" aria-label="Copy install command">Copy</button>
+        </div>
+        <div class="rp-hero__actions">
+          <a class="md-button md-button--primary" href="{{ 'guides/quickstart/' | url }}">Start the quick start</a>
+          <a class="md-button" href="{{ 'api/' | url }}">Browse the API</a>
+        </div>
+      </div>
+
+      <figure class="rp-term" aria-label="Example rpcclient session against an iPhone">
+        <div class="rp-term__bar">
+          <span class="rp-term__link">
+            <span class="rp-term__node rp-term__node--local"></span>
+            <span class="rp-term__wire"></span>
+            <span class="rp-term__node rp-term__node--remote"></span>
+          </span>
+          <span class="rp-term__title">rpcclient 127.0.0.1 -p 5910</span>
+          <span class="rp-term__target">iPhone · iOS</span>
+        </div>
+<pre class="rp-term__body"><code><span class="rp-l"><span class="rp-in">In [1]:</span> symbols.getpid()</span>
+<span class="rp-l rp-l--out"><span class="rp-out">Out[1]:</span> <span class="rp-num">2741</span></span>
+<span class="rp-l"><span class="rp-in">In [2]:</span> p.fs.listdir(<span class="rp-str">'/var/mobile/Media'</span>)</span>
+<span class="rp-l rp-l--out"><span class="rp-out">Out[2]:</span> [<span class="rp-str">'DCIM'</span>, <span class="rp-str">'Downloads'</span>, <span class="rp-str">'iTunes_Control'</span>, <span class="rp-str">'Books'</span>]</span>
+<span class="rp-l"><span class="rp-in">In [3]:</span> d = NSMutableDictionary.new()</span>
+<span class="rp-l"><span class="rp-in">In [4]:</span> d.setObject_forKey_(p.cf(<span class="rp-str">'hello'</span>), p.cf(<span class="rp-str">'from python'</span>))</span>
+<span class="rp-l"><span class="rp-in">In [5]:</span> d.py()</span>
+<span class="rp-l rp-l--out"><span class="rp-out">Out[5]:</span> {<span class="rp-str">'from python'</span>: <span class="rp-str">'hello'</span>}</span>
+<span class="rp-l"><span class="rp-in">In [6]:</span> p.processes.get_by_basename(<span class="rp-str">'SpringBoard'</span>).pid</span>
+<span class="rp-l rp-l--out"><span class="rp-out">Out[6]:</span> <span class="rp-num">34</span></span>
+<span class="rp-l"><span class="rp-in">In [7]:</span> <span class="rp-caret"></span></span></code></pre>
+      </figure>
+    </div>
+  </section>
+{% endblock %}
+
+{% block content %}
+  <div class="rp-home">{{ super() }}</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document$.subscribe(function () {
+      document.querySelectorAll(".rp-install").forEach(function (el) {
+        var btn = el.querySelector("button");
+        if (!btn || btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          navigator.clipboard.writeText(el.dataset.copy).then(function () {
+            btn.textContent = "Copied";
+            setTimeout(function () { btn.textContent = "Copy"; }, 1600);
+          });
+        });
+      });
+    });
+  </script>
+{% endblock %}
