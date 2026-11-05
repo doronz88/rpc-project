@@ -1,0 +1,30 @@
+# rpc-project
+
+> Simple RPC service for controlling every aspect of a remote machine — a C server and a Python client.
+
+rpc-project: a C server and Python rpcclient for calling native functions and controlling a remote machine (filesystem, processes, network, HID, ObjC, and more).
+
+## Getting started
+
+- [Home](https://doronz88.github.io/rpc-project/latest/index.md)
+- [Installation](https://doronz88.github.io/rpc-project/latest/installation/index.md)
+
+## Guides
+
+- [Quick start](https://doronz88.github.io/rpc-project/latest/guides/quickstart/index.md)
+- [Calling native functions](https://doronz88.github.io/rpc-project/latest/guides/calling-native-functions/index.md)
+- [Filesystem](https://doronz88.github.io/rpc-project/latest/guides/filesystem/index.md)
+- [Processes](https://doronz88.github.io/rpc-project/latest/guides/processes/index.md)
+- [Networking](https://doronz88.github.io/rpc-project/latest/guides/networking/index.md)
+- [Scripting with rpcclient](https://doronz88.github.io/rpc-project/latest/guides/scripting/index.md)
+- [Mounting in Finder (WebDAV)](https://doronz88.github.io/rpc-project/latest/guides/mounting-webdav/index.md)
+- [DNS cache](https://doronz88.github.io/rpc-project/latest/guides/dns/index.md)
+
+## API reference
+
+- [Overview](https://doronz88.github.io/rpc-project/latest/api/index.md)
+- [Core client](https://doronz88.github.io/rpc-project/latest/api/core/index.md)
+- [Platform clients](https://doronz88.github.io/rpc-project/latest/api/clients/index.md)
+- [Darwin subsystems](https://doronz88.github.io/rpc-project/latest/api/darwin/index.md)
+- [iOS subsystems](https://doronz88.github.io/rpc-project/latest/api/ios/index.md)
+

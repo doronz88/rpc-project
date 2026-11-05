@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- connection line -->
+  <line x1="74" y1="128" x2="182" y2="128" stroke="#5b6cf0" stroke-width="10" stroke-linecap="round"/>
+  <!-- local node -->
+  <circle cx="56" cy="128" r="30" fill="#5b6cf0"/>
+  <circle cx="56" cy="128" r="11" fill="#ffffff"/>
+  <!-- remote node -->
+  <rect x="170" y="98" width="60" height="60" rx="12" fill="#22d3a6"/>
+  <rect x="186" y="114" width="28" height="28" rx="6" fill="#ffffff"/>
+  <!-- parentheses = call() -->
+  <path d="M118 78 C92 100 92 156 118 178" fill="none" stroke="#1f2430" stroke-width="11" stroke-linecap="round"/>
+  <path d="M138 78 C164 100 164 156 138 178" fill="none" stroke="#1f2430" stroke-width="11" stroke-linecap="round"/>
+</svg>
