@@ -64,7 +64,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-repeat", "pytest-asyncio", "httpx"]
-docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "mkdocs-llmstxt>=0.5"]
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "mkdocs-llmstxt>=0.5", "mike>=2.1"]
 dev = ["rpcclient[test,docs]"]
 
 [project.urls]

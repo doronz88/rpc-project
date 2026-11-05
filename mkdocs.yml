@@ -48,6 +48,11 @@ extra_css:
 
 plugins:
   - search
+  # One site per release series, published by .github/workflows/docs.yml: X.Y for each release,
+  # `latest` for the newest release (the default), `master` for the master branch.
+  - mike:
+      alias_type: copy
+      canonical_version: latest
   - mkdocstrings:
       handlers:
         python:
@@ -120,3 +125,9 @@ nav:
       - Platform clients: api/clients.md
       - Darwin subsystems: api/darwin.md
       - iOS subsystems: api/ios.md
+
+extra:
+  version:
+    provider: mike
+    default: latest
+    alias: true
