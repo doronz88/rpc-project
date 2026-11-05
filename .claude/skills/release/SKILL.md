@@ -78,6 +78,13 @@ description: Cut a new rpcclient release — create the GitHub release (which pu
    Watch them to `completed / success` if the user wants confirmation the wheel landed on PyPI and
    the server binaries are attached to the release.
 
+7. **Verify the docs.** The same release event runs `.github/workflows/docs.yml`, which publishes
+   the release's `X.Y` docs, moves the `latest` alias (the site's default) to it, and then starts
+   the workflow on master to deploy. Check that both runs succeed and the picker shows `X.Y latest`:
+   ```shell
+   gh run list --repo doronz88/rpc-project --workflow=docs.yml --limit 3
+   ```
+
 ## Notes
 
 - `gh` must be installed and authenticated (`gh auth status`).
