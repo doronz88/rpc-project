@@ -176,7 +176,7 @@ async def test_push_pull_dir(client: SyncClient, tmp_path: RemotePath[SyncClient
         (local_dir / "b").touch()
         await client.fs.push(local_dir, tmp_path, recursive=True)
         a = tmp_path / local_dir.name / "b"
-        assert a.exists()
+        assert await a.exists()
 
 
 async def test_scandir_sanity(client: SyncClient, tmp_path: RemotePath[SyncClient]) -> None:
