@@ -122,7 +122,8 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
     def arch(self) -> int:
         return self._bridge.arch
 
-    async def rpc_call(self, msg_id: int, **kwargs: Any) -> Any:
+    async def rpc_call(self, request: Message) -> Any:
+        """Send a request message (e.g. `RequestDlopen(filename=..., mode=...)`) and return the server's reply."""
         # Pop all hooks here, to prevent hooks from running out of order due to recursion.
         hooks, self.pre_rpc_call_hooks[:] = self.pre_rpc_call_hooks[::-1], []
         try:
@@ -134,8 +135,9 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
                 self.pre_rpc_call_hooks[:0] = hooks
 
         try:
-            return await self._bridge.rpc_call(msg_id, **kwargs)
-        except ConnectionError:
+            return await self._bridge.rpc_call(request)
+        except (ConnectionError, UnexpectedReplyError):
+            # After an unexpected reply the stream is out of step with the server, so the connection is unusable too.
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
             self._bridge.close()
             raise
@@ -144,18 +146,18 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
 
     async def dlopen(self, filename: str, mode: int) -> SymbolT_co:
         """Load a shared library on the remote host and return its handle."""
-        return self.symbol((await self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode)).handle)
+        return self.symbol((await self.rpc_call(RequestDlopen(filename=filename, mode=mode))).handle)
 
     async def dlclose(self, lib: int) -> int:
         """Close a previously opened remote library handle."""
-        return (await self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value)).res
+        return (await self.rpc_call(RequestDlclose(handle=ctypes.c_uint64(lib).value))).res
 
     async def dlsym(self, lib: int, symbol_name: str) -> int:
         """Resolve a symbol name in a remote library handle and return its address.
 
         Runs and pops any hooks in `self.pre_dlsym_hooks` first.
         """
-        return (await self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)).ptr
+        return (await self.rpc_call(RequestDlsym(handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name))).ptr
 
     @null_pointer_guard
     async def call(
@@ -192,7 +194,7 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
                 assert_never(arg)
                 raise ArgumentError(f"Can't serialize object of type {type(arg).__name__}")
 
-        ret = await self.rpc_call(MsgId.REQ_CALL, address=address, va_list_index=va_list_index, argv=args)
+        ret = await self.rpc_call(RequestCall(address=address, va_list_index=va_list_index, argv=args))
         if ret.HasField("arm_registers"):
             d0 = ret.arm_registers.d0
             if return_float32:
@@ -208,7 +210,7 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
     async def peek(self, address: int, size: int) -> bytes:
         """peek data at the given address"""
         try:
-            return (await self.rpc_call(MsgId.REQ_PEEK, address=address, size=size)).data
+            return (await self.rpc_call(RequestPeek(address=address, size=size))).data
         except ServerResponseError as e:
             raise ArgumentError() from e
 
@@ -216,7 +218,7 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
     async def poke(self, address: int, data: bytes) -> Any:
         """poke data at a given address"""
         try:
-            return await self.rpc_call(MsgId.REQ_POKE, address=address, data=data)
+            return await self.rpc_call(RequestPoke(address=address, data=data))
         except ServerResponseError as e:
             raise ArgumentError() from e
 
@@ -245,7 +247,7 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
         """get an address for a stub block containing nothing"""
         entries: list[ProtocolDirent] = []
         try:
-            ret = await self.rpc_call(MsgId.REQ_LIST_DIR, path=str(path))
+            ret = await self.rpc_call(RequestListDir(path=str(path)))
         except ServerResponseError:
             await self.raise_errno_exception(f"failed to listdir: {path}")
 
@@ -410,14 +412,14 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
 
     async def close(self) -> None:
         try:
-            await self.rpc_call(MsgId.REQ_CLOSE_CLIENT)
+            await self.rpc_call(RequestCloseClient())
         finally:
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
             self._bridge.close()
 
     async def _execute(self, argv: list[str], envp: list[str], background=False) -> int:
         try:
-            return (await self.rpc_call(MsgId.REQ_EXEC, background=background, argv=argv, envp=envp)).pid
+            return (await self.rpc_call(RequestExec(background=background, argv=argv, envp=envp))).pid
         except ServerResponseError as e:
             raise SpawnError(f"failed to spawn: {argv}") from e
 
@@ -644,6 +646,40 @@ async def uname(self) -> Container:
     return await self.get_uname()
 ```
 
+### rpc_call
+
+```
+rpc_call(request: Message) -> Any
+```
+
+Send a request message (e.g. `RequestDlopen(filename=..., mode=...)`) and return the server's reply.
+
+Source code in `src/rpcclient/rpcclient/core/client.py`
+
+```
+async def rpc_call(self, request: Message) -> Any:
+    """Send a request message (e.g. `RequestDlopen(filename=..., mode=...)`) and return the server's reply."""
+    # Pop all hooks here, to prevent hooks from running out of order due to recursion.
+    hooks, self.pre_rpc_call_hooks[:] = self.pre_rpc_call_hooks[::-1], []
+    try:
+        while hooks:
+            await hooks.pop()()
+    finally:
+        # In case of failure, re-insert the remaining hooks.
+        if hooks:
+            self.pre_rpc_call_hooks[:0] = hooks
+
+    try:
+        return await self._bridge.rpc_call(request)
+    except (ConnectionError, UnexpectedReplyError):
+        # After an unexpected reply the stream is out of step with the server, so the connection is unusable too.
+        self.notifier.notify(ClientEvent.TERMINATED, self.id)
+        self._bridge.close()
+        raise
+    except ServerResponseError:
+        raise
+```
+
 ### dlopen
 
 ```
@@ -657,7 +693,7 @@ Source code in `src/rpcclient/rpcclient/core/client.py`
 ```
 async def dlopen(self, filename: str, mode: int) -> SymbolT_co:
     """Load a shared library on the remote host and return its handle."""
-    return self.symbol((await self.rpc_call(MsgId.REQ_DLOPEN, filename=filename, mode=mode)).handle)
+    return self.symbol((await self.rpc_call(RequestDlopen(filename=filename, mode=mode))).handle)
 ```
 
 ### dlclose
@@ -673,7 +709,7 @@ Source code in `src/rpcclient/rpcclient/core/client.py`
 ```
 async def dlclose(self, lib: int) -> int:
     """Close a previously opened remote library handle."""
-    return (await self.rpc_call(MsgId.REQ_DLCLOSE, handle=ctypes.c_uint64(lib).value)).res
+    return (await self.rpc_call(RequestDlclose(handle=ctypes.c_uint64(lib).value))).res
 ```
 
 ### dlsym
@@ -694,7 +730,7 @@ async def dlsym(self, lib: int, symbol_name: str) -> int:
 
     Runs and pops any hooks in `self.pre_dlsym_hooks` first.
     """
-    return (await self.rpc_call(MsgId.REQ_DLSYM, handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name)).ptr
+    return (await self.rpc_call(RequestDlsym(handle=ctypes.c_uint64(lib).value, symbol_name=symbol_name))).ptr
 ```
 
 ### call
@@ -743,7 +779,7 @@ async def call(
             assert_never(arg)
             raise ArgumentError(f"Can't serialize object of type {type(arg).__name__}")
 
-    ret = await self.rpc_call(MsgId.REQ_CALL, address=address, va_list_index=va_list_index, argv=args)
+    ret = await self.rpc_call(RequestCall(address=address, va_list_index=va_list_index, argv=args))
     if ret.HasField("arm_registers"):
         d0 = ret.arm_registers.d0
         if return_float32:
@@ -771,7 +807,7 @@ Source code in `src/rpcclient/rpcclient/core/client.py`
 async def peek(self, address: int, size: int) -> bytes:
     """peek data at the given address"""
     try:
-        return (await self.rpc_call(MsgId.REQ_PEEK, address=address, size=size)).data
+        return (await self.rpc_call(RequestPeek(address=address, size=size))).data
     except ServerResponseError as e:
         raise ArgumentError() from e
 ```
@@ -791,7 +827,7 @@ Source code in `src/rpcclient/rpcclient/core/client.py`
 async def poke(self, address: int, data: bytes) -> Any:
     """poke data at a given address"""
     try:
-        return await self.rpc_call(MsgId.REQ_POKE, address=address, data=data)
+        return await self.rpc_call(RequestPoke(address=address, data=data))
     except ServerResponseError as e:
         raise ArgumentError() from e
 ```
@@ -844,7 +880,7 @@ async def listdir(self, path: str | PurePath) -> list[ProtocolDirent]:
     """get an address for a stub block containing nothing"""
     entries: list[ProtocolDirent] = []
     try:
-        ret = await self.rpc_call(MsgId.REQ_LIST_DIR, path=str(path))
+        ret = await self.rpc_call(RequestListDir(path=str(path)))
     except ServerResponseError:
         await self.raise_errno_exception(f"failed to listdir: {path}")
 
@@ -4200,6 +4236,21 @@ Source code in `src/rpcclient/rpcclient/exceptions.py`
 ```
 class ServerResponseError(RpcClientException):
     """Server returned error"""
+
+    pass
+```
+
+### UnexpectedReplyError
+
+Bases: `RpcClientException`
+
+Server replied with a message that doesn't answer the request
+
+Source code in `src/rpcclient/rpcclient/exceptions.py`
+
+```
+class UnexpectedReplyError(RpcClientException):
+    """Server replied with a message that doesn't answer the request"""
 
     pass
 ```
