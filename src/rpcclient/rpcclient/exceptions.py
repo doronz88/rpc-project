@@ -28,6 +28,12 @@ class ServerResponseError(RpcClientException):
     pass
 
 
+class UnexpectedReplyError(RpcClientException):
+    """Server replied with a message that doesn't answer the request"""
+
+    pass
+
+
 class ServerDiedError(RpcClientException):
     """server became disconnected during an operation"""
 

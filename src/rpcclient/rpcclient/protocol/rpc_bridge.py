@@ -6,7 +6,7 @@ from typing_extensions import Self
 
 from google.protobuf.message import Message
 
-from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError
+from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError, UnexpectedReplyError
 from rpcclient.protocol.messages import resolve_request
 from rpcclient.protocol.rpc_socket import RpcSocket
 from rpcclient.protos.rpc_api_pb2 import ReplyError
@@ -69,7 +69,7 @@ class RpcBridge:
             raise ServerResponseError(error.message)
 
         elif rep_msg.msg_id != msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID:
-            raise ValueError(f"Unexpected reply msg_id {rep_msg.msg_id} to {request.DESCRIPTOR.full_name}")
+            raise UnexpectedReplyError(f"Unexpected reply msg_id {rep_msg.msg_id} to {request.DESCRIPTOR.full_name}")
 
         rep = reply_class()
         rep.ParseFromString(rep_msg.payload)

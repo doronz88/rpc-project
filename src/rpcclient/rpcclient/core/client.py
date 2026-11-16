@@ -74,6 +74,7 @@ from rpcclient.exceptions import (
     RpcResourceTemporarilyUnavailableError,
     ServerResponseError,
     SpawnError,
+    UnexpectedReplyError,
 )
 from rpcclient.protocol.rpc_bridge import RpcBridge
 from rpcclient.protos.rpc_api_pb2 import (
@@ -311,7 +312,8 @@ class CoreClient(Generic[SymbolT_co], abc.ABC):
 
         try:
             return await self._bridge.rpc_call(request)
-        except ConnectionError:
+        except (ConnectionError, UnexpectedReplyError):
+            # After an unexpected reply the stream is out of step with the server, so the connection is unusable too.
             self.notifier.notify(ClientEvent.TERMINATED, self.id)
             self._bridge.close()
             raise
