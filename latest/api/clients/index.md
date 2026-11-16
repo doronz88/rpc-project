@@ -201,13 +201,13 @@ class DarwinClient(CoreClient[DarwinSymbolT_co]):
         return ["/", "/var/root"]
 
     async def showobject(self, object_address: int) -> dict:
-        return json.loads((await self.rpc_call(MsgId.REQ_SHOW_OBJECT, address=object_address)).description)
+        return json.loads((await self.rpc_call(RequestShowObject(address=object_address))).description)
 
     async def showclass(self, class_address: int) -> dict:
-        return json.loads((await self.rpc_call(MsgId.REQ_SHOW_CLASS, address=class_address)).description)
+        return json.loads((await self.rpc_call(RequestShowClass(address=class_address))).description)
 
     async def get_class_list(self) -> dict[str, objective_c_class.Class]:
-        ret = await self.rpc_call(MsgId.REQ_GET_CLASS_LIST)
+        ret = await self.rpc_call(RequestGetClassList())
         result = {}
         for _class in ret.classes:
             result[_class.name] = objective_c_class.Class(self, self.symbol(_class.address), lazy=True)

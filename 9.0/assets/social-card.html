@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; }
+  body {
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 96px;
+    background: #1f2430;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #ffffff;
+    position: relative;
+    overflow: hidden;
+  }
+  /* faint connection motif in the background */
+  .bg { position: absolute; right: -120px; top: 50%; transform: translateY(-50%); opacity: 0.06; }
+  .row { display: flex; align-items: center; gap: 40px; z-index: 1; }
+  .logo { width: 200px; height: 200px; flex: none; }
+  .name { font-size: 104px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+  .accent { color: #5b6cf0; }
+  .accent2 { color: #22d3a6; }
+  .tagline { margin-top: 40px; font-size: 38px; font-weight: 400; color: #c8cde0; max-width: 1000px; line-height: 1.3; z-index: 1; }
+  .pill { display:inline-block; margin-top: 36px; font-size: 26px; color:#9aa0b5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; z-index:1; }
+  .bar { position:absolute; left:0; bottom:0; height:12px; width:100%; background: linear-gradient(90deg,#5b6cf0 0%,#5b6cf0 50%,#22d3a6 50%,#22d3a6 100%); }
+</style>
+</head>
+<body>
+  <svg class="bg" width="520" height="520" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+    <line x1="74" y1="128" x2="182" y2="128" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="56" cy="128" r="30" fill="#ffffff"/>
+    <rect x="170" y="98" width="60" height="60" rx="12" fill="#ffffff"/>
+    <path d="M118 78 C92 100 92 156 118 178" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+    <path d="M138 78 C164 100 164 156 138 178" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+  </svg>
+
+  <div class="row">
+    <svg class="logo" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <line x1="74" y1="128" x2="182" y2="128" stroke="#5b6cf0" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="56" cy="128" r="30" fill="#5b6cf0"/>
+      <circle cx="56" cy="128" r="11" fill="#1f2430"/>
+      <rect x="170" y="98" width="60" height="60" rx="12" fill="#22d3a6"/>
+      <rect x="186" y="114" width="28" height="28" rx="6" fill="#1f2430"/>
+      <path d="M118 78 C92 100 92 156 118 178" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+      <path d="M138 78 C164 100 164 156 138 178" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
+    </svg>
+    <div class="name">rpc<span class="accent">-</span>project</div>
+  </div>
+
+  <div class="tagline">A powerful RPC service for controlling every aspect of a remote machine — a small C server and a scriptable Python client.</div>
+  <div class="pill">$ python3 -m pip install -U rpcclient</div>
+  <div class="bar"></div>
+</body>
+</html>
