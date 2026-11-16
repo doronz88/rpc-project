@@ -4,15 +4,16 @@ import subprocess
 from typing import Any, final
 from typing_extensions import Self
 
-from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError
-from rpcclient.protocol.messages import RpcMessageRegistry
+from google.protobuf.message import Message
+
+from rpcclient.exceptions import InvalidServerVersionMagicError, ServerResponseError, UnexpectedReplyError
+from rpcclient.protocol.messages import resolve_request
 from rpcclient.protocol.rpc_socket import RpcSocket
+from rpcclient.protos.rpc_api_pb2 import ReplyError
 from rpcclient.protos.rpc_pb2 import ProtocolConstants, RpcMessage
 
 
 logger = logging.getLogger(__name__)
-
-BASIC_MESSAGES = RpcMessageRegistry(modules=["rpcclient.protos.rpc_api_pb2"])
 
 
 def _has_process_exited(process: subprocess.Popen) -> bool:
@@ -28,11 +29,9 @@ class RpcBridge:
         platform_name: str,
         arch: int,
         sysname: str,
-        messages: RpcMessageRegistry | None = None,
         owns_socket: bool = True,
         local_process: subprocess.Popen | None = None,
     ) -> None:
-        self.messages: RpcMessageRegistry = messages or BASIC_MESSAGES.clone()
         self.sock: RpcSocket = sock
         self.client_id: int = client_id
         self.platform: str = platform_name
@@ -42,33 +41,38 @@ class RpcBridge:
         self._local_process: subprocess.Popen | None = local_process
 
     @classmethod
-    async def connect(cls, raw_sock: socket.socket, messages: RpcMessageRegistry | None = None) -> Self:
+    async def connect(cls, raw_sock: socket.socket) -> Self:
         sock = RpcSocket(raw_sock)
         handshake = await sock.rpc_handshake_recv()
         if handshake.server_version != ProtocolConstants.SERVER_VERSION:
             raise InvalidServerVersionMagicError(
                 f"got {handshake.magic:x} instead of {ProtocolConstants.SERVER_VERSION:x}"
             )
-        return cls(
-            sock, handshake.client_id, handshake.platform.lower(), handshake.arch, handshake.sysname.lower(), messages
-        )
+        return cls(sock, handshake.client_id, handshake.platform.lower(), handshake.arch, handshake.sysname.lower())
 
-    async def rpc_call(self, msg_id: int, **kwargs) -> Any:
+    async def rpc_call(self, request: Message) -> Any:
         """
-        Resolve msg_id/reply class from request_msg's type, build RpcMessage, send and, parse reply.
+        Resolve msg_id/reply class from the request's type, build RpcMessage, send and, parse reply.
         """
-        req = self.messages.get(msg_id)(**kwargs)
+        msg_id, reply_class = resolve_request(type(request))
         msg = RpcMessage(
             client_id=self.client_id,
             msg_id=msg_id,
-            payload=req.SerializeToString(),
+            payload=request.SerializeToString(),
         )
+
         rep_msg = await self.sock.rpc_msg_send_recv(msg)
-        rep = self.messages.get(rep_msg.msg_id)()
-        rep.ParseFromString(rep_msg.payload)
         if rep_msg.msg_id == ProtocolConstants.REP_ERROR:
-            logger.error(f"Server error: {rep.message}")
-            raise ServerResponseError(rep.message)
+            error = ReplyError()
+            error.ParseFromString(rep_msg.payload)
+            logger.error(f"Server error: {error.message}")
+            raise ServerResponseError(error.message)
+
+        elif rep_msg.msg_id != msg_id + ProtocolConstants.RPC_MAX_REQ_MSG_ID:
+            raise UnexpectedReplyError(f"Unexpected reply msg_id {rep_msg.msg_id} to {request.DESCRIPTOR.full_name}")
+
+        rep = reply_class()
+        rep.ParseFromString(rep_msg.payload)
         return rep
 
     def close(self) -> None:
@@ -94,6 +98,4 @@ class RpcBridge:
             process.kill()
 
     def clone(self) -> Self:
-        return type(self)(
-            self.sock, self.client_id, self.platform, self.arch, self.sysname, self.messages.clone(), owns_socket=False
-        )
+        return type(self)(self.sock, self.client_id, self.platform, self.arch, self.sysname, owns_socket=False)
